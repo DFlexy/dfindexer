@@ -15,6 +15,21 @@ from utils.text_processing import (
 )
 from utils.date_parser import parse_date_from_string
 
+MONTH_MAP = {
+    'janeiro': 1, 'jan': 1, 'jan.': 1, 'january': 1,
+    'fevereiro': 2, 'fev': 2, 'fev.': 2, 'february': 2, 'feb': 2, 'feb.': 2,
+    'março': 3, 'marco': 3, 'mar': 3, 'mar.': 3, 'march': 3,
+    'abril': 4, 'abr': 4, 'abr.': 4, 'april': 4, 'apr': 4, 'apr.': 4,
+    'maio': 5, 'mai': 5, 'may': 5,
+    'junho': 6, 'jun': 6, 'jun.': 6, 'june': 6,
+    'julho': 7, 'jul': 7, 'jul.': 7, 'july': 7,
+    'agosto': 8, 'ago': 8, 'ago.': 8, 'august': 8, 'aug': 8, 'aug.': 8,
+    'setembro': 9, 'set': 9, 'set.': 9, 'septembro': 9, 'september': 9, 'sep': 9, 'sep.': 9,
+    'outubro': 10, 'out': 10, 'out.': 10, 'october': 10, 'oct': 10, 'oct.': 10,
+    'novembro': 11, 'nov': 11, 'nov.': 11, 'november': 11,
+    'dezembro': 12, 'dez': 12, 'dez.': 12, 'december': 12, 'dec': 12, 'dec.': 12
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,9 +182,14 @@ class VacaScraper(BaseScraper):
         
         # Extrai título original
         original_title = ''
+        season_number = ''
         for elem in doc.find_all(True):
             text = elem.get_text()
             html_content = str(elem)
+            if not season_number:
+                season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', text, flags=re.IGNORECASE)
+                if season_match:
+                    season_number = season_match.group(1).zfill(2)
             
             if 'Título de Origem:' in text:
                 parts = text.split('Título de Origem:')
@@ -214,10 +234,15 @@ class VacaScraper(BaseScraper):
         year = ''
         imdb = ''
         sizes = []
+        release_day: Optional[int] = None
+        release_month: Optional[int] = None
+        release_year = ''
         
         for li in doc.select('.col-left ul li, .content p'):
             text = li.get_text()
             html_content = str(li)
+            text_clean = html.unescape(text or '').strip()
+            lower_text = text_clean.lower()
             
             # Extrai ano
             if not year:
@@ -237,9 +262,53 @@ class VacaScraper(BaseScraper):
             
             # Extrai tamanhos
             sizes.extend(find_sizes_from_text(html_content))
+
+            if 'ano de lançamento' in lower_text:
+                year_match = re.search(r'(19|20)\d{2}', text_clean)
+                if year_match:
+                    release_year = year_match.group(0)
+                    if not year:
+                        year = release_year
+
+            if 'data de lançamento' in lower_text and (release_day is None or release_month is None):
+                value_part = text_clean.split(':', 1)
+                if len(value_part) > 1:
+                    value = value_part[1]
+                else:
+                    value = text_clean
+                value = html.unescape(value).replace(',', ' ')
+                value = re.sub(r'\s+', ' ', value).strip()
+                tokens = [tok for tok in value.split(' ') if tok and tok.lower() not in {'de', '-', '—'}]
+                if tokens:
+                    day_token = tokens[0]
+                    if day_token.isdigit():
+                        try:
+                            release_day = int(day_token)
+                        except ValueError:
+                            release_day = None
+                    if len(tokens) > 1:
+                        month_token = tokens[1].lower().strip('.')
+                        release_month = MONTH_MAP.get(month_token, release_month)
+                    if len(tokens) > 2 and re.match(r'(19|20)\d{2}', tokens[2]):
+                        release_year = tokens[2]
+                        if not year:
+                            year = release_year
         
+        final_year_candidate = release_year or year
+        if (
+            release_day
+            and release_month
+            and final_year_candidate
+            and re.match(r'^\d{4}$', final_year_candidate)
+        ):
+            try:
+                date = datetime(int(final_year_candidate), release_month, release_day)
+                year = final_year_candidate
+            except ValueError:
+                pass
+
         # Extrai links magnet
-        magnet_links = []
+        magnet_entries = []
         for magnet in doc.select('a[href^="magnet:"]'):
             href = magnet.get('href', '')
             if href:
@@ -251,16 +320,33 @@ class VacaScraper(BaseScraper):
                     if new_href == href:  # Não mudou mais, para o loop
                         break
                     href = new_href
-                magnet_links.append(href)
+                episode_number = ''
+                context_text = ''
+                parent = magnet.parent
+                if parent:
+                    context_text = parent.get_text(' ', strip=True)
+                    bold_label = parent.find('b')
+                    if bold_label:
+                        context_text = f"{bold_label.get_text(' ', strip=True)}"
+                if not context_text:
+                    context_text = magnet.get_text(' ', strip=True)
+                if not context_text and parent:
+                    prev_sibling = parent.find_previous('b')
+                    if prev_sibling:
+                        context_text = prev_sibling.get_text(' ', strip=True)
+                episode_match = re.search(r'epis[íi]dio\s*(\d+)', context_text, flags=re.IGNORECASE)
+                if episode_match:
+                    episode_number = episode_match.group(1).zfill(2)
+                magnet_entries.append((href, episode_number))
         
-        if not magnet_links:
+        if not magnet_entries:
             return []
         
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
         
         # Processa cada magnet
-        for idx, magnet_link in enumerate(magnet_links):
+        for idx, (magnet_link, episode_number) in enumerate(magnet_entries):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
@@ -275,12 +361,39 @@ class VacaScraper(BaseScraper):
                     missing_dn=missing_dn
                 )
                 
+                if episode_number:
+                    effective_season = season_number or '01'
+                    episode_tag = f"S{effective_season}E{episode_number}"
+                    if not re.search(r'(?i)S\d{1,2}E\d{1,2}', original_release_title):
+                        rest_release = original_release_title
+                        if fallback_title and rest_release.lower().startswith(fallback_title.lower()):
+                            rest_release = rest_release[len(fallback_title):].strip()
+                        original_release_title = fallback_title.strip()
+                        if original_release_title:
+                            original_release_title = f"{original_release_title} {episode_tag}".strip()
+                        else:
+                            original_release_title = episode_tag
+                        if rest_release:
+                            original_release_title = f"{original_release_title} {rest_release}".strip()
+                
                 standardized_title = create_standardized_title(
                     original_title, year, original_release_title
                 )
                 
                 # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
                 final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+
+                if episode_number:
+                    effective_season = season_number or '01'
+                    episode_tag = f"S{effective_season}E{episode_number}"
+                    if episode_tag.lower() not in final_title.lower():
+                        parts = [part for part in final_title.split('.') if part]
+                        if parts:
+                            base = parts[0]
+                            remaining_parts = parts[1:]
+                            final_title = '.'.join([base, episode_tag] + remaining_parts) if remaining_parts else f"{base}.{episode_tag}"
+                        else:
+                            final_title = episode_tag
                 
                 # Extrai tamanho
                 size = ''
