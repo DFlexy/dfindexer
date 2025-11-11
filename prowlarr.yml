@@ -19,22 +19,20 @@ caps:
     movie-search: [q]
 
 settings:
-  - name: indexer
+  - name: scraper_type
     type: select
-    label: Indexer
-    default: site1
+    label: Scraper
+    default: starck
     options:
-      site1: Site 1
-      site2: Site 2
-      site3: Site 3
-      site4: Site 4
-      site5: Site 5
-      site6: Site 6
-      site7: Site 7
+      starck: Starck Filmes
+      rede: Rede Torrent
+      limao: Limao Torrent
+      tfilme: Torrent dos Filmes
+      vaca: Vaca Torrent
 
 search:
   paths:
-    - path: "{{ if eq .Config.indexer \"site1\" }}/indexer{{ else }}/indexers/{{ .Config.indexer }}{{ end }}"
+    - path: "/indexers/{{ .Config.scraper_type }}"
       response:
         type: json
   inputs:
