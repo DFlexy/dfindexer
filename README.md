@@ -1,16 +1,13 @@
 # DF Indexer - Python Indexer para torrents do Brazil
 
-
-Indexador em Python que replica (e amplia) a lógica do projeto original em Go https://github.com/felipemarinho97/torrent-indexer
-Para organizar torrents brasileiros em um formato padronizado, pronto para consumo por ferramentas como Prowlarr, Sonarr e Radarr.
+ - Indexador em Python que replica (e amplia) a lógica do projeto original em Go https://github.com/felipemarinho97/torrent-indexer
+ - Para organizar torrents brasileiros em um formato padronizado, pronto para consumo por ferramentas como Prowlarr, Sonarr e Radarr.
 
 ## Visão Geral
 
 - Conecta-se a múltiplos sites de torrents e extrai títulos, links magnet, datas, tamanhos e metadados relevantes.
-- Consulta trackers UDP automaticamente para preencher seeds/leechers, com cache e lista dinâmica de trackers (sem fallback estático).
 - Padroniza nomes de lançamentos (séries, episódios e filmes) para facilitar matching automático.
 - Opcionalmente utiliza Redis para cachear o HTML bruto e reduzir carga/latência.
-- Exponde uma API JSON simples que pode ser acoplada ao Prowlarr via `prowlarr.yml`.
 
 ## Estrutura do Projeto
 
@@ -28,17 +25,14 @@ dfindexer/
 └── requirements.txt  # Dependências Python
 ```
 
-## Scrapers Suportados
+## Padronização de Títulos
 
-| Tipo             | Domínio                          |
-|------------------|----------------------------------|
-| `starck`         | https://starckfilmes-v3.com/     |
-| `rede_torrent`   | https://redetorrent.com/         |
-| `torrent_dos_filmes` | https://torrentdosfilmes.se/ |
-| `vaca_torrent`   | https://vacatorrentmov.com/      |
-| `limaotorrent`   | https://limaotorrent.org/        |
+Toda saída faz uso de `utils.text_processing.create_standardized_title()` para manter um padrão consistente:
 
-Cada scraper herda de `BaseScraper` e implementa `search()` e `get_page()` utilizando BeautifulSoup para navegar na estrutura própria do site.
+- **Episódios**: `Title.S02E01.year.restodomagnet`
+- **Séries completas**: `Title.S02.year.restodomagnet`
+- **Filmes**: `Title.year.restodomagnet`
+- **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
 
 ## Padronização de Títulos
 
@@ -49,7 +43,8 @@ Toda saída faz uso de `utils.text_processing.create_standardized_title()` para 
 - **Filmes**: `Title.year.restodomagnet`
 - **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
 
-Regras adicionais:
+
+## Regras adicionais:
 
 - Ordenação garantida: sempre `Título → Sxx/Eyy → Ano → Qualidade/Tags` (ex.: `Pluribus.S01.2025.WEB-DL.1080p`).
 - Detecta temporadas descritas no HTML (ex.: "1ª temporada", "Temporada: 1") mesmo quando o magnet não tem `dn`.
@@ -65,7 +60,7 @@ Regras adicionais:
 | Variável                         | Descrição                                                                    | Padrão             |
 |---------------------------------|-------------------------------------------------------------------------------|--------------------|
 | `PORT`                          | Porta da API                                                                  | `7006`             |
-| `METRICS_PORT`                  | Porta do servidor de métricas (reservada, ainda não utilizada)               | `8081`             |
+| `METRICS_PORT`                  | Porta do servidor de métricas (reservada, ainda não utilizada)                | `8081`             |
 | `REDIS_HOST`                    | Host do Redis (opcional)                                                      | `localhost`        |
 | `REDIS_PORT`                    | Porta do Redis                                                                | `6379`             |
 | `REDIS_DB`                      | Banco lógico do Redis                                                         | `0`                |
@@ -75,8 +70,6 @@ Regras adicionais:
 | `TRACKER_SCRAPE_RETRIES`        | Número de tentativas por tracker                                              | `2`                |
 | `TRACKER_SCRAPE_MAX_TRACKERS`   | Quantidade máxima de trackers consultados por infohash (0 = ilimitado)        | `0`               |
 | `TRACKER_CACHE_TTL`             | TTL do cache de seeds/leechers                                                | `24h`              |
-| `SITE1`…`SITE7`                 | URLs dos sites configurados                                                   | `''`               |
-| `SITE1_TYPE`…`SITE7_TYPE`       | Tipo do scraper (`starck`, `rede_torrent`, `limaotorrent`, etc.)             | `''`               |
 | `LOG_LEVEL`                     | `0` (debug), `1` (info), `2` (warn), `3` (error)                              | `1`                |
 | `LOG_FORMAT`                    | `console` ou `json`                                                           | `console`          |
 
@@ -120,7 +113,7 @@ O arquivo `prowlarr.yml` contém a definição de indexer customizado.
 1. Acesse **Settings > Indexers > + > Custom**.
 2. Cole o conteúdo de `prowlarr.yml` no campo de configuração.
 3. Ajuste o campo `links:` se o endereço da API for diferente.
-4. Escolha o site desejado através do dropdown "Indexer" (Site 1… Site 7).
+4. Escolha o scraper desejado através do dropdown "Indexer".
 
 Para saber como instalar o custom no prowlarr procure no google por (prowlarr custom indexer yml)
 
