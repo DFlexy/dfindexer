@@ -96,7 +96,7 @@ class TrackerListProvider:
                     if tracker and _normalize_tracker(tracker)
                 ]
                 if trackers:
-                    logger.info(
+                    logger.debug(
                         "Lista de trackers dinâmica carregada (%s) com %d entradas.",
                         source,
                         len(trackers),
