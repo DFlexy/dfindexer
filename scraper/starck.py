@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 class StarckScraper(BaseScraper):
     """Scraper específico para Starck Filmes"""
     
-    def __init__(self, base_url: str):
+    SCRAPER_TYPE = "starck"
+    DEFAULT_BASE_URL = "https://starckfilmes-v3.com/"
+    DISPLAY_NAME = "Starck"
+    
+    def __init__(self, base_url: Optional[str] = None):
         super().__init__(base_url)
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
