@@ -1,0 +1,7 @@
+Flask==3.0.0
+beautifulsoup4==4.12.2
+requests==2.31.0
+redis==5.0.1
+lxml==4.9.3
+waitress==2.1.2
+
