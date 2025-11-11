@@ -77,7 +77,10 @@ O endpoint aceita `filter_results=true`. Quando ativado, a função `check_query
 | `LOG_FORMAT`                    | `console` ou `json`                                                           | `console`          |
 
 ## Execução com Docker modo host
-
+Baixe a imagem 
+```bash
+docker pull ghcr.io/dflexy/dfindexer:latest
+```bash
 
 ```bash
 docker run -d \
