@@ -80,8 +80,8 @@ O endpoint aceita `filter_results=true`. Quando ativado, a função `check_query
 Baixe a imagem 
 ```bash
 docker pull ghcr.io/dflexy/dfindexer:latest
-```bash
-
+```
+Execute 
 ```bash
 docker run -d \
   --name=dfindexer \
