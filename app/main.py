@@ -13,6 +13,7 @@ from flask import Flask
 from app.config import Config
 from api.routes import register_routes
 from cache.redis_client import init_redis
+from scraper import available_scraper_types
 from utils.logger import setup_logging
 from waitress import serve
 
@@ -36,7 +37,7 @@ def create_app() -> Flask:
     register_routes(app)
     
     logger.info(f"Servidor iniciado na porta {Config.PORT}")
-    logger.info(f"Sites configurados: {Config.get_sites()}")
+    logger.info(f"Scrapers disponíveis: {list(available_scraper_types().keys())}")
     
     return app
 
