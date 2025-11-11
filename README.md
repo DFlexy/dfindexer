@@ -1,4 +1,5 @@
-# DF Indexer - Python Torrent Indexer
+# DF Indexer - Python Torrent Indexer para torrents do Brazil
+
 
 Indexador em Python que replica (e amplia) a lógica do projeto original em Go para organizar torrents brasileiros em um formato padronizado, pronto para consumo por ferramentas como Prowlarr, Sonarr e Radarr.
 https://github.com/felipemarinho97/torrent-indexer
