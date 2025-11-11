@@ -62,8 +62,7 @@ def setup_logging(log_level: int, log_format: str = 'console'):
     
     tracker_logger = logging.getLogger('tracker.list_provider')
     tracker_logger.handlers = []
-    tracker_logger.setLevel(logging.DEBUG if python_log_level == logging.DEBUG else python_log_level)
-    tracker_logger.propagate = True
+    tracker_logger.setLevel(python_log_level)
     
     # Silencia loggers de bibliotecas externas se nível for alto
     if log_level >= 2:  # warn ou error
