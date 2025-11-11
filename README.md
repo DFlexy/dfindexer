@@ -69,7 +69,10 @@ O endpoint aceita `filter_results=true`. Quando ativado, a função `check_query
 | Variável                         | Descrição                                                                    | Padrão             |
 |---------------------------------|-------------------------------------------------------------------------------|--------------------|
 | `PORT`                          | Porta da API                                                                  | `7006`             |
+| `METRICS_PORT`                  | Porta do servidor de métricas (reservada, ainda não utilizada)               | `8081`             |
 | `REDIS_HOST`                    | Host do Redis (opcional)                                                      | `localhost`        |
+| `REDIS_PORT`                    | Porta do Redis                                                                | `6379`             |
+| `REDIS_DB`                      | Banco lógico do Redis                                                         | `0`                |
 | `SHORT_LIVED_CACHE_EXPIRATION`  | TTL do cache curto (HTML bruto)                                               | `10m`              |
 | `LONG_LIVED_CACHE_EXPIRATION`   | TTL do cache longo                                                            | `12h`              |
 | `TRACKER_SCRAPE_TIMEOUT`        | Timeout por requisição UDP aos trackers (segundos)                            | `0.5`              |
