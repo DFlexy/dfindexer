@@ -21,7 +21,11 @@ dfindexer/
 ├── cache/            # Cliente Redis (opcional)
 ├── magnet/           # Parser de links magnet (info_hash, display_name, trackers)
 ├── scraper/          # Scrapers específicos por site
-└── utils/            # Utilitários (títulos, datas, logging, etc.)
+├── tracker/          # Scrape de trackers UDP, cache e lista dinâmica de trackers
+├── utils/            # Utilitários (títulos, datas, logging, etc.)
+├── Dockerfile        # Build da imagem Docker oficial
+├── prowlarr.yml      # Configuração do indexer customizado para Prowlarr
+└── requirements.txt  # Dependências Python
 ```
 
 ## Scrapers Suportados
