@@ -89,16 +89,6 @@ docker run -d \
   -e SHORT_LIVED_CACHE_EXPIRATION=10m \
   -e LONG_LIVED_CACHE_EXPIRATION=7d \
   -e REDIS_HOST=redis \
-  -e SITE1=https://starckfilmes-v3.com/ \
-  -e SITE1_TYPE=starck \
-  -e SITE2=https://redetorrent.com/ \
-  -e SITE2_TYPE=rede_torrent \
-  -e SITE3=https://vacatorrentmov.com/ \
-  -e SITE3_TYPE=vaca_torrent \
-  -e SITE4=https://limaotorrent.org/ \
-  -e SITE4_TYPE=limaotorrent \
-  -e SITE5=https://torrentdosfilmes.se/ \
-  -e SITE5_TYPE=torrent_dos_filmes \
   ghcr.io/dflexy/dfindexer:latest
 ```
 
