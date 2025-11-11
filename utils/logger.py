@@ -60,6 +60,15 @@ def setup_logging(log_level: int, log_format: str = 'console'):
     root_logger.handlers = []  # Remove handlers existentes
     root_logger.addHandler(handler)
     
+    tracker_logger = logging.getLogger('tracker.list_provider')
+    tracker_logger.handlers = []
+    tracker_logger.setLevel(logging.DEBUG)
+    tracker_logger.propagate = False
+    tracker_handler = logging.StreamHandler(sys.stdout)
+    tracker_handler.setFormatter(formatter)
+    tracker_handler.setLevel(logging.DEBUG)
+    tracker_logger.addHandler(tracker_handler)
+    
     # Silencia loggers de bibliotecas externas se nível for alto
     if log_level >= 2:  # warn ou error
         logging.getLogger('werkzeug').setLevel(logging.WARNING)
