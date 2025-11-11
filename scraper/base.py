@@ -17,9 +17,20 @@ logger = logging.getLogger(__name__)
 
 class BaseScraper(ABC):
     """Classe base para scrapers"""
+
+    SCRAPER_TYPE: str = ''
+    DEFAULT_BASE_URL: str = ''
+    DISPLAY_NAME: str = ''
     
-    def __init__(self, base_url: str):
-        self.base_url = base_url
+    def __init__(self, base_url: Optional[str] = None):
+        resolved_url = (base_url or self.DEFAULT_BASE_URL or '').strip()
+        if resolved_url and not resolved_url.endswith('/'):
+            resolved_url = f"{resolved_url}/"
+        if not resolved_url:
+            raise ValueError(
+                f"{self.__class__.__name__} requer DEFAULT_BASE_URL definido ou um base_url explícito"
+            )
+        self.base_url = resolved_url
         self.redis = get_redis_client()  # Pode ser None se Redis não disponível
         self.session = requests.Session()
         self.session.headers.update({
