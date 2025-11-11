@@ -60,10 +60,6 @@ Regras adicionais:
 - Quando o site não informa tamanho, utiliza o parâmetro `xl` do magnet (quando presente) como fallback.
 - Remove duplicata de pontos e hífens gerando um texto pronto para matching.
 
-## Filtro de Resultados
-
-O endpoint aceita `filter_results=true`. Quando ativado, a função `check_query_match()` garante que pelo menos parte significativa da query esteja presente no título padronizado ou no título original. A lógica ignora stop words (incluindo "temporada"/"season") e entende queries numéricas como referência a temporadas (`S01`, `S1`).
-
 ## Variáveis de Ambiente
 
 | Variável                         | Descrição                                                                    | Padrão             |
@@ -126,7 +122,7 @@ O arquivo `prowlarr.yml` contém a definição de indexer customizado.
 3. Ajuste o campo `links:` se o endereço da API for diferente.
 4. Escolha o site desejado através do dropdown "Indexer" (Site 1… Site 7).
 
-O `keywordsfilters` já converte buscas como `S01` para `temporada 1`, casando com a lógica de padronização do Python.
+Para saber como instalar o custom no prowlarr procure no google por (prowlarr custom indexer yml)
 
 ## Notas Técnicas
 
