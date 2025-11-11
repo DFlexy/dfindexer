@@ -34,15 +34,6 @@ Toda saída faz uso de `utils.text_processing.create_standardized_title()` para 
 - **Filmes**: `Title.year.restodomagnet`
 - **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
 
-## Padronização de Títulos
-
-Toda saída faz uso de `utils.text_processing.create_standardized_title()` para manter um padrão consistente:
-
-- **Episódios**: `Title.S02E01.year.restodomagnet`
-- **Séries completas**: `Title.S02.year.restodomagnet`
-- **Filmes**: `Title.year.restodomagnet`
-- **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
-
 
 ## Regras adicionais:
 
