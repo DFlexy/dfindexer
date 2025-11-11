@@ -1,6 +1,7 @@
 # DF Indexer - Python Torrent Indexer
 
 Indexador em Python que replica (e amplia) a lógica do projeto original em Go para organizar torrents brasileiros em um formato padronizado, pronto para consumo por ferramentas como Prowlarr, Sonarr e Radarr.
+https://github.com/felipemarinho97/torrent-indexer
 
 ## Visão Geral
 
@@ -24,13 +25,13 @@ dfindexer/
 
 ## Scrapers Suportados
 
-| Tipo             | Domínio                        | Observações principais                                    |
-|------------------|--------------------------------|-----------------------------------------------------------|
-| `starck`         | https://starckfilmes-v3.com/   | Magnet direto no HTML, títulos completos                  |
-| `rede_torrent`   | https://redetorrent.com/       | Estrutura semelhante ao projeto Go                        |
-| `torrent_dos_filmes` | https://torrentdosfilmes.se/ | Precisa tratar metas de temporada/ano dentro do conteúdo |
-| `vaca_torrent`   | https://vacatorrentmov.com/    | Magnet em múltiplos botões, fallback para base64          |
-| `limaotorrent`   | https://limaotorrent.org/      | Links via Vialink (token base64), temporada no HTML       |
+| Tipo             | Domínio                          |
+|------------------|----------------------------------|
+| `starck`         | https://starckfilmes-v3.com/     |
+| `rede_torrent`   | https://redetorrent.com/         |
+| `torrent_dos_filmes` | https://torrentdosfilmes.se/ |
+| `vaca_torrent`   | https://vacatorrentmov.com/      |
+| `limaotorrent`   | https://limaotorrent.org/        |
 
 Cada scraper herda de `BaseScraper` e implementa `search()` e `get_page()` utilizando BeautifulSoup para navegar na estrutura própria do site.
 
@@ -75,72 +76,35 @@ O endpoint aceita `filter_results=true`. Quando ativado, a função `check_query
 | `LOG_LEVEL`                     | `0` (debug), `1` (info), `2` (warn), `3` (error)                              | `1`                |
 | `LOG_FORMAT`                    | `console` ou `json`                                                           | `console`          |
 
-## Build e Execução com Docker
+## Execução com Docker modo host
+
 
 ```bash
-docker build -t dfindexer .
-
 docker run -d \
-  --name=indexer \
-  --hostname=indexer \
-  --dns=172.30.0.254 \
-  --network=lan \
-  --ip=172.20.0.27 \
+  --name=dfindexer \
+  --hostname=dfindexer \
   --restart=unless-stopped \
+  --network=host \
   -e TZ=America/Sao_Paulo \
   -e SHORT_LIVED_CACHE_EXPIRATION=10m \
   -e LONG_LIVED_CACHE_EXPIRATION=7d \
   -e REDIS_HOST=redis \
   -e SITE1=https://starckfilmes-v3.com/ \
   -e SITE1_TYPE=starck \
-  -e SITE2=https://limaotorrent.org/ \
-  -e SITE2_TYPE=limaotorrent \
-  -e LOG_LEVEL=1 \
-  -e LOG_FORMAT=console \
-  -p 7006:7006 \
-  dfindexer
+  -e SITE2=https://redetorrent.com/ \
+  -e SITE2_TYPE=rede_torrent \
+  -e SITE3=https://vacatorrentmov.com/ \
+  -e SITE3_TYPE=vaca_torrent \
+  -e SITE4=https://limaotorrent.org/ \
+  -e SITE4_TYPE=limaotorrent \
+  -e SITE5=https://torrentdosfilmes.se/ \
+  -e SITE5_TYPE=torrent_dos_filmes \
+  dfindexer:latest
 ```
 
-> **Nota:** Caso o Redis não esteja disponível, o indexador continua funcionando; apenas abre mão do cache e loga um aviso.
-
-## Endpoints HTTP
-
-| Método | Rota                         | Descrição                                                    |
-|--------|------------------------------|--------------------------------------------------------------|
-| GET    | `/`                           | Informações básicas da API                                   |
-| GET    | `/indexer`                    | Usa `SITE1` como fonte padrão                                |
-| GET    | `/indexer?q=foo`              | Busca na fonte padrão                                        |
-| GET    | `/indexer?page=2`             | Paginação simples                                            |
-| GET    | `/indexer?q=foo&filter_results=true` | Busca com filtro inteligente                              |
-| GET    | `/indexers/<site>?q=foo`      | Usa o site configurado (`site1`, `site2`, …)                 |
-
-A resposta sempre segue o formato:
-
-```json
-{
-  "results": [
-    {
-      "title": "Pluribus.S01.2025 (pt-br)",
-      "original_title": "Pluribus",
-      "details": "https://...",
-      "year": "2025",
-      "imdb": "tt0123456",
-      "audio": [],
-      "magnet_link": "magnet:?xt=urn:btih:...",
-      "date": "2025-07-10T18:30:00",
-      "info_hash": "...",
-      "trackers": ["udp://tracker.opentrackr.org:1337/announce", ...],
-      "size": "2.45 GB",
-      "leech_count": 0,
-      "seed_count": 0,
-      "similarity": 1.0
-    }
-  ],
-  "count": 1
-}
-```
-
-Atualmente os scrapers não fazem scraping ativo de trackers para seed/leech; os campos permanecem `0` quando o site não exibe esses números.
+# Notas
+** Nota: Caso o Redis não esteja disponível, o indexador continua funcionando; apenas abre mão do cache e loga um aviso.
+** Atualmente os scrapers não fazem scraping ativo de trackers para seed/leech; os campos permanecem `0` quando o site não exibe esses números.
 
 ## Integração com Prowlarr
 
@@ -152,116 +116,6 @@ O arquivo `prowlarr.yml` contém a definição de indexer customizado.
 4. Escolha o site desejado através do dropdown "Indexer" (Site 1… Site 7).
 
 O `keywordsfilters` já converte buscas como `S01` para `temporada 1`, casando com a lógica de padronização do Python.
-
-## Desenvolvimento Local
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export SITE1=https://starckfilmes-v3.com/
-export SITE1_TYPE=starck
-flask --app app.main run --port 7006
-```
-
-### Execução de Scrapers Isolados
-
-Você pode testar um scraper específico via shell Python:
-
-```python
-from scraper.limaotorrent import LimaotorrentScraper
-scraper = LimaotorrentScraper("https://limaotorrent.org/")
-results = scraper.search("pluribus temporada 1")
-print(results[0]["title"])
-```
-
-## Notas Técnicas
-
-- Magnet links são parseados em `magnet.parser.MagnetParser`, que suporta info_hash em hex ou base32.
-- Os scrapers aplicam fallback para títulos originais e normalizam acentos/stop words.
-- `_apply_season_temporada_tags` garante que temporadas encontradas no HTML sejam refletidas no título final (ex.: `S01`, `S02`).
-- Palavras técnicas como `CAMRip` ou `TSRip` são preservadas para evitar perda de contexto.
-- Os scrapers removem logs temporários e comentários de debug; apenas logs relevantes permanecem.
-
-## Créditos
-
-Projetado e mantido por **DFlexy** (https://github.com/DFlexy).
-
-
-
-> **Nota:** Caso o Redis não esteja disponível, o indexador continua funcionando; apenas abre mão do cache e loga um aviso.
-
-## Endpoints HTTP
-
-| Método | Rota                         | Descrição                                                    |
-|--------|------------------------------|--------------------------------------------------------------|
-| GET    | `/`                           | Informações básicas da API                                   |
-| GET    | `/indexer`                    | Usa `SITE1` como fonte padrão                                |
-| GET    | `/indexer?q=foo`              | Busca na fonte padrão                                        |
-| GET    | `/indexer?page=2`             | Paginação simples                                            |
-| GET    | `/indexer?q=foo&filter_results=true` | Busca com filtro inteligente                              |
-| GET    | `/indexers/<site>?q=foo`      | Usa o site configurado (`site1`, `site2`, …)                 |
-
-A resposta sempre segue o formato:
-
-```json
-{
-  "results": [
-    {
-      "title": "Pluribus.S01.2025 (pt-br)",
-      "original_title": "Pluribus",
-      "details": "https://...",
-      "year": "2025",
-      "imdb": "tt0123456",
-      "audio": [],
-      "magnet_link": "magnet:?xt=urn:btih:...",
-      "date": "2025-07-10T18:30:00",
-      "info_hash": "...",
-      "trackers": ["udp://tracker.opentrackr.org:1337/announce", ...],
-      "size": "2.45 GB",
-      "leech_count": 0,
-      "seed_count": 0,
-      "similarity": 1.0
-    }
-  ],
-  "count": 1
-}
-```
-
-Atualmente os scrapers não fazem scraping ativo de trackers para seed/leech; os campos permanecem `0` quando o site não exibe esses números.
-
-## Integração com Prowlarr
-
-O arquivo `prowlarr.yml` contém a definição de indexer customizado.
-
-1. Acesse **Settings > Indexers > + > Custom**.
-2. Cole o conteúdo de `prowlarr.yml` no campo de configuração.
-3. Ajuste o campo `links:` se o endereço da API for diferente.
-4. Escolha o site desejado através do dropdown "Indexer" (Site 1… Site 7).
-
-O `keywordsfilters` já converte buscas como `S01` para `temporada 1`, casando com a lógica de padronização do Python.
-
-## Desenvolvimento Local
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export SITE1=https://starckfilmes-v3.com/
-export SITE1_TYPE=starck
-flask --app app.main run --port 7006
-```
-
-### Execução de Scrapers Isolados
-
-Você pode testar um scraper específico via shell Python:
-
-```python
-from scraper.limaotorrent import LimaotorrentScraper
-scraper = LimaotorrentScraper("https://limaotorrent.org/")
-results = scraper.search("pluribus temporada 1")
-print(results[0]["title"])
-```
 
 ## Notas Técnicas
 
