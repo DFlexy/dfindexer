@@ -26,12 +26,14 @@ jobs:
 
       - name: Build Docker image
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/dfindexer:latest
+          OWNER_LC=${{ github.repository_owner,, }}
+          IMAGE_NAME=ghcr.io/$OWNER_LC/dfindexer:latest
           echo "🔨 Building image: $IMAGE_NAME"
           docker build -t $IMAGE_NAME .
-      
+
       - name: Push Docker image
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/dfindexer:latest
+          OWNER_LC=${{ github.repository_owner,, }}
+          IMAGE_NAME=ghcr.io/$OWNER_LC/dfindexer:latest
           echo "🚀 Pushing image: $IMAGE_NAME"
           docker push $IMAGE_NAME
