@@ -105,11 +105,11 @@ def indexer_handler(site_name: str = None):
             # Busca
             torrents = scraper.search(query)
         else:
-            # Lista da página - para teste do Prowlarr, limita processamento
+            # Lista da página - para teste do Prowlarr, usa limite padrão do BaseScraper (3)
             if is_prowlarr_test:
-                # Para teste do Prowlarr, limita links processados para melhor performance
-                torrents = scraper.get_page(page, max_items=5)
-                logger.info(f"{log_prefix} TEST - Processando apenas 5 itens")
+                # Para teste do Prowlarr, usa limite padrão (3) definido no BaseScraper
+                torrents = scraper.get_page(page)  # max_items=None usa padrão de 3
+                logger.info(f"{log_prefix} TEST - Processando apenas 3 itens (padrão)")
             else:
                 torrents = scraper.get_page(page)
         
@@ -126,14 +126,14 @@ def indexer_handler(site_name: str = None):
                     t.get('original_title', '')
                 )
             ]
-        elif is_prowlarr_test:
-            # Se não há query (teste do Prowlarr), garante máximo de 5 resultados
-            torrents = torrents[:5]
-            if len(torrents) < 5:
-                logger.info(f"{log_prefix} TEST - Retornando {len(torrents)} resultados")
         
         suffix = " filtrados" if filter_results and query else ""
         logger.info(f"{log_prefix} Retornando {len(torrents)} resultados{suffix}")
+        
+        # Remove campos internos antes de retornar
+        for torrent in torrents:
+            torrent.pop('_metadata', None)
+            torrent.pop('_metadata_fetched', None)
         
         return jsonify({
             'results': torrents,
