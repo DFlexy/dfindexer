@@ -54,3 +54,6 @@ class Config:
     LOG_LEVEL: int = int(os.getenv('LOG_LEVEL', '1'))  # Padrão: 1 (info)
     LOG_FORMAT: str = os.getenv('LOG_FORMAT', 'console')  # 'json' ou 'console'
     
+    # Magnet Metadata API
+    MAGNET_METADATA_ENABLED: bool = os.getenv('MAGNET_METADATA_ENABLED', 'true').lower() == 'true'  # Padrão: true
+    
