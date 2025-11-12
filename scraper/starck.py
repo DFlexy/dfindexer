@@ -61,20 +61,31 @@ class StarckScraper(BaseScraper):
                 if href:
                     links.append(href)
         
-        # Limita links se max_items for especificado (otimização para testes do Prowlarr)
-        if max_items and max_items > 0:
-            links = links[:max_items]
+        # Obtém limite efetivo (usa padrão de 3 se não especificado)
+        effective_max = self._get_effective_max_items(max_items)
+        
+        # Detecta se está usando limite padrão (teste do Prowlarr)
+        is_using_default_limit = max_items is None
+        
+        # Limita links
+        if effective_max > 0:
+            links = links[:effective_max]
         
         all_torrents = []
         for link in links:
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
-            # Para testes do Prowlarr, para assim que tiver resultados suficientes
-            if max_items and len(all_torrents) >= max_items:
+            # Para quando tiver resultados suficientes
+            if len(all_torrents) >= effective_max:
                 break
         
-        enriched = self.enrich_torrents(all_torrents)
-        return enriched[:max_items] if max_items else enriched
+        # Pula metadata e trackers se estiver usando limite padrão (teste do Prowlarr)
+        enriched = self.enrich_torrents(
+            all_torrents, 
+            skip_metadata=is_using_default_limit,
+            skip_trackers=is_using_default_limit
+        )
+        return enriched[:effective_max]
     
     def _search_variations(self, query: str) -> List[str]:
         """Busca com variações da query"""
