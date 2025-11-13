@@ -1,14 +1,12 @@
 <div align="center">
-
 # 💖 Apoie este projeto
 
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
 <a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
-  <img src="https://img.shields.io/badge/💸%20APOIAR%20ESTE%20PROJETO-FF00FF?style=for-the-badge" width="500" />
+  <img src="https://img.shields.io/badge/💸%20APOIAR%20ESTE%20PROJETO-00C851?style=for-the-badge" width="500" />
 </a>
-
 </div>
 
 # DF Indexer - Python Indexer para torrents do Brazil
