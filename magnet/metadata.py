@@ -13,6 +13,9 @@ from app.config import Config
 
 logger = logging.getLogger(__name__)
 
+# Cache em memória temporário por requisição (evita buscas duplicadas quando cache Redis está desligado)
+_request_cache = threading.local()
+
 # Rate limiter simples (2 req/s com burst de 4)
 _rate_limiter_lock = threading.Lock()
 _rate_limiter_last_request = 0.0
@@ -306,6 +309,16 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         
         Retorna None se não conseguir extrair pelo menos o tamanho.
     """
+    info_hash_lower = info_hash.lower()
+    
+    # Verifica cache em memória primeiro (evita buscas duplicadas na mesma requisição)
+    if not hasattr(_request_cache, 'metadata_cache'):
+        _request_cache.metadata_cache = {}
+    if info_hash_lower in _request_cache.metadata_cache:
+        cached_data = _request_cache.metadata_cache[info_hash_lower]
+        logger.debug(f"Cache em memória hit para metadata: {info_hash}")
+        return cached_data
+    
     # Verifica circuit breaker primeiro
     if _is_circuit_breaker_open():
         logger.debug(f"Circuit breaker aberto - pulando busca de metadata para {info_hash}")
@@ -318,15 +331,17 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
     
     redis = get_redis_client()
     
-    # Verifica cache primeiro
+    # Verifica cache Redis
     if redis:
         try:
-            cache_key = f"metadata:{info_hash.lower()}"
+            cache_key = f"metadata:{info_hash_lower}"
             cached = redis.get(cache_key)
             if cached:
                 import json
                 data = json.loads(cached)
-                logger.debug(f"Cache hit para metadata: {info_hash}")
+                logger.debug(f"Cache Redis hit para metadata: {info_hash}")
+                # Armazena também no cache em memória
+                _request_cache.metadata_cache[info_hash_lower] = data
                 return data
         except Exception as e:
             logger.debug(f"Erro ao verificar cache: {e}")
@@ -352,13 +367,14 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
     # Tenta extrair nome também (opcional)
     name = None
     try:
-        # Procura por padrão "4:name" seguido de string bencode
-        name_pattern = rb'4:name(\d+):(.+?)(?=[0-9]|e|:)'
+        name_pattern = rb'4:name(\d+):'
         name_match = re.search(name_pattern, torrent_data)
         if name_match:
             name_len = int(name_match.group(1))
-            name_bytes = name_match.group(2)[:name_len]
-            name = name_bytes.decode('utf-8', errors='ignore')
+            start_pos = name_match.end()
+            if start_pos + name_len <= len(torrent_data):
+                name_bytes = torrent_data[start_pos:start_pos + name_len]
+                name = name_bytes.decode('utf-8', errors='ignore')
     except Exception:
         pass
     
@@ -379,11 +395,16 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
     except Exception:
         pass
     
-    # Cacheia resultado (24 horas)
+    # Armazena no cache em memória (evita buscas duplicadas na mesma requisição)
+    if not hasattr(_request_cache, 'metadata_cache'):
+        _request_cache.metadata_cache = {}
+    _request_cache.metadata_cache[info_hash_lower] = result
+    
+    # Cacheia no Redis se disponível (24 horas)
     if redis:
         try:
             import json
-            cache_key = f"metadata:{info_hash.lower()}"
+            cache_key = f"metadata:{info_hash_lower}"
             redis.setex(cache_key, 24 * 3600, json.dumps(result))
         except Exception:
             pass
