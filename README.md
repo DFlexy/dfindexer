@@ -66,7 +66,10 @@ dfindexer/
 | `LOG_FORMAT`                    | `console` ou `json`                                                           | `console`          |
 
 ## Execução com Docker modo host
-Baixe a imagem 
+
+ Abaixo um exemplo de um docker-compose.yml para subir os 2 containers em uma nova rede.
+ Edite conforme necessário
+ 
 ```bash
 version: "3.9"
 
