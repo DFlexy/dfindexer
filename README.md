@@ -73,6 +73,16 @@ docker pull ghcr.io/dflexy/dfindexer:latest
 Execute 
 ```bash
 docker run -d \
+  --name=redis \
+  --hostname=redis \
+  --network=host \
+  -e TZ=America/Sao_Paulo \
+  -v redis:/data \
+  --restart=unless-stopped \
+  redis:alpine
+```
+```bash
+docker run -d \
   --name=dfindexer \
   --hostname=dfindexer \
   --restart=unless-stopped \
