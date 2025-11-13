@@ -2,9 +2,12 @@
 """https://github.com/DFlexy"""
 
 import html
+import logging
 import re
-from typing import List
+from typing import List, Optional
 from urllib.parse import unquote
+
+logger = logging.getLogger(__name__)
 
 # Lista de stop words utilizada para filtrar termos irrelevantes em buscas
 STOP_WORDS = [
@@ -49,12 +52,41 @@ def clean_title(title: str) -> str:
     return cleaned.strip()
 
 
+# Busca o nome do torrent via metadata API quando falta display_name no magnet
+def get_metadata_name(info_hash: str) -> Optional[str]:
+    """
+    Busca o nome do torrent via metadata API quando falta display_name no magnet.
+    
+    Args:
+        info_hash: Info hash do torrent (hex, 40 caracteres)
+        
+    Returns:
+        Nome do torrent se encontrado, None caso contrário
+    """
+    try:
+        from app.config import Config
+        if not Config.MAGNET_METADATA_ENABLED:
+            return None
+        
+        from magnet.metadata import fetch_metadata_from_itorrents
+        metadata = fetch_metadata_from_itorrents(info_hash)
+        if metadata and metadata.get('name'):
+            name = metadata.get('name', '').strip()
+            if name and len(name) >= 3:
+                return name
+    except Exception:
+        pass
+    
+    return None
+
+
 # Normaliza o título original do release antes de gerar o padrão final
 def prepare_release_title(
     release_title: str,
     fallback_title: str,
     year: str = '',
-    missing_dn: bool = False
+    missing_dn: bool = False,
+    info_hash: Optional[str] = None
 ) -> str:
     fallback_title = (fallback_title or '').strip()
 
@@ -67,6 +99,14 @@ def prepare_release_title(
             pass
         normalized = normalized.strip()
 
+    # FALLBACK 1: Busca do metadata quando falta dn
+    if (not normalized or len(normalized) < 3) and missing_dn and info_hash:
+        metadata_name = get_metadata_name(info_hash)
+        if metadata_name:
+            normalized = metadata_name
+            missing_dn = False
+    
+    # FALLBACK 2: Título da página quando metadata não disponível
     if not normalized or len(normalized) < 3:
         normalized = fallback_title
         missing_dn = True
@@ -126,27 +166,100 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     # Processa release_title para extrair apenas informações técnicas (SxxExx, Sx, ano, qualidade, codec, etc.)
     clean_release = clean_title(release_title)
     
+    # EPISÓDIOS MÚLTIPLOS: Title.S02E01-02-03.restodomagnet - detecta antes de normalizar espaços
+    # Regex para detectar múltiplos episódios: S02E01-02-03, S02E01-02, S02E01.02.03, etc.
+    # Padrão: S02E01-02-03, S02E01-02, S02E01.02, S02E01 - 02 - 03 (mas não S02E12.2025)
+    # Busca padrão completo: S02E01-02-03 ou S02E01.02.03
+    # Usa lookahead negativo para garantir que não capture ano (2025)
+    season_ep_multi_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})(?:\s*[\.\-]\s*\d{1,2}){1,}(?![0-9])', clean_release)
+    
+    if not season_ep_multi_match:
+        # Tenta padrão alternativo sem espaços
+        alt_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})(?:[\.\-]\d{1,2}){1,}(?![0-9])', clean_release)
+        if alt_match:
+            season_ep_multi_match = alt_match
+    
+    if season_ep_multi_match:
+        season = season_ep_multi_match.group(1).zfill(2)
+        episode1 = int(season_ep_multi_match.group(2))
+        
+        # Extrai todos os episódios do match completo
+        full_match = season_ep_multi_match.group(0)
+        episodes = [episode1]
+        
+        # Extrai todos os números após o primeiro episódio (E01)
+        # Busca por padrão: -02, -03, .02, .03, etc. (sem espaços após normalização)
+        episode_numbers = re.findall(r'[\.\-]\s*(\d{1,2})', full_match)
+        
+        for ep_str in episode_numbers:
+            ep_num = int(ep_str)
+            # Validação: cada episódio deve ser maior que o anterior, <= 99, e diferença <= 20
+            if ep_num > episodes[-1] and ep_num <= 99 and (ep_num - episodes[-1]) <= 20:
+                episodes.append(ep_num)
+            else:
+                break  # Para se encontrar número inválido
+        
+        # Se tem pelo menos 2 episódios válidos, formata como múltiplos
+        if len(episodes) >= 2:
+            episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+            season_ep_str = f"S{season}E{episode_str}"
+            
+            # Normaliza espaços para pontos no restante (após SxxExx-xx-xx)
+            remaining_text = clean_release[season_ep_multi_match.end():]
+            remaining_text = re.sub(r'\s+', '.', remaining_text)
+            remaining_text = re.sub(r'\.{2,}', '.', remaining_text)
+            remaining_text = remaining_text.strip('.')
+            
+            remaining = _extract_technical_info(remaining_text)
+            remaining = _clean_remaining(remaining)
+            result = finalize_title(f"{base_title}.{season_ep_str}{remaining}")
+            
+            return result
+    
     # Normaliza espaços para pontos para facilitar processamento
     clean_release = re.sub(r'\s+', '.', clean_release)
     clean_release = re.sub(r'\.{2,}', '.', clean_release)
     clean_release = clean_release.strip('.')
     
-    # EPISÓDIOS DUPLOS: Title.S02E01-02.restodomagnet (2 dígitos) - detecta ANTES de episódios simples
-    season_ep_double_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})[\.\-](\d{1,2})', clean_release)
-    if season_ep_double_match:
-        season = season_ep_double_match.group(1).zfill(2)  # 2 dígitos
-        episode1 = season_ep_double_match.group(2).zfill(2)  # 2 dígitos
-        episode2 = season_ep_double_match.group(3).zfill(2)  # 2 dígitos
-        season_ep_str = f"S{season}E{episode1}-{episode2}"
+    # EPISÓDIOS MÚLTIPLOS: detecta após normalizar também
+    # Regex para detectar múltiplos episódios após normalização
+    season_ep_multi_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})(?:[\.\-]\d{1,2}){1,}(?![0-9])', clean_release)
+    
+    if season_ep_multi_match:
+        season = season_ep_multi_match.group(1).zfill(2)
+        episode1 = int(season_ep_multi_match.group(2))
         
-        # Extrai apenas informações técnicas do restante (após SxxExx-xx)
-        remaining_text = clean_release[season_ep_double_match.end():]
-        remaining = _extract_technical_info(remaining_text)
-        remaining = _clean_remaining(remaining)
-        return finalize_title(f"{base_title}.{season_ep_str}{remaining}")
+        # Extrai todos os episódios do match completo
+        full_match = season_ep_multi_match.group(0)
+        episodes = [episode1]
+        
+        # Extrai todos os números após o primeiro episódio (E01)
+        # Busca por padrão: -02, -03, .02, .03, etc.
+        episode_numbers = re.findall(r'[\.\-](\d{1,2})', full_match)
+        for ep_str in episode_numbers:
+            ep_num = int(ep_str)
+            # Validação: cada episódio deve ser maior que o anterior, <= 99, e diferença <= 20
+            if ep_num > episodes[-1] and ep_num <= 99 and (ep_num - episodes[-1]) <= 20:
+                episodes.append(ep_num)
+            else:
+                break  # Para se encontrar número inválido
+        
+        # Se tem pelo menos 2 episódios válidos, formata como múltiplos
+        if len(episodes) >= 2:
+            episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+            season_ep_str = f"S{season}E{episode_str}"
+            
+            # Extrai apenas informações técnicas do restante (após SxxExx-xx-xx)
+            remaining_text = clean_release[season_ep_multi_match.end():]
+            remaining = _extract_technical_info(remaining_text)
+            remaining = _clean_remaining(remaining)
+            result = finalize_title(f"{base_title}.{season_ep_str}{remaining}")
+            
+            return result
     
     # EPISÓDIOS: Title.S02E01.restodomagnet (2 dígitos) - detecta ANTES de filtrar
     season_ep_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})', clean_release)
+    
     if season_ep_match:
         season = season_ep_match.group(1).zfill(2)  # 2 dígitos
         episode = season_ep_match.group(2).zfill(2)  # 2 dígitos
@@ -392,9 +505,10 @@ def _apply_season_temporada_tags(title: str, release_title: str, original_title:
     if season_match:
         season_number_raw = season_match.group(1)
         season_number = season_number_raw.zfill(2)
-        season_pattern = rf'(?i)\bS0*{season_number_raw}\b'
+        has_season_info = re.search(rf'(?i)S0*{season_number_raw}(?:E\d+(?:-\d+)?|$)', result)
+        has_any_season_ep = re.search(r'(?i)S\d{1,2}E\d{1,2}', result)
         year_in_title = year_str and year_str in result
-        if not re.search(season_pattern, result):
+        if not has_season_info and not has_any_season_ep:
             if year_in_title:
                 result = result.replace(f".{year_str}", '')
                 result = f"{result}.S{season_number}.{year_str}"
@@ -441,15 +555,28 @@ def _reorder_title_components(title: str) -> str:
         if not clean_part:
             continue
         
-        # Verifica episódios duplos primeiro: S02E05-06
-        match_episode_double = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})[\.\-](\d{1,2})$', clean_part)
-        if match_episode_double:
-            season = match_episode_double.group(1).zfill(2)
-            episode1 = match_episode_double.group(2).zfill(2)
-            episode2 = match_episode_double.group(3).zfill(2)
-            season_episode = f"S{season}E{episode1}-{episode2}"
-            structure_started = True
-            continue
+        # Verifica episódios múltiplos primeiro: S02E05-06, S02E05-06-07, etc.
+        match_episode_multi = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})(?:[\.\-](\d{1,2}))+$', clean_part)
+        if match_episode_multi:
+            season = match_episode_multi.group(1).zfill(2)
+            episode1 = int(match_episode_multi.group(2))
+            episodes = [episode1]
+            
+            # Extrai todos os números após o primeiro episódio
+            episode_numbers = re.findall(r'[\.\-](\d{1,2})', clean_part)
+            for ep_str in episode_numbers:
+                ep_num = int(ep_str)
+                if ep_num > episodes[-1] and ep_num <= 99 and (ep_num - episodes[-1]) <= 20:
+                    episodes.append(ep_num)
+                else:
+                    break
+            
+            # Se tem pelo menos 2 episódios válidos, formata como múltiplos
+            if len(episodes) >= 2:
+                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                season_episode = f"S{season}E{episode_str}"
+                structure_started = True
+                continue
         
         match_episode = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})$', clean_part)
         if match_episode:
