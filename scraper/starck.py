@@ -5,7 +5,7 @@ import html
 import re
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from urllib.parse import quote
 from scraper.base import BaseScraper
 from magnet.parser import MagnetParser
@@ -31,7 +31,7 @@ class StarckScraper(BaseScraper):
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
     
-    def search(self, query: str) -> List[Dict]:
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
         """Busca torrents com variações da query"""
         links = self._search_variations(query)
         
@@ -40,7 +40,7 @@ class StarckScraper(BaseScraper):
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
         
-        return self.enrich_torrents(all_torrents)
+        return self.enrich_torrents(all_torrents, filter_func=filter_func)
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
         """Obtém torrents de uma página específica"""
