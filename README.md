@@ -38,10 +38,10 @@ dfindexer/
 ## Padronização de Títulos
 - **Episódios**: `Title.S02E01.year.restodomagnet`
 - **Episódios Duplos**: `Title.S02E01-02.year.restodomagnet`
+- **Episódios Múltiplos**: `Title.S02E01-02-03.year.restodomagnet` (triplos, quádruplos, etc.)
 - **Séries completas**: `Title.S02.year.restodomagnet`
 - **Filmes**: `Title.year.restodomagnet`
-- **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
-
+- **Faltou `dn` no magnet**: Usa título da página + `WEB-DL` como fallback
 
 ## Regras adicionais:
 - Ordenação garantida: sempre `Título → Sxx/Eyy → Ano → Qualidade/Tags` (ex.: `Pluribus.S01.2025.WEB-DL.1080p`).
