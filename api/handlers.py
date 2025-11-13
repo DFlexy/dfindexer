@@ -3,6 +3,7 @@
 
 import logging
 from datetime import datetime
+from typing import Dict
 from flask import jsonify, request
 from app.config import Config
 from scraper import (
@@ -101,9 +102,19 @@ def indexer_handler(site_name: str = None):
         # Detecta se é teste do Prowlarr (query vazia)
         is_prowlarr_test = not query
         
+        # Prepara função de filtro se necessário (para aplicar ANTES do enriquecimento)
+        filter_func = None
+        if filter_results and query:
+            def filter_func(torrent: Dict) -> bool:
+                return check_query_match(
+                    query,
+                    torrent.get('title', ''),
+                    torrent.get('original_title', '')
+                )
+        
         if query:
-            # Busca
-            torrents = scraper.search(query)
+            # Busca - passa filtro para aplicar antes do enriquecimento
+            torrents = scraper.search(query, filter_func=filter_func)
         else:
             # Lista da página - para teste do Prowlarr, usa limite padrão do BaseScraper (3)
             if is_prowlarr_test:
@@ -116,6 +127,8 @@ def indexer_handler(site_name: str = None):
         logger.info(f"{log_prefix} Extraídos {len(torrents)} torrents antes do filtro")
         
         # Filtra resultados se solicitado - verifica se tem pelo menos uma palavra da query
+        # NOTA: O filtro ainda é aplicado aqui para compatibilidade, mas idealmente deveria
+        # ser aplicado dentro do scraper antes do enrich_torrents para melhor performance
         if filter_results and query:
             # Filtra apenas quando filter_results=true E há query
             torrents = [
