@@ -68,33 +68,52 @@ dfindexer/
 ## Execução com Docker modo host
 Baixe a imagem 
 ```bash
-CONTAINER DO REDIS "CACHE"
-```
-Execute 
-```bash
-docker run -d \
-  --name=redis \
-  --hostname=redis \
-  --network=host \
-  -e TZ=America/Sao_Paulo \
-  -v redis:/data \
-  --restart=unless-stopped \
-  redis:alpine
-```
-```bash
-CONTAINER DO INDEXADOR
-```
-```bash
-docker run -d \
-  --name=dfindexer \
-  --hostname=dfindexer \
-  --restart=unless-stopped \
-  --network=host \
-  -e TZ=America/Sao_Paulo \
-  -e SHORT_LIVED_CACHE_EXPIRATION=10m \
-  -e LONG_LIVED_CACHE_EXPIRATION=7d \
-  -e REDIS_HOST=redis \
-  ghcr.io/dflexy/dfindexer:latest
+version: "3.9"
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo
+    volumes:
+      - redis_data:/data
+    networks:
+      df-net:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "6379:6379"
+
+  dfindexer:
+    image: ghcr.io/dflexy/dfindexer:latest
+    container_name: dfindexer
+    hostname: dfindexer
+    restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo
+      - SHORT_LIVED_CACHE_EXPIRATION=10m
+      - LONG_LIVED_CACHE_EXPIRATION=7d
+      - REDIS_HOST=redis
+    networks:
+      df-net:
+        ipv4_address: 172.20.0.11
+    ports:
+      - "7006:7006"
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+
+networks:
+  df-net:
+    name: df-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
 ```
 
 # Notas
