@@ -111,8 +111,8 @@ def create_standardized_title(original_title: str, year: str, release_title: str
             base_title = re.sub(r'[^\w\.\-]', '', base_title)
             base_title = base_title.strip('.')
             
-            # Se já tem formato SxxExx no título base, retorna direto
-            if re.search(r'(?i)S\d{1,2}E\d{1,2}', base_title):
+            # Se já tem formato SxxExx ou SxxExx-xx no título base, retorna direto
+            if re.search(r'(?i)S\d{1,2}E\d{1,2}(?:[\.\-]\d{1,2})?', base_title):
                 return finalize_title(base_title)
         else:
             # Fallback1: Title Não-latinos Ex:Russo/Koreano (Usar title do magnet)
@@ -131,12 +131,19 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     clean_release = re.sub(r'\.{2,}', '.', clean_release)
     clean_release = clean_release.strip('.')
     
-    # Corrige episódios duplos: S01E01-02 → S01E01E02
-    clean_release = re.sub(
-        r'(?i)(S\d{1,2}E)(\d{1,2})[\.\-](\d{1,2})',
-        lambda m: f"{m.group(1)}{m.group(2)}E{m.group(3).zfill(2)}",
-        clean_release
-    )
+    # EPISÓDIOS DUPLOS: Title.S02E01-02.restodomagnet (2 dígitos) - detecta ANTES de episódios simples
+    season_ep_double_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})[\.\-](\d{1,2})', clean_release)
+    if season_ep_double_match:
+        season = season_ep_double_match.group(1).zfill(2)  # 2 dígitos
+        episode1 = season_ep_double_match.group(2).zfill(2)  # 2 dígitos
+        episode2 = season_ep_double_match.group(3).zfill(2)  # 2 dígitos
+        season_ep_str = f"S{season}E{episode1}-{episode2}"
+        
+        # Extrai apenas informações técnicas do restante (após SxxExx-xx)
+        remaining_text = clean_release[season_ep_double_match.end():]
+        remaining = _extract_technical_info(remaining_text)
+        remaining = _clean_remaining(remaining)
+        return finalize_title(f"{base_title}.{season_ep_str}{remaining}")
     
     # EPISÓDIOS: Title.S02E01.restodomagnet (2 dígitos) - detecta ANTES de filtrar
     season_ep_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})', clean_release)
@@ -432,6 +439,16 @@ def _reorder_title_components(title: str) -> str:
     for part in parts:
         clean_part = part.strip()
         if not clean_part:
+            continue
+        
+        # Verifica episódios duplos primeiro: S02E05-06
+        match_episode_double = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})[\.\-](\d{1,2})$', clean_part)
+        if match_episode_double:
+            season = match_episode_double.group(1).zfill(2)
+            episode1 = match_episode_double.group(2).zfill(2)
+            episode2 = match_episode_double.group(3).zfill(2)
+            season_episode = f"S{season}E{episode1}-{episode2}"
+            structure_started = True
             continue
         
         match_episode = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})$', clean_part)
