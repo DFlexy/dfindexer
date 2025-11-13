@@ -5,7 +5,7 @@
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
-<a href="https://buy.stripe.com/test_3cI3cvehCfd18bxbPoco000" target="_blank">
+<a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
   <img src="https://img.shields.io/badge/Apoiar%20via%20Stripe-💸-purple?style=for-the-badge&logo=stripe" alt="Apoiar via Stripe"/>
 </a>
 
