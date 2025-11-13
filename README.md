@@ -24,6 +24,7 @@ dfindexer/
 
 ## Padronização de Títulos
 - **Episódios**: `Title.S02E01.year.restodomagnet`
+- **Episódios Duplos**: `Title.S02E01-02.year.restodomagnet`
 - **Séries completas**: `Title.S02.year.restodomagnet`
 - **Filmes**: `Title.year.restodomagnet`
 - **Faltou `dn` no magnet**: `Title.S02.year.WEB-DL` (ou `Title.year.WEB-DL`)
