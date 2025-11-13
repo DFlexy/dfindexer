@@ -99,7 +99,6 @@ docker run -d \
 
 # Notas
 ** Nota: Caso o Redis não esteja disponível, o indexador continua funcionando; apenas abre mão do cache e loga um aviso.
-** Atualmente os scrapers não fazem scraping ativo de trackers para seed/leech; os campos permanecem `0` quando o site não exibe esses números.
 
 ## Integração com Prowlarr
 O arquivo `prowlarr.yml` contém a definição de indexer customizado.
