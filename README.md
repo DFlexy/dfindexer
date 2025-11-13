@@ -6,8 +6,13 @@
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
 <a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
-  <img src="https://img.shields.io/badge/Apoiar%20via%20Stripe-💸-purple?style=for-the-badge&logo=stripe" alt="Apoiar via Stripe"/>
+  <img 
+    src="https://img.shields.io/badge/Apoiar%20o%20Projeto-💰%20Doar%20agora!-brightgreen?style=for-the-badge&logo=money&logoColor=white"
+    alt="Apoiar via Stripe"
+    style="transform: scale(1.3); margin-top: 10px;" 
+  />
 </a>
+
 
 </div>
 
