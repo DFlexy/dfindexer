@@ -240,13 +240,15 @@ class TfilmeScraper(BaseScraper):
                 info_hash = magnet_data['info_hash']
                 
                 raw_release_title = magnet_data.get('display_name', '')
-                fallback_title = page_title or original_title or ''
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                
+                fallback_title = page_title or original_title or ''
                 original_release_title = prepare_release_title(
                     raw_release_title,
                     fallback_title,
                     year,
-                    missing_dn=missing_dn
+                    missing_dn=missing_dn,
+                    info_hash=info_hash if missing_dn else None
                 )
                 
                 standardized_title = create_standardized_title(
