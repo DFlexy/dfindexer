@@ -3,7 +3,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 from bs4 import BeautifulSoup
 import requests
 from cache.redis_client import get_redis_client
@@ -102,8 +102,14 @@ class BaseScraper(ABC):
             return None
     
     @abstractmethod
-    def search(self, query: str) -> List[Dict]:
-        """Busca torrents por query"""
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+        """
+        Busca torrents por query
+        
+        Args:
+            query: Query de busca
+            filter_func: Função opcional para filtrar torrents antes do enriquecimento
+        """
         pass
     
     @abstractmethod
@@ -124,7 +130,7 @@ class BaseScraper(ABC):
         """
         return max_items if max_items is not None else self.DEFAULT_MAX_ITEMS_FOR_TEST
 
-    def enrich_torrents(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False) -> List[Dict]:
+    def enrich_torrents(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
         """
         Preenche dados de seeds/leechers via trackers (quando possível).
         
@@ -132,9 +138,29 @@ class BaseScraper(ABC):
             torrents: Lista de torrents para enriquecer
             skip_metadata: Se True, pula busca de metadata (útil para testes do Prowlarr)
             skip_trackers: Se True, pula scraping de trackers (útil para testes do Prowlarr)
+            filter_func: Função opcional para filtrar torrents. 
+                        O filtro é aplicado DEPOIS de buscar metadata para títulos (se necessário),
+                        mas ANTES de buscar trackers e metadata para size/date (evita trabalho desnecessário).
         """
         if not torrents:
             return torrents
+        
+        # NOTA: Não aplicamos o filtro aqui ainda porque alguns torrents podem precisar
+        # de metadata para obter o título completo (quando missing_dn=True).
+        # O prepare_release_title já busca metadata quando necessário, então os títulos
+        # já devem estar completos quando chegamos aqui.
+        # Mas para garantir, vamos buscar metadata para títulos primeiro se necessário.
+        
+        # Busca metadata para títulos que ainda não têm (quando missing_dn)
+        # Isso garante que o filtro tenha títulos completos para trabalhar
+        if Config.MAGNET_METADATA_ENABLED and not skip_metadata:
+            self._ensure_titles_complete(torrents)
+        
+        # Agora aplica o filtro DEPOIS que os títulos estão completos
+        if filter_func:
+            torrents = [t for t in torrents if filter_func(t)]
+            if not torrents:
+                return torrents
         
         # Busca metadata uma vez e reutiliza para size e date (evita buscas duplicadas)
         if Config.MAGNET_METADATA_ENABLED and not skip_metadata:
@@ -145,6 +171,34 @@ class BaseScraper(ABC):
         if not skip_trackers:
             self._attach_peers(torrents)
         return torrents
+    
+    def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
+        """
+        Garante que os títulos dos torrents estão completos, buscando metadata se necessário.
+        Isso é importante para que o filtro funcione corretamente com títulos completos.
+        
+        NOTA: Torrents com 'dn' completo já têm título completo do prepare_release_title,
+        então só buscamos metadata para títulos muito curtos (< 10 chars) que podem ter
+        falhado na busca anterior ou não tinham 'dn'.
+        """
+        from magnet.metadata import fetch_metadata_from_itorrents
+        
+        for torrent in torrents:
+            # Só busca metadata se o título parece incompleto (muito curto)
+            # Torrents com 'dn' completo já têm título completo, então não precisam buscar
+            title = torrent.get('title', '')
+            if not title or len(title.strip()) < 10:
+                info_hash = torrent.get('info_hash')
+                if info_hash:
+                    try:
+                        metadata = fetch_metadata_from_itorrents(info_hash)
+                        if metadata and metadata.get('name'):
+                            name = metadata.get('name', '').strip()
+                            if name and len(name) >= 3:
+                                # Atualiza o título se encontrou um melhor
+                                torrent['title'] = name
+                    except Exception:
+                        pass
     
     def _fetch_metadata_batch(self, torrents: List[Dict]) -> None:
         """
