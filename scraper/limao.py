@@ -6,7 +6,7 @@ import re
 import logging
 import base64
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from urllib.parse import quote, unquote, urlparse, parse_qs
 from scraper.base import BaseScraper
 from magnet.parser import MagnetParser
@@ -31,7 +31,7 @@ class LimaoScraper(BaseScraper):
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
     
-    def search(self, query: str) -> List[Dict]:
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
         """Busca torrents"""
         search_url = f"{self.base_url}{self.search_url}{quote(query)}"
         doc = self.get_document(search_url, self.base_url)
@@ -51,7 +51,7 @@ class LimaoScraper(BaseScraper):
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
         
-        return self.enrich_torrents(all_torrents)
+        return self.enrich_torrents(all_torrents, filter_func=filter_func)
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
         """Obtém torrents de uma página específica"""
