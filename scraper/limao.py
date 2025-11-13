@@ -378,27 +378,43 @@ class LimaoScraper(BaseScraper):
                 info_hash = magnet_data['info_hash']
                 
                 raw_release_title = magnet_data.get('display_name', '') or ''
-                fallback_title = title
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
-                working_release_title = raw_release_title if raw_release_title else fallback_title
                 
-                # Garante que informações de temporada do HTML entrem no release_title
-                try:
-                    if 'temporada' not in working_release_title.lower():
-                        article_text = article.get_text(' ', strip=True).lower()
-                        season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
-                        if season_match:
-                            season_number = season_match.group(1)
-                            working_release_title = f"{working_release_title} temporada {season_number}"
-                except Exception:
-                    pass
+                fallback_title = title
+                working_release_title = raw_release_title if not missing_dn else ''
+                
+                if not missing_dn:
+                    try:
+                        if 'temporada' not in working_release_title.lower():
+                            article_text = article.get_text(' ', strip=True).lower()
+                            season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
+                            if season_match:
+                                season_number = season_match.group(1)
+                                working_release_title = f"{working_release_title} temporada {season_number}"
+                    except Exception:
+                        pass
 
                 original_release_title = prepare_release_title(
                     working_release_title,
                     fallback_title,
                     year,
-                    missing_dn=missing_dn
+                    missing_dn=missing_dn,
+                    info_hash=info_hash if missing_dn else None
                 )
+                
+                # Adiciona temporada do HTML apenas se não tiver informação de temporada/episódio no metadata
+                if missing_dn:
+                    has_season_ep_info = re.search(r'(?i)S\d{1,2}(?:E\d{1,2}(?:-\d{1,2})?)?', original_release_title)
+                    if not has_season_ep_info and 'temporada' not in original_release_title.lower():
+                        try:
+                            article_text = article.get_text(' ', strip=True).lower()
+                            season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
+                            if season_match:
+                                season_number = season_match.group(1)
+                                if not re.search(rf'\b{season_number}\s*(?:ª|a)?\s*temporada', original_release_title, re.IGNORECASE):
+                                    original_release_title = f"{original_release_title} temporada {season_number}"
+                        except Exception:
+                            pass
                 
                 logger.debug(f"[LIMAO] Antes create_standardized_title - original_title: '{original_title}', year: '{year}', release_title: '{original_release_title[:100]}'")
                 standardized_title = create_standardized_title(
@@ -601,27 +617,43 @@ class LimaoScraper(BaseScraper):
                 info_hash = magnet_data['info_hash']
                 
                 raw_release_title = magnet_data.get('display_name', '') or ''
-                fallback_title = title
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
-                working_release_title = raw_release_title if raw_release_title else fallback_title
                 
-                # Garante que informações de temporada do HTML entrem no release_title
-                try:
-                    if 'temporada' not in working_release_title.lower():
-                        article_text = article.get_text(' ', strip=True).lower()
-                        season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
-                        if season_match:
-                            season_number = season_match.group(1)
-                            working_release_title = f"{working_release_title} temporada {season_number}"
-                except Exception:
-                    pass
+                fallback_title = title
+                working_release_title = raw_release_title if not missing_dn else ''
+                
+                if not missing_dn:
+                    try:
+                        if 'temporada' not in working_release_title.lower():
+                            article_text = article.get_text(' ', strip=True).lower()
+                            season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
+                            if season_match:
+                                season_number = season_match.group(1)
+                                working_release_title = f"{working_release_title} temporada {season_number}"
+                    except Exception:
+                        pass
 
                 original_release_title = prepare_release_title(
                     working_release_title,
                     fallback_title,
                     year,
-                    missing_dn=missing_dn
+                    missing_dn=missing_dn,
+                    info_hash=info_hash if missing_dn else None
                 )
+                
+                # Adiciona temporada do HTML apenas se não tiver informação de temporada/episódio no metadata
+                if missing_dn:
+                    has_season_ep_info = re.search(r'(?i)S\d{1,2}(?:E\d{1,2}(?:-\d{1,2})?)?', original_release_title)
+                    if not has_season_ep_info and 'temporada' not in original_release_title.lower():
+                        try:
+                            article_text = article.get_text(' ', strip=True).lower()
+                            season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text)
+                            if season_match:
+                                season_number = season_match.group(1)
+                                if not re.search(rf'\b{season_number}\s*(?:ª|a)?\s*temporada', original_release_title, re.IGNORECASE):
+                                    original_release_title = f"{original_release_title} temporada {season_number}"
+                        except Exception:
+                            pass
                 
                 logger.debug(f"[LIMAOTORRENT] Antes create_standardized_title - original_title: '{original_title}', year: '{year}', release_title: '{original_release_title[:100]}'")
                 standardized_title = create_standardized_title(
