@@ -5,12 +5,27 @@
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
-<a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
-  <img 
-    src="https://img.shields.io/badge/Apoiar%20o%20Projeto-💰%20Doar%20agora!-brightgreen?style=for-the-badge&logo=money&logoColor=white"
-    alt="Apoiar via Stripe"
-    style="transform: scale(1.3); margin-top: 10px;" 
-  />
+<a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" 
+   target="_blank" 
+   style="
+     display: inline-flex;
+     align-items: center;
+     gap: 20px;
+     background: linear-gradient(135deg, #7b2ff7, #f107a3);
+     color: white;
+     padding: 36px 64px;   /* dobro */
+     font-size: 2.8rem;    /* dobro */
+     font-weight: bold;
+     border-radius: 28px;  /* dobro */
+     text-decoration: none;
+     box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+     transition: transform .2s, box-shadow .2s;
+   "
+   onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 20px 50px rgba(0,0,0,0.35)'"
+   onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 12px 40px rgba(0,0,0,0.25)'"
+>
+  <span style="font-size: 4rem;">💰</span>
+  Apoiar este projeto
 </a>
 
 
