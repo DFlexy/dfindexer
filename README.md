@@ -5,9 +5,12 @@
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
-[![Apoiar via Stripe](https://img.shields.io/badge/Apoiar%20via%20Stripe-💸-purple?style=for-the-badge&logo=stripe)](https://buy.stripe.com/test_3cI3cvehCfd18bxbPoco000)
+<a href="https://buy.stripe.com/test_3cI3cvehCfd18bxbPoco000" target="_blank">
+  <img src="https://img.shields.io/badge/Apoiar%20via%20Stripe-💸-purple?style=for-the-badge&logo=stripe" alt="Apoiar via Stripe"/>
+</a>
 
 </div>
+
 # DF Indexer - Python Indexer para torrents do Brazil
  - Indexador em Python que replica (e amplia) a lógica do projeto original em Go https://github.com/felipemarinho97/torrent-indexer
  - Para organizar torrents brasileiros em um formato padronizado, pronto para consumo por ferramentas como Prowlarr, Sonarr e Radarr.
