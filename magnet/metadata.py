@@ -5,7 +5,7 @@ import logging
 import re
 import time
 import threading
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from urllib.parse import unquote
 import requests
 from cache.redis_client import get_redis_client
@@ -16,30 +16,37 @@ logger = logging.getLogger(__name__)
 # Cache em memória temporário por requisição (evita buscas duplicadas quando cache Redis está desligado)
 _request_cache = threading.local()
 
-# Rate limiter simples (2 req/s com burst de 4)
+# Rate limiter simples (1 req/s com burst de 2) - reduzido para evitar sobrecarga
 _rate_limiter_lock = threading.Lock()
 _rate_limiter_last_request = 0.0
-_rate_limiter_min_interval = 0.5  # 2 req/s = 0.5s entre requisições
-_rate_limiter_burst_tokens = 4
+_rate_limiter_min_interval = 1.0  # 1 req/s = 1s entre requisições (mais conservador)
+_rate_limiter_burst_tokens = 2  # Burst reduzido
 
-# Circuit breaker para evitar consultas quando há muitos timeouts
+# Circuit breaker para evitar consultas quando há muitos timeouts/503s
 _CIRCUIT_BREAKER_KEY = "metadata:circuit_breaker"
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3  # Número de timeouts consecutivos antes de desabilitar
-_CIRCUIT_BREAKER_DISABLE_DURATION = 300  # 5 minutos de desabilitação após muitos timeouts
+_CIRCUIT_BREAKER_503_THRESHOLD = 5  # Número de 503s consecutivos antes de desabilitar
+_CIRCUIT_BREAKER_DISABLE_DURATION = 300  # 5 minutos de desabilitação após muitos erros
 _CIRCUIT_BREAKER_FAILURE_CACHE_TTL = 60  # Cache de falhas individuais por 1 minuto
+_CIRCUIT_BREAKER_503_CACHE_TTL = 300  # Cache de falhas 503 por 5 minutos
+
+# Lock por hash para evitar requisições simultâneas ao mesmo hash
+_hash_locks = {}
+_hash_locks_lock = threading.Lock()
 
 
 def _rate_limit():
-    """Rate limiter simples para iTorrents"""
+    """Rate limiter simples para iTorrents - mais conservador para evitar 503"""
     global _rate_limiter_last_request, _rate_limiter_burst_tokens
     
     with _rate_limiter_lock:
         now = time.time()
         elapsed = now - _rate_limiter_last_request
         
-        # Recarrega tokens de burst (1 token a cada 0.5s, máximo 4)
+        # Recarrega tokens de burst (1 token a cada intervalo, máximo 2)
         if elapsed >= _rate_limiter_min_interval:
-            _rate_limiter_burst_tokens = min(4, _rate_limiter_burst_tokens + int(elapsed / _rate_limiter_min_interval))
+            tokens_to_add = int(elapsed / _rate_limiter_min_interval)
+            _rate_limiter_burst_tokens = min(2, _rate_limiter_burst_tokens + tokens_to_add)
         
         # Se não tem tokens, espera
         if _rate_limiter_burst_tokens <= 0:
@@ -47,6 +54,11 @@ def _rate_limit():
             if wait_time > 0:
                 time.sleep(wait_time)
                 now = time.time()
+                elapsed = now - _rate_limiter_last_request
+                # Recarrega após espera
+                if elapsed >= _rate_limiter_min_interval:
+                    tokens_to_add = int(elapsed / _rate_limiter_min_interval)
+                    _rate_limiter_burst_tokens = min(2, tokens_to_add)
         
         _rate_limiter_burst_tokens -= 1
         _rate_limiter_last_request = now
@@ -102,9 +114,36 @@ def _record_timeout():
         logger.debug(f"Erro ao registrar timeout: {e}")
 
 
+def _record_503():
+    """
+    Registra um erro 503 e abre o circuit breaker se houver muitos 503s consecutivos.
+    """
+    redis = get_redis_client()
+    if not redis:
+        return
+    
+    try:
+        error_503_key = f"{_CIRCUIT_BREAKER_KEY}:503s"
+        error_503_count = redis.incr(error_503_key)
+        redis.expire(error_503_key, 60)  # Expira contador após 1 minuto
+        
+        # Se atingiu o limite, abre o circuit breaker
+        if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
+            disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
+            redis.setex(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION, str(disabled_until))
+            logger.warning(
+                f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
+                f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
+            )
+            # Reseta contador
+            redis.delete(error_503_key)
+    except Exception as e:
+        logger.debug(f"Erro ao registrar 503: {e}")
+
+
 def _record_success():
     """
-    Registra uma requisição bem-sucedida, resetando o contador de timeouts.
+    Registra uma requisição bem-sucedida, resetando os contadores de erros.
     """
     redis = get_redis_client()
     if not redis:
@@ -112,7 +151,9 @@ def _record_success():
     
     try:
         timeout_key = f"{_CIRCUIT_BREAKER_KEY}:timeouts"
+        error_503_key = f"{_CIRCUIT_BREAKER_KEY}:503s"
         redis.delete(timeout_key)
+        redis.delete(error_503_key)
     except Exception:
         pass
 
@@ -126,25 +167,54 @@ def _is_failure_cached(info_hash: str) -> bool:
         return False
     
     try:
-        failure_key = f"metadata:failure:{info_hash.lower()}"
-        return redis.exists(failure_key) > 0
+        info_hash_lower = info_hash.lower()
+        # Verifica cache de falha geral
+        failure_key = f"metadata:failure:{info_hash_lower}"
+        if redis.exists(failure_key) > 0:
+            return True
+        # Verifica cache específico de 503
+        failure_503_key = f"metadata:failure_503:{info_hash_lower}"
+        if redis.exists(failure_503_key) > 0:
+            return True
+        return False
     except Exception:
         return False
 
 
-def _cache_failure(info_hash: str):
+def _cache_failure(info_hash: str, is_503: bool = False):
     """
     Cacheia uma falha para evitar tentativas repetidas por um período.
+    
+    Args:
+        info_hash: Hash do torrent
+        is_503: Se True, cacheia por mais tempo (5 minutos) pois é erro de serviço indisponível
     """
     redis = get_redis_client()
     if not redis:
         return
     
     try:
-        failure_key = f"metadata:failure:{info_hash.lower()}"
-        redis.setex(failure_key, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL, "1")
+        info_hash_lower = info_hash.lower()
+        if is_503:
+            # Erros 503 são cacheados por mais tempo
+            failure_key = f"metadata:failure_503:{info_hash_lower}"
+            redis.setex(failure_key, _CIRCUIT_BREAKER_503_CACHE_TTL, "1")
+        else:
+            failure_key = f"metadata:failure:{info_hash_lower}"
+            redis.setex(failure_key, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL, "1")
     except Exception:
         pass
+
+
+def _get_hash_lock(info_hash: str):
+    """
+    Obtém um lock específico para um hash, evitando requisições simultâneas.
+    """
+    info_hash_lower = info_hash.lower()
+    with _hash_locks_lock:
+        if info_hash_lower not in _hash_locks:
+            _hash_locks[info_hash_lower] = threading.Lock()
+        return _hash_locks[info_hash_lower]
 
 
 def _parse_bencode_size(data: bytes) -> Optional[int]:
@@ -200,10 +270,13 @@ def _parse_bencode_size(data: bytes) -> Optional[int]:
         return None
 
 
-def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Optional[bytes]:
+def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Tuple[Optional[bytes], bool, bool]:
     """
     Baixa apenas o header do arquivo .torrent do iTorrents.
     Usa HTTP Range requests para baixar só o necessário (até 512KB).
+    
+    Returns:
+        Tupla (dados, foi_timeout, foi_503): dados do torrent ou None, se houve timeout, e se foi 503
     """
     info_hash_hex = info_hash.lower() if use_lowercase else info_hash.upper()
     url = f"https://itorrents.org/torrent/{info_hash_hex}.torrent"
@@ -213,6 +286,9 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Option
         'User-Agent': 'TorrentMetadataService/1.0',
         'Accept-Encoding': 'gzip',
     })
+    
+    # Timeout reduzido para evitar esperas longas (5s connect + 3s read)
+    timeout_config = (5, 3)  # (connect_timeout, read_timeout)
     
     # Tenta baixar chunks progressivamente até ter o header completo
     chunk_size = 6 * 1024  # 6KB inicial
@@ -230,23 +306,36 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Option
             # Faz requisição com Range header
             headers = {'Range': f'bytes={start}-{start + chunk_size - 1}'}
             try:
-                response = session.get(url, headers=headers, timeout=15)
+                response = session.get(url, headers=headers, timeout=timeout_config)
             except requests.exceptions.Timeout:
-                # Timeout detectado - registra e retorna None
+                # Timeout detectado - registra e retorna None com flag de timeout
                 _record_timeout()
                 logger.debug(f"Timeout ao buscar torrent header de {info_hash_hex}")
-                return None
+                return None, True, False
             except requests.exceptions.ReadTimeout:
-                # Read timeout detectado - registra e retorna None
+                # Read timeout detectado - registra e retorna None com flag de timeout
                 _record_timeout()
                 logger.debug(f"Read timeout ao buscar torrent header de {info_hash_hex}")
-                return None
+                return None, True, False
             
             # Aceita 200 (full) ou 206 (partial)
             if response.status_code not in (200, 206):
                 if response.status_code == 404:
-                    return None  # Torrent não encontrado
-                response.raise_for_status()
+                    return None, False, False  # Torrent não encontrado
+                if response.status_code == 503:
+                    # Service Unavailable - registra 503 e cacheia falha por mais tempo
+                    _record_503()
+                    _cache_failure(info_hash, is_503=True)
+                    logger.debug(f"503 Service Unavailable ao buscar torrent header de {info_hash_hex}")
+                    return None, False, True
+                # Outros erros HTTP
+                try:
+                    response.raise_for_status()
+                except requests.exceptions.HTTPError:
+                    # Erro HTTP genérico - cacheia falha
+                    _cache_failure(info_hash, is_503=False)
+                    logger.debug(f"Erro HTTP {response.status_code} ao buscar torrent header de {info_hash_hex}")
+                    return None, False, False
             
             chunk = response.content
             if not chunk:
@@ -276,22 +365,33 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Option
         
         if all_data:
             _record_success()  # Registra sucesso
-        return all_data if all_data else None
+        return (all_data if all_data else None), False, False
     
     except requests.exceptions.Timeout:
         _record_timeout()
         logger.debug(f"Timeout ao buscar torrent header de {info_hash_hex}")
-        return None
+        return None, True, False
     except requests.exceptions.ReadTimeout:
         _record_timeout()
         logger.debug(f"Read timeout ao buscar torrent header de {info_hash_hex}")
-        return None
+        return None, True, False
+    except requests.exceptions.HTTPError as e:
+        # Trata erros HTTP específicos
+        if hasattr(e.response, 'status_code') and e.response.status_code == 503:
+            _record_503()
+            _cache_failure(info_hash, is_503=True)
+            logger.debug(f"503 Service Unavailable ao buscar torrent header de {info_hash_hex}")
+            return None, False, True
+        else:
+            _cache_failure(info_hash, is_503=False)
+            logger.debug(f"Erro HTTP ao buscar torrent header de {info_hash_hex}: {e}")
+            return None, False, False
     except requests.RequestException as e:
         logger.debug(f"Erro ao buscar torrent header de {info_hash_hex}: {e}")
-        return None
+        return None, False, False
     except Exception as e:
         logger.debug(f"Erro inesperado ao buscar torrent: {e}")
-        return None
+        return None, False, False
 
 
 def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
@@ -346,17 +446,39 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         except Exception as e:
             logger.debug(f"Erro ao verificar cache: {e}")
     
-    # Tenta com uppercase primeiro
-    torrent_data = _fetch_torrent_header(info_hash, use_lowercase=False)
-    
-    # Se falhou, tenta com lowercase
-    if not torrent_data:
-        torrent_data = _fetch_torrent_header(info_hash, use_lowercase=True)
-    
-    if not torrent_data:
-        # Cacheia a falha para evitar tentativas repetidas
-        _cache_failure(info_hash)
-        return None
+    # Usa lock por hash para evitar requisições simultâneas ao mesmo hash
+    hash_lock = _get_hash_lock(info_hash)
+    with hash_lock:
+        # Verifica cache novamente após adquirir lock (outra thread pode ter cacheado)
+        if redis:
+            try:
+                cache_key = f"metadata:{info_hash_lower}"
+                cached = redis.get(cache_key)
+                if cached:
+                    import json
+                    data = json.loads(cached)
+                    logger.debug(f"Cache Redis hit para metadata (após lock): {info_hash}")
+                    _request_cache.metadata_cache[info_hash_lower] = data
+                    return data
+            except Exception:
+                pass
+        
+        # Tenta com lowercase primeiro (mais comum)
+        torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=True)
+        
+        # Se falhou mas não foi timeout nem 503, tenta com uppercase (menos comum)
+        # Se foi timeout ou 503, não tenta novamente para evitar esperas longas
+        if not torrent_data and not was_timeout and not was_503:
+            torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=False)
+        
+        if not torrent_data:
+            # Cacheia a falha (já foi cacheado dentro de _fetch_torrent_header se foi 503)
+            if not was_503:
+                if was_timeout:
+                    _cache_failure(info_hash, is_503=True)  # Trata timeout como 503
+                else:
+                    _cache_failure(info_hash, is_503=False)
+            return None
     
     # Extrai tamanho do bencode
     size = _parse_bencode_size(torrent_data)
