@@ -179,42 +179,21 @@ class StarckScraper(BaseScraper):
                 year = y
             sizes.extend(find_sizes_from_text(text))
         
-        # Extrai links magnet
-        post_buttons = post.find('div', class_='post-buttons')
-        if not post_buttons:
-            # Tenta buscar links magnet em qualquer lugar do post
-            all_magnets = post.select('a[href^="magnet:"]')
-            if all_magnets:
-                magnet_links = []
-                for magnet in all_magnets:
-                    href = magnet.get('href', '')
-                    if href:
-                        magnet_links.append(html.unescape(href))
-                if not magnet_links:
-                    return []
-            else:
-                return []
-        else:
-            # Busca links magnet diretamente em post-buttons (estrutura: div.buttons-content > span.btn-down > a)
-            magnets = post_buttons.select('a[href^="magnet:"]')
-            
-            magnet_links = []
-            for magnet in magnets:
-                href = magnet.get('href', '')
-                if href:
-                    magnet_links.append(html.unescape(href))
-            
-            if not magnet_links:
-                # Tenta buscar links magnet em qualquer lugar do post
-                all_magnets = post.select('a[href^="magnet:"]')
-                if all_magnets:
-                    for magnet in all_magnets:
-                        href = magnet.get('href', '')
-                        if href:
-                            magnet_links.append(html.unescape(href))
-                
-                if not magnet_links:
-                    return []
+        # Extrai links magnet - busca TODOS os magnets em todo o post
+        # Isso garante que capture magnets de todas as seções (DUAL ÁUDIO, LEGENDADO, etc.)
+        all_magnets = post.select('a[href^="magnet:"]')
+        
+        magnet_links = []
+        for magnet in all_magnets:
+            href = magnet.get('href', '')
+            if href:
+                # Remove duplicados usando unescape para normalizar
+                unescaped_href = html.unescape(href)
+                if unescaped_href not in magnet_links:
+                    magnet_links.append(unescaped_href)
+        
+        if not magnet_links:
+            return []
         
         # Processa cada magnet
         for idx, magnet_link in enumerate(magnet_links):
@@ -223,13 +202,15 @@ class StarckScraper(BaseScraper):
                 info_hash = magnet_data['info_hash']
                 
                 raw_release_title = magnet_data.get('display_name', '')
-                fallback_title = page_title or original_title or ''
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                
+                fallback_title = page_title or original_title or ''
                 original_release_title = prepare_release_title(
                     raw_release_title,
                     fallback_title,
                     year,
-                    missing_dn=missing_dn
+                    missing_dn=missing_dn,
+                    info_hash=info_hash if missing_dn else None
                 )
                 
                 standardized_title = create_standardized_title(
