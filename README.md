@@ -47,7 +47,7 @@ dfindexer/
 | `TRACKER_SCRAPE_RETRIES`        | Número de tentativas por tracker                                              | `2`                |
 | `TRACKER_SCRAPE_MAX_TRACKERS`   | Quantidade máxima de trackers consultados por infohash (0 = ilimitado)        | `0`                |
 | `TRACKER_CACHE_TTL`             | TTL do cache de seeds/leechers                                                | `24h`              |
-| `MAGNET_METADATA_ENABLED`       | Habilita busca de tamanhos e datas via metadata API (iTorrents.org).          | `false`            |
+| `MAGNET_METADATA_ENABLED`       | Habilita busca de tamanhos e datas via metadata API                           | `false`            |
 | `LOG_LEVEL`                     | `0` (debug), `1` (info), `2` (warn), `3` (error)                              | `1`                |
 | `LOG_FORMAT`                    | `console` ou `json`                                                           | `console`          |
 
