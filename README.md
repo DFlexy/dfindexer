@@ -68,7 +68,7 @@ dfindexer/
 ## Execução com Docker modo host
 Baixe a imagem 
 ```bash
-docker pull ghcr.io/dflexy/dfindexer:latest
+CONTAINER DO REDIS "CACHE"
 ```
 Execute 
 ```bash
@@ -80,6 +80,9 @@ docker run -d \
   -v redis:/data \
   --restart=unless-stopped \
   redis:alpine
+```
+```bash
+CONTAINER DO INDEXADOR
 ```
 ```bash
 docker run -d \
