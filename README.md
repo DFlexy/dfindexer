@@ -5,33 +5,9 @@
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
-<a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000"
-   target="_blank"
-   style="
-     display: inline-flex;
-     align-items: center;
-     justify-content: center;
-     gap: 22px;
-     background: #5b00ff;
-     background: linear-gradient(135deg, #5b00ff 0%, #b100ff 50%, #ff00cc 100%);
-     padding: 40px 80px;
-     border-radius: 32px;
-     color: #fff;
-     text-decoration: none;
-     font-size: 2.8rem;
-     font-weight: 900;
-     letter-spacing: 1px;
-     box-shadow: 0 18px 45px rgba(0,0,0,0.35);
-     transition: transform .25s ease, box-shadow .25s ease;
-   "
-   onmouseover="this.style.transform='scale(1.08)'; this.style.boxShadow='0 25px 60px rgba(0,0,0,0.45)'"
-   onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 18px 45px rgba(0,0,0,0.35)'"
->
-  <span style="font-size: 4.4rem;">💸</span>
-  APOIAR AGORA
+<a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
+  <img src="https://img.shields.io/badge/💸%20APOIAR%20ESTE%20PROJETO-FF00FF?style=for-the-badge" width="500" />
 </a>
-
-
 
 </div>
 
