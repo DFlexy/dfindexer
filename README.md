@@ -128,6 +128,8 @@ O arquivo `prowlarr.yml` contém a definição de indexer customizado.
 
 Para saber como instalar o custom no prowlarr procure no google por (prowlarr custom indexer yml)
 
+## Abaixo o yml do prowlar basta copiar e colar
+
 ```bash
 ---
 id: dfindexer
