@@ -128,5 +128,98 @@ O arquivo `prowlarr.yml` contém a definição de indexer customizado.
 
 Para saber como instalar o custom no prowlarr procure no google por (prowlarr custom indexer yml)
 
+```bash
+---
+id: dfindexer
+name: DF Indexer
+description: "Python Torrent Indexer - Indexing Brazilian Torrent websites into structured data"
+language: pt-BR
+type: public
+encoding: UTF-8
+links:
+  - http://localhost:7006/
+
+caps:
+  categories:
+    Movies: Movies
+    TV: TV
+
+  modes:
+    search: [q]
+    tv-search: [q, season]
+    movie-search: [q]
+
+settings:
+  - name: scraper_type
+    type: select
+    label: Scraper
+    default: starck
+    options:
+      starck: Starck Filmes
+      rede: Rede Torrent
+      limao: Limao Torrent
+      tfilme: Torrent dos Filmes
+      vaca: Vaca Torrent
+
+search:
+  paths:
+    - path: "/indexers/{{ .Config.scraper_type }}"
+      response:
+        type: json
+  inputs:
+    filter_results: "true"
+    q: "{{ .Keywords }}"
+  keywordsfilters:
+    - name: tolower
+    - name: re_replace
+      args: ["(?i)(S0)(\\d{1,2})$", "temporada $2"]
+    - name: re_replace
+      args: ["(?i)(S)(\\d{1,3})$", "temporada $2"]
+
+  rows:
+    selector: $.results
+    count:
+      selector: $.count
+
+  fields:
+    download:
+      selector: magnet_link
+    title:
+      selector: title
+    description:
+      selector: original_title
+    details:
+      selector: details
+    infohash:
+      selector: info_hash
+    date:
+      selector: date
+    size:
+      selector: size
+      optional: true
+      filters:
+        - name: re_replace
+          args: ["^(|0 B|0B)$", "2,5 GB"]
+    seeders:
+      selector: seed_count
+      filters:
+        - name: re_replace
+          args: ["^(|null|0)$", "1"]
+    leechers:
+      selector: leech_count
+      filters:
+        - name: re_replace
+          args: ["^(|null|0)$", "1"]
+    imdb:
+      selector: imdb
+    category_is_tv_show:
+      selector: title
+      filters:
+        - name: regexp
+          args: "(?i)(temporada|season|S\\d{1,3}E\\d{1,3}|\\bS\\d{1,3}\\b|\\d+x\\d+|série|series|episódio|episode|EP\\d+|1ª|2ª|3ª|4ª|5ª|6ª|7ª|8ª|9ª|10ª|completa)"
+    category:
+      text: "{{ if .Result.category_is_tv_show }}TV{{ else }}Movies{{ end }}"
+```
+
 ## Créditos
 Projetado e mantido por **DFlexy** (https://github.com/DFlexy).
