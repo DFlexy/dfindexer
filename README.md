@@ -134,7 +134,7 @@ Para saber como instalar o custom no prowlarr procure no google por (prowlarr cu
 ---
 id: dfindexer
 name: DF Indexer
-description: "Python Torrent Indexer - Indexing Brazilian Torrent websites into structured data"
+description: "Python Torrent Indexer for Brazilian"
 language: pt-BR
 type: public
 encoding: UTF-8
