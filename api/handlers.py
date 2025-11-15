@@ -124,24 +124,9 @@ def indexer_handler(site_name: str = None):
             else:
                 torrents = scraper.get_page(page)
         
-        logger.info(f"{log_prefix} Extraídos {len(torrents)} torrents antes do filtro")
-        
-        # Filtra resultados se solicitado - verifica se tem pelo menos uma palavra da query
-        # NOTA: O filtro ainda é aplicado aqui para compatibilidade, mas idealmente deveria
-        # ser aplicado dentro do scraper antes do enrich_torrents para melhor performance
-        if filter_results and query:
-            # Filtra apenas quando filter_results=true E há query
-            torrents = [
-                t for t in torrents 
-                if check_query_match(
-                    query, 
-                    t.get('title', ''), 
-                    t.get('original_title', '')
-                )
-            ]
-        
-        suffix = " filtrados" if filter_results and query else ""
-        logger.info(f"{log_prefix} Retornando {len(torrents)} resultados{suffix}")
+        # O filtro já foi aplicado dentro do scraper (via filter_func) antes do enriquecimento pesado
+        # Isso garante que apenas torrents relevantes passem pelo processo de enriquecimento
+        logger.info(f"{log_prefix} Retornando {len(torrents)} resultados")
         
         # Remove campos internos antes de retornar
         for torrent in torrents:
