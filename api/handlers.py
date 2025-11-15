@@ -125,17 +125,27 @@ def indexer_handler(site_name: str = None):
         
         # O filtro já foi aplicado dentro do scraper (via filter_func) antes do enriquecimento pesado
         # Isso garante que apenas torrents relevantes passem pelo processo de enriquecimento
-        logger.info(f"{log_prefix} [[ Retornando {len(torrents)} resultados ]]")
+        if is_prowlarr_test:
+            logger.info(f"{log_prefix} [[ Teste Retornando {len(torrents)} resultados ]]")
+        else:
+            logger.info(f"{log_prefix} [[ Retornando {len(torrents)} resultados ]]")
         
         # Remove campos internos antes de retornar
         for torrent in torrents:
             torrent.pop('_metadata', None)
             torrent.pop('_metadata_fetched', None)
         
-        return jsonify({
+        # Prepara resposta JSON
+        response_data = {
             'results': torrents,
             'count': len(torrents)
-        })
+        }
+        
+        # Adiciona indicador de teste quando for query de teste
+        if is_prowlarr_test:
+            response_data['teste'] = True
+        
+        return jsonify(response_data)
     
     except Exception as e:
         site_info = f"[{display_label}]" if 'display_label' in locals() else "[UNKNOWN]"
