@@ -13,38 +13,20 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. Scraper extrai torrents do HTML                          │
-│    └─ Alguns podem ter tamanho, outros não                  │
+│    └─ Extrai tamanho do HTML (salvo como fallback)         │
 └─────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 2. enrich_torrents() é chamado automaticamente              │
-│    └─ Para CADA torrent sem tamanho:                        │
+│    └─ Para CADA torrent:                                   │
 └─────────────────────────────────────────────────────────────┘
                     │
                     ▼
-        ┌───────────┴───────────┐
-        │                       │
-        ▼                       ▼
-┌───────────────┐      ┌──────────────────┐
-│ TEM tamanho? │ SIM  │ PULA (continue)  │
-└──────────────┘      └──────────────────┘
-        │
-       NÃO
-        │
-        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. TENTATIVA 1: Parâmetro 'xl' do magnet link              │
-│    └─ Parseia magnet → procura parâmetro 'xl'              │
-│    └─ Se encontrou → formata e USA → PARA AQUI ✅          │
-└─────────────────────────────────────────────────────────────┘
-                    │
-                   NÃO encontrou
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 4. TENTATIVA 2: Busca via Metadata API                     │
+│ 3. TENTATIVA 1: Busca via Metadata API (PRIORIDADE)        │
 │    └─ Chama get_torrent_size()                             │
+│    └─ Metadata é mais confiável (vem do arquivo .torrent)  │
 └─────────────────────────────────────────────────────────────┘
                     │
                     ▼
@@ -67,7 +49,7 @@
         │
         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. Busca no iTorrents.org                                  │
+│ 4. Busca no iTorrents.org                                  │
 │    └─ Baixa apenas HEADER do .torrent (até 512KB)         │
 │    └─ Parseia bencode para extrair tamanho                 │
 └─────────────────────────────────────────────────────────────┘
@@ -82,11 +64,29 @@
 │                  │   │ → USA → PARA AQUI ✅  │
 └──────────────────┘   └──────────────────────┘
         │
-       NÃO
+       NÃO encontrou
         │
         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 6. Retorna None (sem tamanho)                              │
+│ 5. TENTATIVA 2: Parâmetro 'xl' do magnet link              │
+│    └─ Parseia magnet → procura parâmetro 'xl'             │
+│    └─ Se encontrou → formata e USA → PARA AQUI ✅        │
+└─────────────────────────────────────────────────────────────┘
+                    │
+                   NÃO encontrou
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 6. TENTATIVA 3: Usa tamanho do HTML (FALLBACK FINAL)       │
+│    └─ Usa o tamanho extraído do HTML pelo scraper         │
+│    └─ Se encontrou → USA → PARA AQUI ✅                   │
+└─────────────────────────────────────────────────────────────┘
+                    │
+                   NÃO encontrou
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 7. Retorna None (sem tamanho)                              │
 │    └─ Torrent fica sem tamanho (não quebra nada)           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -154,22 +154,25 @@ Não quebra nada! O torrent simplesmente fica sem tamanho (campo `size` vazio).
 
 ## 📝 Exemplo Prático
 
-### Cenário: 10 torrents, 3 sem tamanho
+### Cenário: 10 torrents
 
 ```
-Torrent 1: Tem tamanho no HTML → ✅ USA (0ms)
-Torrent 2: Tem tamanho no HTML → ✅ USA (0ms)
-Torrent 3: SEM tamanho → Tenta 'xl' → ✅ Encontrou (5ms)
-Torrent 4: Tem tamanho no HTML → ✅ USA (0ms)
-Torrent 5: SEM tamanho → Tenta 'xl' → ❌ Não tem
-           → Busca cache → ✅ ENCONTROU (1ms)
-Torrent 6: Tem tamanho no HTML → ✅ USA (0ms)
-Torrent 7: SEM tamanho → Tenta 'xl' → ❌ Não tem
-           → Busca cache → ❌ Não tem
-           → Busca iTorrents → ✅ Encontrou (800ms) → Cacheia
-Torrent 8-10: Tem tamanho no HTML → ✅ USA (0ms)
+Torrent 1: Busca metadata cache → ✅ ENCONTROU (1ms) → USA metadata
+Torrent 2: Busca metadata cache → ❌ Não tem
+           → Busca iTorrents → ✅ Encontrou (800ms) → Cacheia → USA metadata
+Torrent 3: Busca metadata cache → ✅ ENCONTROU (1ms) → USA metadata
+Torrent 4: Busca metadata cache → ❌ Não tem
+           → Busca iTorrents → ❌ Não encontrou
+           → Tenta 'xl' → ✅ Encontrou (5ms) → USA parâmetro xl
+Torrent 5: Busca metadata cache → ✅ ENCONTROU (1ms) → USA metadata
+Torrent 6: Busca metadata cache → ❌ Não tem
+           → Busca iTorrents → ❌ Não encontrou
+           → Tenta 'xl' → ❌ Não tem
+           → Usa HTML (fallback final) → ✅ USA tamanho do HTML
+Torrent 7-10: Busca metadata cache → ✅ ENCONTROU (1ms cada) → USA metadata
 
-Total: ~806ms (só 1 requisição HTTP real)
+Total: ~808ms (só 1 requisição HTTP real)
+Observação: Ordem de prioridade: Metadata > Parâmetro xl > HTML
 ```
 
 ---
