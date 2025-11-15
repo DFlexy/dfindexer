@@ -38,6 +38,44 @@ _hash_locks_lock = threading.Lock()
 # Funciona apenas durante a query atual (via _request_cache)
 
 
+def _is_redis_connection_error(error: Exception) -> bool:
+    """
+    Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível).
+    Retorna True se for erro de conexão, False caso contrário.
+    """
+    error_str = str(error).lower()
+    connection_errors = [
+        "connection refused",
+        "error 111",
+        "error 111 connecting",
+        "cannot connect",
+        "no connection",
+        "connection error",
+        "connection timeout",
+        "name or service not known",
+    ]
+    return any(err in error_str for err in connection_errors)
+
+
+def _log_redis_error(operation: str, error: Exception, log_once: bool = True) -> None:
+    """
+    Loga erros do Redis de forma mais amigável.
+    Se for erro de conexão (Redis desabilitado), mostra mensagem informativa.
+    Se for outro erro, mostra detalhes técnicos apenas em DEBUG.
+    
+    Args:
+        operation: Descrição da operação que falhou (ex: "verificar circuit breaker")
+        error: Exceção capturada
+        log_once: Se True, só loga uma vez por operação (evita spam)
+    """
+    if _is_redis_connection_error(error):
+        # Redis desabilitado/indisponível - mensagem informativa
+        logger.debug(f"Redis indisponível - {operation} usando fallback em memória")
+    else:
+        # Outro tipo de erro - mostra detalhes técnicos
+        logger.debug(f"Erro ao {operation} no Redis: {error}")
+
+
 def _rate_limit():
     """Rate limiter simples para iTorrents - mais conservador para evitar 503"""
     global _rate_limiter_last_request, _rate_limiter_burst_tokens
@@ -90,7 +128,7 @@ def _is_circuit_breaker_open() -> bool:
                 logger.info("Circuit breaker expirou no Redis - reabilitando metadata")
                 redis.delete(_CIRCUIT_BREAKER_KEY)
         except Exception as e:
-            logger.debug(f"Erro ao verificar circuit breaker no Redis: {e}")
+            _log_redis_error("verificar circuit breaker", e)
     
     # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
@@ -132,7 +170,7 @@ def _record_timeout():
                 redis.delete(timeout_key)
             return
         except Exception as e:
-            logger.debug(f"Erro ao registrar timeout no Redis: {e}")
+            _log_redis_error("registrar timeout", e)
     
     # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
@@ -179,7 +217,7 @@ def _record_503():
                 redis.delete(error_503_key)
             return
         except Exception as e:
-            logger.debug(f"Erro ao registrar 503 no Redis: {e}")
+            _log_redis_error("registrar 503", e)
     
     # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
@@ -526,7 +564,7 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
                 _request_cache.metadata_cache[info_hash_lower] = data
                 return data
         except Exception as e:
-            logger.debug(f"Erro ao verificar cache: {e}")
+            _log_redis_error("verificar cache de metadata", e)
     
     # Usa lock por hash para evitar requisições simultâneas ao mesmo hash
     hash_lock = _get_hash_lock(info_hash)
@@ -561,59 +599,59 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
                 else:
                     _cache_failure(info_hash, is_503=False)
             return None
-    
-    # Extrai tamanho do bencode
-    size = _parse_bencode_size(torrent_data)
-    
-    if not size:
-        return None
-    
-    # Tenta extrair nome também (opcional)
-    name = None
-    try:
-        name_pattern = rb'4:name(\d+):'
-        name_match = re.search(name_pattern, torrent_data)
-        if name_match:
-            name_len = int(name_match.group(1))
-            start_pos = name_match.end()
-            if start_pos + name_len <= len(torrent_data):
-                name_bytes = torrent_data[start_pos:start_pos + name_len]
-                name = name_bytes.decode('utf-8', errors='ignore')
-    except Exception:
-        pass
-    
-    result = {'size': size}
-    if name:
-        result['name'] = name
-    
-    # Tenta extrair data de criação (opcional) - para usar como date
-    try:
-        # Formato: "13:creation date" seguido de "i{timestamp}e"
-        creation_date_pattern = rb'13:creation datei(\d+)e'
-        creation_match = re.search(creation_date_pattern, torrent_data)
-        if creation_match:
-            timestamp = int(creation_match.group(1))
-            # Timestamps válidos estão entre 2000 e 2100
-            if 946684800 <= timestamp <= 4102444800:  # 2000-01-01 a 2100-01-01
-                result['creation_date'] = timestamp
-    except Exception:
-        pass
-    
-    # Armazena no cache em memória (evita buscas duplicadas na mesma requisição)
-    if not hasattr(_request_cache, 'metadata_cache'):
-        _request_cache.metadata_cache = {}
-    _request_cache.metadata_cache[info_hash_lower] = result
-    
-    # Cacheia no Redis se disponível (24 horas)
-    if redis:
+        
+        # Extrai tamanho do bencode
+        size = _parse_bencode_size(torrent_data)
+        
+        if not size:
+            return None
+        
+        # Tenta extrair nome também (opcional)
+        name = None
         try:
-            import json
-            cache_key = f"metadata:{info_hash_lower}"
-            redis.setex(cache_key, 24 * 3600, json.dumps(result))
+            name_pattern = rb'4:name(\d+):'
+            name_match = re.search(name_pattern, torrent_data)
+            if name_match:
+                name_len = int(name_match.group(1))
+                start_pos = name_match.end()
+                if start_pos + name_len <= len(torrent_data):
+                    name_bytes = torrent_data[start_pos:start_pos + name_len]
+                    name = name_bytes.decode('utf-8', errors='ignore')
         except Exception:
             pass
-    
-    return result
+        
+        result = {'size': size}
+        if name:
+            result['name'] = name
+        
+        # Tenta extrair data de criação (opcional) - para usar como date
+        try:
+            # Formato: "13:creation date" seguido de "i{timestamp}e"
+            creation_date_pattern = rb'13:creation datei(\d+)e'
+            creation_match = re.search(creation_date_pattern, torrent_data)
+            if creation_match:
+                timestamp = int(creation_match.group(1))
+                # Timestamps válidos estão entre 2000 e 2100
+                if 946684800 <= timestamp <= 4102444800:  # 2000-01-01 a 2100-01-01
+                    result['creation_date'] = timestamp
+        except Exception:
+            pass
+        
+        # Armazena no cache em memória (evita buscas duplicadas na mesma requisição)
+        if not hasattr(_request_cache, 'metadata_cache'):
+            _request_cache.metadata_cache = {}
+        _request_cache.metadata_cache[info_hash_lower] = result
+        
+        # Cacheia no Redis se disponível (24 horas)
+        if redis:
+            try:
+                import json
+                cache_key = f"metadata:{info_hash_lower}"
+                redis.setex(cache_key, 24 * 3600, json.dumps(result))
+            except Exception:
+                pass
+        
+        return result
 
 
 def get_torrent_size(magnet_link: str, info_hash: Optional[str] = None) -> Optional[str]:
