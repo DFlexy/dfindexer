@@ -143,8 +143,8 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     
     # Verifica se tem título original válido
     if original_title and original_title.strip():
-        # Verifica se tem caracteres não-latinos (Russo, Chinês, Coreano, Japonês)
-        has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff]', original_title))
+        # Verifica se tem caracteres não-latinos (Russo, Chinês, Coreano, Japonês, Tailandês, Hindi/Devanagari, Árabe, Hebreu, Grego)
+        has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u097f\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff]', original_title))
         
         if not has_non_latin:
             # Título Original da página: Como base principal
