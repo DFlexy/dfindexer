@@ -22,22 +22,69 @@ Indexador em Python que organiza torrents brasileiros em formato padronizado, pr
 - ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
 
 ## 🐳 Execução com Docker
+
+### Opção 1: Docker Compose (Recomendado)
+A forma mais simples de executar o projeto é usando Docker Compose, que já configura o Redis automaticamente:
+
 ```bash
+# Construir e iniciar os serviços
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Parar os serviços
+docker-compose down
+
+# Parar e remover volumes (limpa dados do Redis)
+docker-compose down -v
+```
+
+O Docker Compose irá:
+- ✅ Iniciar o serviço Redis automaticamente
+- ✅ Configurar a rede entre os containers
+- ✅ Persistir dados do Redis em volume nomeado
+- ✅ Configurar restart automático
+
+### Opção 2: Docker Run CLI
+
+Se preferir executar manualmente:
+
+```bash
+# Primeiro, inicie o Redis
+docker run -d \
+  --name=redis \
+  --restart=unless-stopped \
+  -p 6379:6379 \
+  redis:7-alpine
+
+# Depois, inicie o indexer
 docker run -d \
   --name=indexer \
   --restart=unless-stopped \
   -e REDIS_HOST=redis \
   -e LOG_LEVEL=1 \
   -p 7006:7006 \
+  --link redis:redis \
   dfindexer
 ```
 
 ## 🔌 Integração com Prowlarr
-1. Acesse **Settings > Indexers > + > Custom** no Prowlarr
-2. Cole o conteúdo do arquivo `prowlarr.yml`
-3. Ajuste a URL em `links:` se necessário
-4. Escolha o scraper desejado no dropdown
-5. Salve e teste
+1. Primeiro, baixe o arquivo de configuração prowlarr.yml neste repositorio
+2. Crie um diretório chamado Custom dentro do diretório de configuração do Prowlarr, na pasta Definitions.
+ .Se ele ainda não existir, você pode criá-lo no seguinte local:
+ .<Prowlarr_Config_Directory>/Definitions/Custom/
+3. Coloque o arquivo prowlarr.yml que você baixou dentro do diretório Custom criado no passo anterior.
+4. Reinicie o Prowlarr para aplicar as alterações.
+5 . Adicionar o Torrentio como Indexador Personalizado
+ . Depois que o Prowlarr reiniciar, você pode adicionar o Torrentio como um indexador customizado seguindo estes passos:
+ . Vá até a página Indexers no Prowlarr.
+ . Clique no botão “+” para adicionar um novo indexador.
+ . Digite “DF Indexer” na busca e selecione DF Indexer na lista.
+ . Edite as opções padrão, se necessário, e não esqueça de adicionar
+ . Salve as alterações
+
+
 
 ### Funcionalidades Configuradas
 - ✅ Suporte a Filmes e Séries
