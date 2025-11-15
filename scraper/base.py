@@ -42,6 +42,7 @@ class BaseScraper(ABC):
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
         })
         self.tracker_service = get_tracker_service()
+        self._skip_metadata = False  # Flag temporário para controlar busca de metadata durante extração
     
     def get_document(self, url: str, referer: str = '') -> Optional[BeautifulSoup]:
         """Obtém documento HTML do cache ou faz requisição"""
@@ -236,11 +237,16 @@ class BaseScraper(ABC):
 
     def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         """
-        Aplica fallbacks para obter tamanho do torrent quando não encontrado no HTML.
-        Ordem de tentativas (se metadata habilitado):
-        1. Busca via metadata API (iTorrents.org) - PADRÃO
+        Aplica fallbacks para obter tamanho do torrent.
+        
+        Ordem de prioridade (metadata é mais confiável):
+        1. Busca via metadata API (iTorrents.org) - PRIORIDADE (mais confiável)
+           - Verifica cache Redis primeiro
+           - Se não tiver em cache, busca no iTorrents.org
         2. Parâmetro 'xl' do magnet link - FALLBACK
-        3. Mantém tamanho do HTML (se extraído pelo scraper)
+           - Extrai do próprio link magnet (mais rápido, mas nem sempre disponível)
+        3. Tamanho do HTML (extraído pelo scraper) - FALLBACK FINAL
+           - Usa o tamanho que o scraper extraiu do HTML do site
         
         Args:
             torrents: Lista de torrents para processar
@@ -250,8 +256,8 @@ class BaseScraper(ABC):
         metadata_enabled = Config.MAGNET_METADATA_ENABLED and not skip_metadata
         
         for torrent in torrents:
-            if torrent.get('size'):
-                continue
+            # Salva tamanho do HTML como fallback final (se existir)
+            html_size = torrent.get('size', '')
             
             magnet_link = torrent.get('magnet_link')
             if not magnet_link:
@@ -264,8 +270,11 @@ class BaseScraper(ABC):
             except Exception:
                 pass
             
-            # Tentativa 1: Busca via metadata API (iTorrents.org) - PADRÃO
-            if metadata_enabled and not torrent.get('size'):
+            # Limpa tamanho atual para tentar metadata primeiro
+            torrent['size'] = ''
+            
+            # Tentativa 1: Busca via metadata API (iTorrents.org) - PRIORIDADE
+            if metadata_enabled:
                 # Tenta usar metadata já buscado primeiro
                 if torrent.get('_metadata') and 'size' in torrent['_metadata']:
                     try:
@@ -275,7 +284,7 @@ class BaseScraper(ABC):
                         if formatted_size:
                             torrent['size'] = formatted_size
                             logger.debug(f"Tamanho obtido via metadata (cache) para {torrent.get('info_hash', 'unknown')}: {formatted_size}")
-                            continue
+                            continue  # Tamanho encontrado, passa para próximo
                     except Exception:
                         pass
                 
@@ -312,8 +321,15 @@ class BaseScraper(ABC):
                 except Exception:
                     pass
             
+            # Tentativa 3: Usa tamanho do HTML (fallback final)
+            if not torrent.get('size') and html_size:
+                torrent['size'] = html_size
+                logger.debug(f"Tamanho obtido via HTML (fallback final)")
+                continue  # Tamanho encontrado, passa para próximo
+            
             # Se ainda não tem tamanho, mantém o que veio do HTML (se houver)
-            # O scraper já tentou extrair do HTML antes de chamar enrich_torrents
+            if not torrent.get('size') and html_size:
+                torrent['size'] = html_size
 
     def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         """
