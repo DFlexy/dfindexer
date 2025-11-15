@@ -58,48 +58,53 @@ class VacaScraper(BaseScraper):
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
         """Obtém torrents de uma página específica"""
-        if page == '1':
-            page_url = self.base_url
-        else:
-            page_url = f"{self.base_url}{self.page_pattern.format(page)}"
-        
-        doc = self.get_document(page_url, self.base_url)
-        if not doc:
-            return []
-        
-        links = []
-        for item in doc.select('.i-tem_ht'):
-            link_elem = item.select_one('a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
-        
-        # Obtém limite efetivo (usa padrão de 3 se não especificado)
-        effective_max = self._get_effective_max_items(max_items)
-        
         # Detecta se está usando limite padrão (teste do Prowlarr)
         is_using_default_limit = max_items is None
         
-        # Limita links
-        if effective_max > 0:
-            links = links[:effective_max]
-        
-        all_torrents = []
-        for link in links:
-            torrents = self._get_torrents_from_page(link)
-            all_torrents.extend(torrents)
-            # Para quando tiver resultados suficientes
-            if len(all_torrents) >= effective_max:
-                break
-        
-        # Pula metadata e trackers se estiver usando limite padrão (teste do Prowlarr)
-        enriched = self.enrich_torrents(
-            all_torrents, 
-            skip_metadata=is_using_default_limit,
-            skip_trackers=is_using_default_limit
-        )
-        return enriched[:effective_max]
+        # Armazena skip_metadata temporariamente para uso em _get_torrents_from_page
+        self._skip_metadata = is_using_default_limit
+        try:
+            if page == '1':
+                page_url = self.base_url
+            else:
+                page_url = f"{self.base_url}{self.page_pattern.format(page)}"
+            
+            doc = self.get_document(page_url, self.base_url)
+            if not doc:
+                return []
+            
+            links = []
+            for item in doc.select('.i-tem_ht'):
+                link_elem = item.select_one('a')
+                if link_elem:
+                    href = link_elem.get('href')
+                    if href:
+                        links.append(href)
+            
+            # Obtém limite efetivo (usa padrão de 3 se não especificado)
+            effective_max = self._get_effective_max_items(max_items)
+            
+            # Limita links
+            if effective_max > 0:
+                links = links[:effective_max]
+            
+            all_torrents = []
+            for link in links:
+                torrents = self._get_torrents_from_page(link)
+                all_torrents.extend(torrents)
+                # Para quando tiver resultados suficientes
+                if len(all_torrents) >= effective_max:
+                    break
+            
+            # Pula metadata e trackers se estiver usando limite padrão (teste do Prowlarr)
+            enriched = self.enrich_torrents(
+                all_torrents, 
+                skip_metadata=is_using_default_limit,
+                skip_trackers=is_using_default_limit
+            )
+            return enriched[:effective_max]
+        finally:
+            self._skip_metadata = False
     
     def _post_search(self, query: str, page: str = '1') -> List[str]:
         """Faz busca POST para WordPress AJAX endpoint"""
@@ -371,7 +376,8 @@ class VacaScraper(BaseScraper):
                     fallback_title,
                     year,
                     missing_dn=missing_dn,
-                    info_hash=info_hash if missing_dn else None
+                    info_hash=info_hash if missing_dn else None,
+                    skip_metadata=self._skip_metadata
                 )
                 
                 if episode_number:
