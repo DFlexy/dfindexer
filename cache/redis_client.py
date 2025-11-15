@@ -24,7 +24,7 @@ def init_redis():
         )
         # Testa conexão
         _redis_client.ping()
-        logger.info(f"Redis conectado em {Config.REDIS_HOST}:{Config.REDIS_PORT}")
+        logger.info("[[ Redis Conectado ]]")
     except Exception:
         _redis_client = None
 
