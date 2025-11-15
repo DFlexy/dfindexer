@@ -52,7 +52,6 @@ class BaseScraper(ABC):
                 cache_key = f"doc:{url}"
                 cached = self.redis.get(cache_key)
                 if cached:
-                    logger.debug(f"Cache hit (long): {url}")
                     return BeautifulSoup(cached, 'html.parser')
             except:
                 pass
@@ -63,7 +62,6 @@ class BaseScraper(ABC):
                 short_cache_key = f"short:{url}"
                 cached = self.redis.get(short_cache_key)
                 if cached:
-                    logger.debug(f"Cache hit (short): {url}")
                     return BeautifulSoup(cached, 'html.parser')
             except:
                 pass
@@ -95,7 +93,6 @@ class BaseScraper(ABC):
                 except:
                     pass  # Ignora erros de cache
             
-            logger.debug(f"Documento obtido: {url}")
             return BeautifulSoup(html_content, 'html.parser')
         
         except Exception as e:
@@ -146,6 +143,9 @@ class BaseScraper(ABC):
         if not torrents:
             return torrents
         
+        # IMPORTANTE: Durante testes (skip_metadata=True ou skip_trackers=True),
+        # NÃO busca metadata nem trackers para garantir resposta rápida
+        
         # NOTA: Não aplicamos o filtro aqui ainda porque alguns torrents podem precisar
         # de metadata para obter o título completo (quando missing_dn=True).
         # O prepare_release_title já busca metadata quando necessário, então os títulos
@@ -154,6 +154,7 @@ class BaseScraper(ABC):
         
         # Busca metadata para títulos que ainda não têm (quando missing_dn)
         # Isso garante que o filtro tenha títulos completos para trabalhar
+        # PULA durante testes (skip_metadata=True)
         if Config.MAGNET_METADATA_ENABLED and not skip_metadata:
             self._ensure_titles_complete(torrents)
         
@@ -164,11 +165,15 @@ class BaseScraper(ABC):
                 return torrents
         
         # Busca metadata uma vez e reutiliza para size e date (evita buscas duplicadas)
+        # PULA durante testes (skip_metadata=True)
         if Config.MAGNET_METADATA_ENABLED and not skip_metadata:
             self._fetch_metadata_batch(torrents)
         
+        # Aplica fallbacks para size e date (respeitam skip_metadata)
         self._apply_size_fallback(torrents, skip_metadata=skip_metadata)
         self._apply_date_fallback(torrents, skip_metadata=skip_metadata)
+        
+        # Busca trackers apenas se não for teste (skip_trackers=False)
         if not skip_trackers:
             self._attach_peers(torrents)
         return torrents
@@ -283,7 +288,6 @@ class BaseScraper(ABC):
                         formatted_size = format_bytes(size_bytes)
                         if formatted_size:
                             torrent['size'] = formatted_size
-                            logger.debug(f"Tamanho obtido via metadata (cache) para {torrent.get('info_hash', 'unknown')}: {formatted_size}")
                             continue  # Tamanho encontrado, passa para próximo
                     except Exception:
                         pass
@@ -300,10 +304,9 @@ class BaseScraper(ABC):
                         metadata_size = get_torrent_size(magnet_link, info_hash)
                         if metadata_size:
                             torrent['size'] = metadata_size
-                            logger.debug(f"Tamanho obtido via metadata para {info_hash}: {metadata_size}")
                             continue  # Tamanho encontrado, passa para próximo
-                except Exception as e:
-                    logger.debug(f"Erro ao buscar tamanho via metadata: {e}")
+                except Exception:
+                    pass
             
             # Tentativa 2: Parâmetro 'xl' do magnet link - FALLBACK
             if not torrent.get('size') and magnet_data:
@@ -314,7 +317,6 @@ class BaseScraper(ABC):
                             formatted_size = format_bytes(int(xl_value))
                             if formatted_size:
                                 torrent['size'] = formatted_size
-                                logger.debug(f"Tamanho obtido via parâmetro 'xl' do magnet")
                                 continue  # Tamanho encontrado, passa para próximo
                         except (ValueError, TypeError):
                             pass
@@ -324,7 +326,6 @@ class BaseScraper(ABC):
             # Tentativa 3: Usa tamanho do HTML (fallback final)
             if not torrent.get('size') and html_size:
                 torrent['size'] = html_size
-                logger.debug(f"Tamanho obtido via HTML (fallback final)")
                 continue  # Tamanho encontrado, passa para próximo
             
             # Se ainda não tem tamanho, mantém o que veio do HTML (se houver)
@@ -387,13 +388,12 @@ class BaseScraper(ABC):
                         creation_date = datetime.fromtimestamp(creation_timestamp)
                         # Atualiza date com creation_date do torrent
                         torrent['date'] = creation_date.isoformat()
-                        logger.debug(f"Date atualizado via metadata (creation_date) para {info_hash}")
-                    except (ValueError, OSError) as e:
-                        logger.debug(f"Erro ao converter timestamp {creation_timestamp} para datetime: {e}")
+                    except (ValueError, OSError):
                         # Se falhar, mantém date do HTML (se houver)
-            except Exception as e:
-                logger.debug(f"Erro ao buscar date via metadata: {e}")
+                        pass
+            except Exception:
                 # Se falhar, mantém date do HTML (se houver)
+                pass
 
     def _attach_peers(self, torrents: List[Dict]) -> None:
         if not self.tracker_service:
