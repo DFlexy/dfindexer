@@ -56,7 +56,7 @@ docker run -d \
   --name=redis \
   --restart=unless-stopped \
   -p 6379:6379 \
-  redis:7-alpine
+  redis:alpine:latest
 
 # Depois, inicie o indexer
 docker run -d \
@@ -66,7 +66,7 @@ docker run -d \
   -e LOG_LEVEL=1 \
   -p 7006:7006 \
   --link redis:redis \
-  dfindexer
+  ghcr.io/dflexy/dfindexer:latest
 ```
 
 ## 🔌 Integração com Prowlarr
@@ -177,4 +177,5 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull r
 
 ---
 **Nota**: Este é um projeto de indexação de torrents. Use com responsabilidade e respeite os direitos autorais.
+
 
