@@ -18,6 +18,30 @@ logger = logging.getLogger(__name__)
 _CACHE_PREFIX = "tracker:peers:"
 
 
+def _is_redis_connection_error(error: Exception) -> bool:
+    """Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível)."""
+    error_str = str(error).lower()
+    connection_errors = [
+        "connection refused",
+        "error 111",
+        "error 111 connecting",
+        "cannot connect",
+        "no connection",
+        "connection error",
+        "connection timeout",
+        "name or service not known",
+    ]
+    return any(err in error_str for err in connection_errors)
+
+
+def _log_redis_error(operation: str, error: Exception) -> None:
+    """Loga erros do Redis de forma mais amigável."""
+    if _is_redis_connection_error(error):
+        logger.debug(f"Redis indisponível - {operation} usando fallback em memória")
+    else:
+        logger.debug(f"Erro ao {operation} no Redis: {error}")
+
+
 def _sanitize_tracker(url: str) -> Optional[str]:
     if not url:
         return None
@@ -110,7 +134,7 @@ class TrackerService:
                 else:
                     results[info_hash] = (0, 0)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Tracker %s falhou para %s: %s", tracker, info_hash, exc)
+                logger.warning("Falha ao obter peers para %s: %s", info_hash, exc)
                 results[info_hash] = (0, 0)
 
         return results
@@ -138,41 +162,95 @@ class TrackerService:
         if self.max_trackers > 0:
             udp_trackers = udp_trackers[: self.max_trackers]
 
-        best: Optional[Tuple[int, int]] = None
-        errors = 0
         if not udp_trackers:
             return None
 
+        best: Optional[Tuple[int, int]] = None
+        dns_errors = {}  # Agrupa erros de DNS por tracker
+        timeout_errors = {}  # Agrupa erros de timeout por tracker
+        
         for tracker in udp_trackers:
             try:
-                leechers, seeders = self._udp_scraper.scrape(tracker, info_hash_bytes)
-                if seeders or leechers:
-                    logger.debug(
-                        "Peers obtidos via tracker %s para %s (S:%d L:%d).",
-                        tracker,
-                        info_hash,
-                        seeders,
-                        leechers,
-                    )
-                    return leechers, seeders
-                if best is None:
-                    best = (leechers, seeders)
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(
-                    "Tracker %s não respondeu para %s: %s", tracker, info_hash, exc
+                peers = self._scrape_single_tracker(
+                    tracker, info_hash_bytes, info_hash
                 )
-                errors += 1
-                continue
+                if peers:
+                    leechers, seeders = peers
+                    if seeders or leechers:
+                        logger.debug(
+                            "Peers obtidos via tracker %s para %s (S:%d L:%d).",
+                            tracker,
+                            info_hash,
+                            seeders,
+                            leechers,
+                        )
+                        return leechers, seeders
+                    if best is None:
+                        best = (leechers, seeders)
+            except Exception as exc:  # noqa: BLE001
+                # Detecta e trata erros de forma mais amigável
+                error_msg = str(exc)
+                is_dns_error = (
+                    "Temporary failure in name resolution" in error_msg
+                    or "[Errno -3]" in error_msg
+                    or "[Errno -2]" in error_msg
+                    or "[Errno -5]" in error_msg
+                    or "No address associated with hostname" in error_msg
+                    or "name or service not known" in error_msg.lower()
+                    or "Name or service not known" in error_msg
+                )
+                is_timeout_error = (
+                    "Timeout" in error_msg
+                    or "timeout" in error_msg.lower()
+                    or isinstance(exc, TimeoutError)
+                )
+                
+                if is_dns_error:
+                    # Agrupa erros de DNS - só loga uma vez por tracker
+                    if tracker not in dns_errors:
+                        dns_errors[tracker] = True
+                        logger.debug(
+                            "Tracker %s indisponível (erro de DNS)",
+                            tracker
+                        )
+                    # Não loga cada info_hash individualmente para erros de DNS
+                elif is_timeout_error:
+                    # Agrupa erros de timeout - só loga uma vez por tracker
+                    if tracker not in timeout_errors:
+                        timeout_errors[tracker] = True
+                        logger.debug(
+                            "Tracker %s indisponível (timeout)",
+                            tracker
+                        )
+                    # Não loga cada info_hash individualmente para erros de timeout
+                else:
+                    # Outros erros são logados normalmente (mas de forma mais resumida)
+                    error_type = type(exc).__name__
+                    short_msg = error_msg.split('\n')[0][:100]  # Primeira linha, máximo 100 chars
+                    logger.debug(
+                        "Tracker %s não respondeu (%s): %s",
+                        tracker,
+                        error_type,
+                        short_msg
+                    )
 
         if best:
             return best
-        if errors:
-            logger.info(
-                "Todos os trackers falharam para %s (tentativas=%d).",
-                info_hash,
-                errors,
-            )
         return None
+
+    def _scrape_single_tracker(
+        self, tracker: str, info_hash_bytes: bytes, info_hash: str
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Faz scrape de um único tracker.
+        Método auxiliar para consultas paralelas.
+        """
+        try:
+            leechers, seeders = self._udp_scraper.scrape(tracker, info_hash_bytes)
+            return leechers, seeders
+        except Exception:  # noqa: BLE001
+            # Erro será tratado e logado no loop principal com agrupamento
+            return None
 
     def _cache_key(self, info_hash: str) -> str:
         return f"{_CACHE_PREFIX}{info_hash.lower()}"
@@ -195,7 +273,7 @@ class TrackerService:
             data = json.loads(cached.decode("utf-8"))
             return int(data.get("leech", 0)), int(data.get("seed", 0))
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Falha ao ler cache Redis de peers: %s", exc)
+            _log_redis_error("ler cache de peers", exc)
             return None
 
     def _store_cache(self, info_hash: str, peers: Tuple[int, int]) -> None:
@@ -210,6 +288,6 @@ class TrackerService:
             payload = json.dumps({"leech": peers[0], "seed": peers[1]}).encode("utf-8")
             self.redis.setex(key, self.cache_ttl, payload)
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Falha ao gravar cache Redis de peers: %s", exc)
+            _log_redis_error("gravar cache de peers", exc)
 
 
