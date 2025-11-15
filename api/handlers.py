@@ -120,13 +120,12 @@ def indexer_handler(site_name: str = None):
             if is_prowlarr_test:
                 # Para teste do Prowlarr, usa limite padrão (3) definido no BaseScraper
                 torrents = scraper.get_page(page)  # max_items=None usa padrão de 3
-                logger.info(f"{log_prefix} TEST - Processando apenas 3 itens (padrão)")
             else:
                 torrents = scraper.get_page(page)
         
         # O filtro já foi aplicado dentro do scraper (via filter_func) antes do enriquecimento pesado
         # Isso garante que apenas torrents relevantes passem pelo processo de enriquecimento
-        logger.info(f"{log_prefix} Retornando {len(torrents)} resultados")
+        logger.info(f"{log_prefix} [[ Retornando {len(torrents)} resultados ]]")
         
         # Remove campos internos antes de retornar
         for torrent in torrents:
