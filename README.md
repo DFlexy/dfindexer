@@ -169,17 +169,6 @@ Todos os títulos são padronizados no formato:
 1. **Creation Date do Torrent** (via metadata API) - PADRÃO
 2. **Data do HTML** (publicação do post) - FALLBACK
 
-## 🛠️ Desenvolvimento
-```bash
-# Instalação
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# Execução
-flask --app app.main run --port 7006
-```
-
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
 
