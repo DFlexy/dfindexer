@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 _TRACKERS_LIST_CACHE_KEY = "dynamic_trackers_list"
 _TRACKERS_LIST_TTL_SECONDS = 24 * 3600
 
+# Cache para evitar logs duplicados de carregamento de trackers
+_logged_sources = {}
+_logged_sources_lock = threading.Lock()
+_LOG_COOLDOWN = 60  # Só loga uma vez por minuto por source
+
+
+def _is_redis_connection_error(error: Exception) -> bool:
+    """Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível)."""
+    error_str = str(error).lower()
+    connection_errors = [
+        "connection refused",
+        "error 111",
+        "error 111 connecting",
+        "cannot connect",
+        "no connection",
+        "connection error",
+        "connection timeout",
+        "name or service not known",
+    ]
+    return any(err in error_str for err in connection_errors)
+
+
+def _log_redis_error(operation: str, error: Exception) -> None:
+    """Loga erros do Redis de forma mais amigável."""
+    if _is_redis_connection_error(error):
+        logger.debug(f"Redis indisponível - {operation} usando fallback em memória")
+    else:
+        logger.debug(f"Erro ao {operation} no Redis: {error}")
+
 # Circuit breaker para evitar consultas quando há muitos timeouts
 _CIRCUIT_BREAKER_KEY = "tracker:circuit_breaker"
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3  # Número de timeouts consecutivos antes de desabilitar
@@ -155,7 +184,7 @@ class TrackerListProvider:
             logger.debug("Trackers recuperados do cache Redis.")
             return list(trackers)
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Falha ao recuperar trackers do Redis: %s", exc)
+            _log_redis_error("recuperar trackers do cache", exc)
             return None
 
     def _fetch_remote_trackers(self) -> Optional[List[str]]:
@@ -171,28 +200,78 @@ class TrackerListProvider:
                     if tracker and _normalize_tracker(tracker)
                 ]
                 if trackers:
-                    logger.debug(
-                        "Lista de trackers dinâmica carregada (%s) com %d entradas.",
-                        source,
-                        len(trackers),
-                    )
+                    # Evita logs duplicados - só loga uma vez por minuto por source
+                    now = time.time()
+                    should_log = False
+                    with _logged_sources_lock:
+                        last_logged = _logged_sources.get(source, 0)
+                        if now - last_logged >= _LOG_COOLDOWN:
+                            _logged_sources[source] = now
+                            should_log = True
+                            # Limpa entradas antigas (mantém apenas últimas 10)
+                            if len(_logged_sources) > 10:
+                                oldest_key = min(_logged_sources.items(), key=lambda x: x[1])[0]
+                                _logged_sources.pop(oldest_key, None)
+                    
+                    if should_log:
+                        logger.debug(
+                            "Lista de trackers dinâmica carregada (%s) com %d entradas.",
+                            source,
+                            len(trackers),
+                        )
                     _record_success()  # Registra sucesso
                     return trackers
             except requests.exceptions.Timeout:
                 # Timeout detectado - registra e continua para próxima fonte
                 _record_timeout()
-                logger.warning(
+                logger.debug(
                     "Timeout ao obter trackers de %s", source
                 )
             except requests.exceptions.ReadTimeout:
                 # Read timeout detectado - registra e continua para próxima fonte
                 _record_timeout()
-                logger.warning(
+                logger.debug(
                     "Read timeout ao obter trackers de %s", source
                 )
+            except requests.exceptions.ConnectionError as exc:
+                # Erro de conexão (DNS, rede, etc.)
+                error_msg = str(exc)
+                # Extrai hostname da URL
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(source)
+                    host = parsed.netloc or parsed.path.split('/')[0] if parsed.path else source
+                except Exception:
+                    host = source.split('/')[2] if '/' in source and len(source.split('/')) > 2 else source
+                
+                # Detecta tipo específico de erro
+                if "Failed to resolve" in error_msg or "No address associated" in error_msg:
+                    # Erro de DNS - não consegue resolver o hostname
+                    logger.debug(
+                        "Erro de DNS ao obter trackers de %s (host: %s)", source, host
+                    )
+                elif "Connection refused" in error_msg:
+                    logger.debug(
+                        "Conexão recusada ao obter trackers de %s (host: %s)", source, host
+                    )
+                else:
+                    # Outros erros de conexão - mostra mensagem resumida
+                    short_msg = error_msg.split('(')[0].strip() if '(' in error_msg else error_msg[:100]
+                    logger.debug(
+                        "Erro de conexão ao obter trackers de %s: %s", source, short_msg
+                    )
+            except requests.exceptions.HTTPError as exc:
+                # Erro HTTP (404, 500, etc.)
+                status_code = exc.response.status_code if hasattr(exc, 'response') and exc.response else 'unknown'
+                logger.debug(
+                    "Erro HTTP %s ao obter trackers de %s", status_code, source
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Falha ao obter trackers de %s: %s", source, exc
+                # Outros erros - mostra apenas mensagem principal
+                error_type = type(exc).__name__
+                error_msg = str(exc).split('\n')[0]  # Pega apenas primeira linha
+                logger.debug(
+                    "Falha ao obter trackers de %s (%s): %s", source, error_type, error_msg
                 )
         return None
 
@@ -208,6 +287,6 @@ class TrackerListProvider:
                 _TRACKERS_LIST_CACHE_KEY, _TRACKERS_LIST_TTL_SECONDS, encoded
             )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Falha ao gravar lista de trackers no Redis: %s", exc)
+            _log_redis_error("gravar lista de trackers", exc)
 
 
