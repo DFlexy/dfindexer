@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dfindexer-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  indexer:
+    build: .
+    container_name: dfindexer
+    restart: unless-stopped
+    ports:
+      - "7006:7006"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - PORT=7006
+      - LOG_LEVEL=1
+      - LOG_FORMAT=console
+    depends_on:
+      - redis
+    networks:
+      - dfindexer-network
+
+volumes:
+  redis_data:
+
+networks:
+  dfindexer-network:
+    driver: bridge
+
