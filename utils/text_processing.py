@@ -53,16 +53,20 @@ def clean_title(title: str) -> str:
 
 
 # Busca o nome do torrent via metadata API quando falta display_name no magnet
-def get_metadata_name(info_hash: str) -> Optional[str]:
+def get_metadata_name(info_hash: str, skip_metadata: bool = False) -> Optional[str]:
     """
     Busca o nome do torrent via metadata API quando falta display_name no magnet.
     
     Args:
         info_hash: Info hash do torrent (hex, 40 caracteres)
+        skip_metadata: Se True, não busca metadata (útil para testes)
         
     Returns:
         Nome do torrent se encontrado, None caso contrário
     """
+    if skip_metadata:
+        return None
+    
     try:
         from app.config import Config
         if not Config.MAGNET_METADATA_ENABLED:
@@ -86,7 +90,8 @@ def prepare_release_title(
     fallback_title: str,
     year: str = '',
     missing_dn: bool = False,
-    info_hash: Optional[str] = None
+    info_hash: Optional[str] = None,
+    skip_metadata: bool = False
 ) -> str:
     fallback_title = (fallback_title or '').strip()
 
@@ -99,12 +104,15 @@ def prepare_release_title(
             pass
         normalized = normalized.strip()
 
-    # FALLBACK 1: Busca do metadata quando falta dn
-    if (not normalized or len(normalized) < 3) and missing_dn and info_hash:
-        metadata_name = get_metadata_name(info_hash)
+    # FALLBACK 1: Busca do metadata quando falta dn (apenas se não for para pular)
+    if (not normalized or len(normalized) < 3) and missing_dn and info_hash and not skip_metadata:
+        metadata_name = get_metadata_name(info_hash, skip_metadata=skip_metadata)
         if metadata_name:
             normalized = metadata_name
             missing_dn = False
+    elif skip_metadata and (not normalized or len(normalized) < 3) and missing_dn and info_hash:
+        # Em testes, não busca metadata mesmo quando falta dn
+        pass
     
     # FALLBACK 2: Título da página quando metadata não disponível
     if not normalized or len(normalized) < 3:
