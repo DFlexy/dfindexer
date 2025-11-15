@@ -159,16 +159,6 @@ Todos os títulos são padronizados no formato:
 - **Rate Limiting**: 1 req/s com burst de 2 tokens
 - **Circuit Breakers**: Proteção automática contra serviços indisponíveis
 
-## 📊 Busca de Tamanhos e Datas
-### Tamanhos (ordem de prioridade):
-1. **Metadata API** (iTorrents.org) - PRIORIDADE
-2. **Parâmetro `xl` do magnet** - FALLBACK
-3. **Tamanho do HTML** - FALLBACK FINAL
-
-### Datas:
-1. **Creation Date do Torrent** (via metadata API) - PADRÃO
-2. **Data do HTML** (publicação do post) - FALLBACK
-
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
 
@@ -177,5 +167,6 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull r
 
 ---
 **Nota**: Este é um projeto de indexação de torrents. Use com responsabilidade e respeite os direitos autorais.
+
 
 
