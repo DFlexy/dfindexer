@@ -60,20 +60,87 @@ class VacaScraper(BaseScraper):
         
         return self.enrich_torrents(all_torrents, filter_func=filter_func)
     
-    # Extrai links da página inicial
+    # Extrai links da seção "Atualizações Recentes"
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        for item in doc.select('.i-tem_ht'):
-            link_elem = item.select_one('a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
+        
+        # Encontra o container "Atualizações Recentes"
+        # Busca por .unique-container que contém o título "Atualizações Recentes"
+        unique_containers = doc.select('.unique-container')
+        for container in unique_containers:
+            # Verifica se este container tem o título "Atualizações Recentes"
+            block_header = container.select_one('.block-header')
+            if block_header:
+                header_text = block_header.get_text(strip=True)
+                if 'Atualizações Recentes' in header_text:
+                    # Encontrou a seção correta, extrai links de .movies-list
+                    movies_list = container.select_one('.movies-list')
+                    if movies_list:
+                        # Itera pelos .lo-col-m na ordem que aparecem para garantir ordem exata
+                        for lo_col in movies_list.select('.lo-col-m'):
+                            # Dentro de cada .lo-col-m, busca o .i-tem_ht
+                            item = lo_col.select_one('.i-tem_ht')
+                            if item:
+                                # Busca o link dentro de div.image > a.tooltip-container
+                                link_elem = item.select_one('div.image a.tooltip-container')
+                                if link_elem:
+                                    href = link_elem.get('href')
+                                    if href:
+                                        links.append(href)
+                    break  # Encontrou a seção, não precisa continuar
+        
         return links
     
     # Obtém torrents de uma página específica
+    # Processa sempre sequencialmente para manter a ordem original do site
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
-        return self._default_get_page(page, max_items)
+        # Prepara flags de teste/metadata/trackers (centralizado no BaseScraper)
+        is_using_default_limit, skip_metadata, skip_trackers = self._prepare_page_flags(max_items)
+        
+        try:
+            # Constrói URL da página usando função utilitária
+            from utils.concurrency.scraper_helpers import (
+                build_page_url, get_effective_max_items, limit_list,
+                process_links_sequential
+            )
+            # Para página 1, usa page/2/ como padrão
+            if page == '1':
+                page_url = f"{self.base_url}page/2/"
+            else:
+                page_url = build_page_url(self.base_url, self.page_pattern, page)
+            
+            doc = self.get_document(page_url, self.base_url)
+            if not doc:
+                return []
+            
+            # Extrai links usando método específico do scraper
+            links = self._extract_links_from_page(doc)
+            
+            # Obtém limite efetivo usando função utilitária
+            effective_max = get_effective_max_items(max_items)
+            
+            # Limita links se houver limite
+            links = limit_list(links, effective_max)
+            
+            # SEMPRE processa sequencialmente para manter a ordem original do site
+            all_torrents = process_links_sequential(
+                links,
+                self._get_torrents_from_page,
+                None  # Sem limite no processamento - já limitamos os links acima
+            )
+            
+            # Enriquece torrents (usa flags preparadas pelo BaseScraper)
+            enriched = self.enrich_torrents(
+                all_torrents,
+                skip_metadata=skip_metadata,
+                skip_trackers=skip_trackers
+            )
+            
+            return enriched
+        
+        except Exception as e:
+            logger.error(f"Erro ao obter página {page}: {e}")
+            return []
     
     # Faz busca POST para WordPress AJAX endpoint
     def _post_search(self, query: str, page: str = '1') -> List[str]:
