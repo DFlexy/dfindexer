@@ -75,24 +75,23 @@ docker-compose down
 docker-compose down -v
 ```
 
+### Opção 2: Docker Run CLI
+Se preferir executar manualmente:
 O Docker Compose irá:
 - ✅ Iniciar o serviço Redis automaticamente
 - ✅ Iniciar o serviço FlareSolverr automaticamente (opcional, para resolver Cloudflare)
 - ✅ Configurar a rede entre os containers
 - ✅ Persistir dados do Redis em volume nomeado
 - ✅ Configurar restart automático
-### Opção 2: Docker Run CLI
-Se preferir executar manualmente:
 
+### Option 2: Docker Run CLI
+If you prefer to run manually:
 Docker Compose will:
 - ✅ Automatically start the Redis service
 - ✅ Automatically start the FlareSolverr service (optional, to resolve Cloudflare)
 - ✅ Configure the network between containers
 - ✅ Persist Redis data in a named volume
 - ✅ Configure automatic restart
-### Option 2: Docker Run CLI
-If you prefer to run manually:
-
 
 ```bash
 # Primeiro, inicie o Redis
@@ -341,5 +340,6 @@ This project is maintained by **DFlexy**.
 Contributions are welcome! Feel free to open issues or pull requests.
 ---
 **Note**: This is a torrent indexing project. Use responsibly and respect copyrights.
+
 
 
