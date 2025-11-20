@@ -54,8 +54,9 @@ class IndexerService:
         self.processor.remove_internal_fields(torrents)
         
         # Para testes com limite, mantém ordem original
+        # Para vaca, sempre mantém ordem original do site
         # Caso contrário, ordena por data
-        if not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
+        if scraper_type != 'vaca' and not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
             self.processor.sort_by_date(torrents)
         
         return torrents
