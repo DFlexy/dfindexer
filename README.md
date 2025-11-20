@@ -3,6 +3,7 @@
 
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
+<br>
 **This project is 100% independent and open-source.**  
 💜 Your support keeps development active and makes the project continue evolving.
 
@@ -123,6 +124,7 @@ docker run -d \
 ```
 
 **Nota**: O FlareSolverr é opcional. Se não for iniciado, o indexer funcionará normalmente, mas sites protegidos por Cloudflare podem retornar erro 403.
+
 **Note**: FlareSolverr is optional. If not started, the indexer will work normally, but Cloudflare-protected sites may return a 403 error.
 
 ## 🔌 Integração com Prowlarr
@@ -339,4 +341,5 @@ This project is maintained by **DFlexy**.
 Contributions are welcome! Feel free to open issues or pull requests.
 ---
 **Note**: This is a torrent indexing project. Use responsibly and respect copyrights.
+
 
