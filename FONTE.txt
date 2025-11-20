@@ -1,0 +1,1469 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="theme-color" content="#000045">
+	<meta name="msapplication-navbutton-color" content="#000045"> 
+	<meta name="apple-mobile-web-app-status-bar-style" content="#000045"> 
+	<meta name="mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+    <meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />
+	<style>img:is([sizes="auto" i], [sizes^="auto," i]) { contain-intrinsic-size: 3000px 1500px }</style>
+	<meta name="description" content="Vaca Torrent é uma plataforma dedicada a disponibilizar downloads de filmes, séries, HQs e mangás, oferecendo conteúdo organizado, acessível e sempre atualizado.">
+
+	<!-- This site is optimized with the Yoast SEO plugin v26.4 - https://yoast.com/wordpress/plugins/seo/ -->
+	<title>Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online</title>
+	<meta name="description" content="Vaca Torrent é uma plataforma dedicada a disponibilizar downloads de filmes, séries, HQs e mangás, oferecendo conteúdo organizado, acessível e sempre atualizado." />
+	<link rel="canonical" href="https://vacatorrentmov.com/page/2/" />
+	<link rel="prev" href="https://vacatorrentmov.com/" />
+	<link rel="next" href="https://vacatorrentmov.com/page/3/" />
+	<meta property="og:locale" content="en_US" />
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" />
+	<meta property="og:description" content="Vaca Torrent é uma plataforma dedicada a disponibilizar downloads de filmes, séries, HQs e mangás, oferecendo conteúdo organizado, acessível e sempre atualizado." />
+	<meta property="og:url" content="https://vacatorrentmov.com/" />
+	<meta property="og:site_name" content="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[{"@type":"CollectionPage","@id":"https://vacatorrentmov.com/","url":"https://vacatorrentmov.com/page/2/","name":"Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online","isPartOf":{"@id":"https://vacatorrentmov.com/#website"},"description":"Vaca Torrent é uma plataforma dedicada a disponibilizar downloads de filmes, séries, HQs e mangás, oferecendo conteúdo organizado, acessível e sempre atualizado.","breadcrumb":{"@id":"https://vacatorrentmov.com/page/2/#breadcrumb"},"inLanguage":"en-US"},{"@type":"BreadcrumbList","@id":"https://vacatorrentmov.com/page/2/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Início"}]},{"@type":"WebSite","@id":"https://vacatorrentmov.com/#website","url":"https://vacatorrentmov.com/","name":"VacaTorrent - Filmes e Séries Via Torrent Grátis","description":"Vaca Torrent é uma plataforma dedicada a disponibilizar downloads de filmes, séries, HQs e mangás, oferecendo conteúdo organizado, acessível e sempre atualizado.","alternateName":"VacaTorrent - Filmes e Séries Via Torrent Grátis","potentialAction":[{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://vacatorrentmov.com/?s={search_term_string}"},"query-input":{"@type":"PropertyValueSpecification","valueRequired":true,"valueName":"search_term_string"}}],"inLanguage":"pt-BR"}]}</script>
+	<!-- / Yoast SEO plugin. -->
+
+
+<link rel='stylesheet' id='post-views-counter-frontend-css' href='https://vacatorrentmov.com/wp-content/plugins/post-views-counter/css/frontend.css?ver=1.5.8' type='text/css' media='all' />
+<style id='classic-theme-styles-inline-css' type='text/css'>
+/**
+ * These rules are needed for backwards compatibility.
+ * They should match the button element rules in the base theme.json file.
+ */
+.wp-block-button__link {
+	color: #ffffff;
+	background-color: #32373c;
+	border-radius: 9999px; /* 100% causes an oval, but any explicit but really high value retains the pill shape. */
+
+	/* This needs a low specificity so it won't override the rules from the button element if defined in theme.json. */
+	box-shadow: none;
+	text-decoration: none;
+
+	/* The extra 2px are added to size solids the same as the outline versions.*/
+	padding: calc(0.667em + 2px) calc(1.333em + 2px);
+
+	font-size: 1.125em;
+}
+
+.wp-block-file__button {
+	background: #32373c;
+	color: #ffffff;
+	text-decoration: none;
+}
+
+</style>
+<style id='global-styles-inline-css' type='text/css'>
+:root{--wp--preset--aspect-ratio--square: 1;--wp--preset--aspect-ratio--4-3: 4/3;--wp--preset--aspect-ratio--3-4: 3/4;--wp--preset--aspect-ratio--3-2: 3/2;--wp--preset--aspect-ratio--2-3: 2/3;--wp--preset--aspect-ratio--16-9: 16/9;--wp--preset--aspect-ratio--9-16: 9/16;--wp--preset--color--black: #000000;--wp--preset--color--cyan-bluish-gray: #abb8c3;--wp--preset--color--white: #ffffff;--wp--preset--color--pale-pink: #f78da7;--wp--preset--color--vivid-red: #cf2e2e;--wp--preset--color--luminous-vivid-orange: #ff6900;--wp--preset--color--luminous-vivid-amber: #fcb900;--wp--preset--color--light-green-cyan: #7bdcb5;--wp--preset--color--vivid-green-cyan: #00d084;--wp--preset--color--pale-cyan-blue: #8ed1fc;--wp--preset--color--vivid-cyan-blue: #0693e3;--wp--preset--color--vivid-purple: #9b51e0;--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple: linear-gradient(135deg,rgba(6,147,227,1) 0%,rgb(155,81,224) 100%);--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan: linear-gradient(135deg,rgb(122,220,180) 0%,rgb(0,208,130) 100%);--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange: linear-gradient(135deg,rgba(252,185,0,1) 0%,rgba(255,105,0,1) 100%);--wp--preset--gradient--luminous-vivid-orange-to-vivid-red: linear-gradient(135deg,rgba(255,105,0,1) 0%,rgb(207,46,46) 100%);--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray: linear-gradient(135deg,rgb(238,238,238) 0%,rgb(169,184,195) 100%);--wp--preset--gradient--cool-to-warm-spectrum: linear-gradient(135deg,rgb(74,234,220) 0%,rgb(151,120,209) 20%,rgb(207,42,186) 40%,rgb(238,44,130) 60%,rgb(251,105,98) 80%,rgb(254,248,76) 100%);--wp--preset--gradient--blush-light-purple: linear-gradient(135deg,rgb(255,206,236) 0%,rgb(152,150,240) 100%);--wp--preset--gradient--blush-bordeaux: linear-gradient(135deg,rgb(254,205,165) 0%,rgb(254,45,45) 50%,rgb(107,0,62) 100%);--wp--preset--gradient--luminous-dusk: linear-gradient(135deg,rgb(255,203,112) 0%,rgb(199,81,192) 50%,rgb(65,88,208) 100%);--wp--preset--gradient--pale-ocean: linear-gradient(135deg,rgb(255,245,203) 0%,rgb(182,227,212) 50%,rgb(51,167,181) 100%);--wp--preset--gradient--electric-grass: linear-gradient(135deg,rgb(202,248,128) 0%,rgb(113,206,126) 100%);--wp--preset--gradient--midnight: linear-gradient(135deg,rgb(2,3,129) 0%,rgb(40,116,252) 100%);--wp--preset--font-size--small: 13px;--wp--preset--font-size--medium: 20px;--wp--preset--font-size--large: 36px;--wp--preset--font-size--x-large: 42px;--wp--preset--spacing--20: 0.44rem;--wp--preset--spacing--30: 0.67rem;--wp--preset--spacing--40: 1rem;--wp--preset--spacing--50: 1.5rem;--wp--preset--spacing--60: 2.25rem;--wp--preset--spacing--70: 3.38rem;--wp--preset--spacing--80: 5.06rem;--wp--preset--shadow--natural: 6px 6px 9px rgba(0, 0, 0, 0.2);--wp--preset--shadow--deep: 12px 12px 50px rgba(0, 0, 0, 0.4);--wp--preset--shadow--sharp: 6px 6px 0px rgba(0, 0, 0, 0.2);--wp--preset--shadow--outlined: 6px 6px 0px -3px rgba(255, 255, 255, 1), 6px 6px rgba(0, 0, 0, 1);--wp--preset--shadow--crisp: 6px 6px 0px rgba(0, 0, 0, 1);}:where(.is-layout-flex){gap: 0.5em;}:where(.is-layout-grid){gap: 0.5em;}body .is-layout-flex{display: flex;}.is-layout-flex{flex-wrap: wrap;align-items: center;}.is-layout-flex > :is(*, div){margin: 0;}body .is-layout-grid{display: grid;}.is-layout-grid > :is(*, div){margin: 0;}:where(.wp-block-columns.is-layout-flex){gap: 2em;}:where(.wp-block-columns.is-layout-grid){gap: 2em;}:where(.wp-block-post-template.is-layout-flex){gap: 1.25em;}:where(.wp-block-post-template.is-layout-grid){gap: 1.25em;}.has-black-color{color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-color{color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-color{color: var(--wp--preset--color--white) !important;}.has-pale-pink-color{color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-color{color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-color{color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-color{color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-color{color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-color{color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-color{color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-color{color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-color{color: var(--wp--preset--color--vivid-purple) !important;}.has-black-background-color{background-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-background-color{background-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-background-color{background-color: var(--wp--preset--color--white) !important;}.has-pale-pink-background-color{background-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-background-color{background-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-background-color{background-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-background-color{background-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-background-color{background-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-background-color{background-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-background-color{background-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-background-color{background-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-background-color{background-color: var(--wp--preset--color--vivid-purple) !important;}.has-black-border-color{border-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-border-color{border-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-border-color{border-color: var(--wp--preset--color--white) !important;}.has-pale-pink-border-color{border-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-border-color{border-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-border-color{border-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-border-color{border-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-border-color{border-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-border-color{border-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-border-color{border-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-border-color{border-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-border-color{border-color: var(--wp--preset--color--vivid-purple) !important;}.has-vivid-cyan-blue-to-vivid-purple-gradient-background{background: var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple) !important;}.has-light-green-cyan-to-vivid-green-cyan-gradient-background{background: var(--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan) !important;}.has-luminous-vivid-amber-to-luminous-vivid-orange-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange) !important;}.has-luminous-vivid-orange-to-vivid-red-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-orange-to-vivid-red) !important;}.has-very-light-gray-to-cyan-bluish-gray-gradient-background{background: var(--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray) !important;}.has-cool-to-warm-spectrum-gradient-background{background: var(--wp--preset--gradient--cool-to-warm-spectrum) !important;}.has-blush-light-purple-gradient-background{background: var(--wp--preset--gradient--blush-light-purple) !important;}.has-blush-bordeaux-gradient-background{background: var(--wp--preset--gradient--blush-bordeaux) !important;}.has-luminous-dusk-gradient-background{background: var(--wp--preset--gradient--luminous-dusk) !important;}.has-pale-ocean-gradient-background{background: var(--wp--preset--gradient--pale-ocean) !important;}.has-electric-grass-gradient-background{background: var(--wp--preset--gradient--electric-grass) !important;}.has-midnight-gradient-background{background: var(--wp--preset--gradient--midnight) !important;}.has-small-font-size{font-size: var(--wp--preset--font-size--small) !important;}.has-medium-font-size{font-size: var(--wp--preset--font-size--medium) !important;}.has-large-font-size{font-size: var(--wp--preset--font-size--large) !important;}.has-x-large-font-size{font-size: var(--wp--preset--font-size--x-large) !important;}
+:where(.wp-block-post-template.is-layout-flex){gap: 1.25em;}:where(.wp-block-post-template.is-layout-grid){gap: 1.25em;}
+:where(.wp-block-columns.is-layout-flex){gap: 2em;}:where(.wp-block-columns.is-layout-grid){gap: 2em;}
+:root :where(.wp-block-pullquote){font-size: 1.5em;line-height: 1.6;}
+</style>
+<link rel='stylesheet' id='favorites-css-css' href='https://vacatorrentmov.com/wp-content/themes/VacaTorrent/css/favorites.css?ver=1.0' type='text/css' media='all' />
+<link rel='stylesheet' id='index-css-css' href='https://vacatorrentmov.com/wp-content/themes/VacaTorrent/css/index-home.css?ver=1761307967' type='text/css' media='all' />
+<script type="text/javascript" id="jquery-core-js-extra">
+/* <![CDATA[ */
+var likeDislikeAjax = {"ajax_url":"https:\/\/vacatorrentmov.com\/wp-admin\/admin-ajax.php","nonce":"c9a285b909"};
+/* ]]> */
+</script>
+<script type="text/javascript" src="https://vacatorrentmov.com/wp-includes/js/jquery/jquery.js?ver=3.7.1" id="jquery-core-js"></script>
+<script type="text/javascript" src="https://vacatorrentmov.com/wp-includes/js/jquery/jquery-migrate.js?ver=3.4.1" id="jquery-migrate-js"></script>
+<link rel="https://api.w.org/" href="https://vacatorrentmov.com/wp-json/" /><link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://vacatorrentmov.com/xmlrpc.php?rsd" />
+<link rel="alternate" hreflang="x-default" href="https://vacatorrentmov.com/page/2/" />
+<link rel="alternate" hreflang="pt-BR" href="https://vacatorrentmov.com/page/2/" />
+<link rel="alternate" hreflang="en-US" href="https://vacatorrentmov.com/page/2/?lang=en-US" />
+<link rel="icon" href="https://vacatorrentmov.com/wp-content/uploads/2024/05/cropped-favicon-32x32-1-32x32.png" sizes="32x32" />
+<link rel="icon" href="https://vacatorrentmov.com/wp-content/uploads/2024/05/cropped-favicon-32x32-1-192x192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://vacatorrentmov.com/wp-content/uploads/2024/05/cropped-favicon-32x32-1-180x180.png" />
+<meta name="msapplication-TileImage" content="https://vacatorrentmov.com/wp-content/uploads/2024/05/cropped-favicon-32x32-1-270x270.png" />
+        <link rel="shortcut icon" href="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/images/favicon.png">
+    	<link rel="stylesheet" href="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/css/dark.css">
+	<link rel="stylesheet" href="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/css/main-header.css">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TZ5FL3METL"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-TZ5FL3METL');
+</script>
+<script>
+    let popup = null;
+    let popupAberto = false;
+
+    function isMobile() {
+        return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    function abrirPopup(urlDestino) {
+        if (!popupAberto) {
+            if (isMobile()) {
+                popup = window.open(urlDestino, "_blank");
+            } else {
+                let largura = 80;
+                let altura = 10;
+                let esquerda = screen.width - largura - 10;
+                let topo = 10;
+
+                popup = window.open("", "popupWindow",
+                    `width=${largura},height=${altura},left=${esquerda},top=${topo},resizable=yes`
+                );
+
+                if (popup) {
+                    setTimeout(() => {
+                        if (!popup.closed) {
+                            popup.resizeTo(largura, altura);
+                        }
+                    }, 1000); // atraso de 1s
+                    popup.blur();
+                    window.focus();
+                }
+            }
+            popupAberto = true;
+        } else if (!isMobile() && popup) {
+            setTimeout(() => { // atraso antes de expandir
+                popup.location.href = urlDestino;
+                popup.resizeTo(screen.availWidth, screen.availHeight);
+                popup.moveTo(0, 0);
+            }, 1500);
+        }
+    }
+
+    // trocamos de "click" para "mouseup"
+    document.addEventListener("mouseup", function (event) {
+        let urlDestino = "https://www.revenuecpmgate.com/w0iqjy9py6?key=5211d5347eade671ce442d30b5efee22";
+        if (!popupAberto && event.target.closest("a")) {
+            event.preventDefault();
+        }
+        abrirPopup(urlDestino);
+    });
+</script>
+	<script type="text/javascript" data-cfasync="false">
+/*<![CDATA[/* */
+(function(){var p=window,o="db5957c1e1e55f3f0ab8f5c6978e2376",e=[["siteId",787*86+70-323+5091926],["minBid",0],["popundersPerIP","0"],["delayBetween",0],["default",false],["defaultPerDay",0],["topmostLayer","auto"]],b=["d3d3LmludGVsbGlnZW5jZWFkeC5jb20vb2FsYWMubWluLmNzcw==","ZDJrbHg4N2Jnem5nY2UuY2xvdWRmcm9udC5uZXQvRFYvdHhzcy5taW4uanM="],t=-1,d,c,m=function(){clearTimeout(c);t++;if(b[t]&&!(1788035961000<(new Date).getTime()&&1<t)){d=p.document.createElement("script");d.type="text/javascript";d.async=!0;var w=p.document.getElementsByTagName("script")[0];d.src="https://"+atob(b[t]);d.crossOrigin="anonymous";d.onerror=m;d.onload=function(){clearTimeout(c);p[o.slice(0,16)+o.slice(0,16)]||m()};c=setTimeout(m,5E3);w.parentNode.insertBefore(d,w)}};if(!p[o]){try{Object.freeze(p[o]=e)}catch(e){}m()}})();
+/*]]>/* */
+</script>
+
+</head>
+<body>
+<style>
+  /* === ESTILO DO AVISO === */
+  #adblock-alert {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999999;
+  }
+
+  #adblock-alert .alert-box {
+    background: #ffffff;
+    border-radius: 18px;
+    max-width: 420px;
+    padding: 36px 30px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    animation: fadeInUp 0.5s ease;
+  }
+
+  #adblock-alert h2 {
+    font-size: 1.6rem;
+    color: #222;
+    margin-bottom: 14px;
+  }
+
+  #adblock-alert p {
+    color: #555;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  #adblock-alert button {
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 10px 22px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    font-weight: 500;
+  }
+
+  #adblock-alert button:hover {
+    background: #0056b3;
+  }
+
+  @keyframes fadeInUp {
+    from {opacity: 0; transform: translateY(25px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+</style>
+
+<div id="adblock-alert">
+  <div class="alert-box">
+    <h2>Detectamos um bloqueador de anúncios 😕</h2>
+    <p>Por favor, desative seu AdBlock e recarregue a página.<br>
+    Nossa publicidade mantém o conteúdo gratuito para todos.</p>
+    <button onclick="location.reload()">Já desativei</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  /* ======== 1️⃣ DETECÇÃO DE ADBLOCK ======== */
+  const bait = document.createElement('div');
+  bait.className = 'ad ad-banner adsbox advertisement adunit adblock-test';
+  bait.style.cssText = 'width:1px;height:1px;position:absolute;left:-9999px;';
+  document.body.appendChild(bait);
+
+  setTimeout(() => {
+    const baitStyles = window.getComputedStyle(bait);
+    const adBlocked = (baitStyles.display === 'none' || baitStyles.visibility === 'hidden');
+    bait.remove();
+
+    if (adBlocked) {
+      showAdblockAlert();
+    }
+  }, 500);
+
+  function showAdblockAlert() {
+    const alertBox = document.getElementById('adblock-alert');
+    alertBox.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  /* ======== 2️⃣ BLOQUEIO DE INSPECIONAR ELEMENTO ======== */
+
+  // Bloqueia atalhos comuns
+  document.onkeydown = function(e) {
+    // F12
+    if (e.keyCode === 123) return false;
+    // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C / Ctrl+U
+    if (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) return false;
+    if (e.ctrlKey && e.key.toLowerCase() === 'u') return false;
+  };
+
+  // Bloqueia clique direito
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Detecta abertura de console (truque de performance)
+  const element = new Image();
+  Object.defineProperty(element, 'id', {
+    get: function() {
+      showAdblockAlert();
+      setTimeout(() => { window.location.reload(); }, 2000);
+    }
+  });
+
+  // Loop de detecção de console aberto
+  setInterval(() => {
+    console.log(element);
+    console.clear();
+  }, 2000);
+
+  // Bloqueia se redimensionar o inspetor
+  let devtoolsOpen = false;
+  const threshold = 160;
+  setInterval(() => {
+    if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {
+      if (!devtoolsOpen) {
+        devtoolsOpen = true;
+        showAdblockAlert();
+      }
+    } else {
+      devtoolsOpen = false;
+    }
+  }, 1000);
+})();
+</script>
+
+	<!-- animacao trenor Natal-->
+<!--<div class="trenor">
+    <img src="https://vacatorrentmov.com/wp-content/uploads/2024/11/treno-papai-noel-imagem-animada-0085.gif" alt="Feliz Natal">
+</div>
+
+<style>
+.trenor {
+    position: fixed;
+    top: 20%; 
+    right: -370px;
+    z-index: 1000;
+    animation: mover-trenor 10s ease-in-out forwards;
+    animation-delay: 5s;
+    width: 370px;
+    height: auto; 
+    pointer-events: none; 
+}
+
+
+@media screen and (max-width: 768px) {
+    .trenor img {
+        width: 250px; 
+    }
+}
+
+@keyframes mover-trenor {
+    0% {
+        right: -370px;
+        opacity: 1;
+        transform: translateY(0);
+    }
+    30% {
+        right: 30%;
+        opacity: 1;
+        transform: translateY(-20px);
+    }
+    50% {
+        right: 50%;
+        opacity: 1;
+        transform: translateY(20px);
+    }
+    70% {
+        right: calc(100% - 200px); 
+        opacity: 1;
+        transform: translateY(-20px);
+    }
+    80% {
+        right: calc(100% - 100px);
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        right: -370px;
+        opacity: 0;
+        transform: translateY(0);
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const trenor = document.querySelector('.trenor');
+
+    function restartAnimation() {
+        trenor.style.animation = 'none'; 
+        trenor.offsetHeight;  
+        trenor.style.animation = 'mover-trenor 10s ease-in-out forwards'; 
+    }
+
+    trenor.addEventListener('animationend', function() {
+        setTimeout(restartAnimation, 5000); 
+    });
+});
+</script>
+-->
+  <div id="menu-mobile">
+        <div class="menu-image">
+                            <div class="logo">
+                 <a href="https://vacatorrentmov.com/">
+                 <img src="https://vacatorrentmov.com/wp-content/uploads/2025/08/logo-natal-1-menor-e1756172496421.png" alt="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" title="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" width="250" height="auto" loading="lazy">
+                </a>
+            </div>
+                </div>
+        <!-- Menu WordPress -->
+        <ul id="menu-menu-topo" class="menu"><li id="menu-item-61094" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-61094"><a href="https://vacatorrentmov.com/contribua-para-o-vacatorrentmov-com-bitcoin/">Contribua para o Site</a></li>
+<li id="menu-item-47695" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-has-children menu-item-47695"><a href="https://vacatorrentmov.com/category/filmes/">Filmes (2901)</a>
+<ul class="sub-menu">
+	<li id="menu-item-61819" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61819"><a href="https://vacatorrentmov.com/category/filmes-acao/">Filmes de Ação (789)</a></li>
+	<li id="menu-item-61820" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61820"><a href="https://vacatorrentmov.com/category/filmes-animacao/">Filmes de Animação (203)</a></li>
+	<li id="menu-item-61889" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61889"><a href="https://vacatorrentmov.com/category/filmes-anime/">Filmes de Anime (34)</a></li>
+	<li id="menu-item-61832" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61832"><a href="https://vacatorrentmov.com/category/filmes-aventura/">Filmes de Aventura (483)</a></li>
+	<li id="menu-item-61828" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61828"><a href="https://vacatorrentmov.com/category/filmes-biografia/">Filmes de Biografia (90)</a></li>
+	<li id="menu-item-61830" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61830"><a href="https://vacatorrentmov.com/category/filmes-comedia/">Filmes de Comédia (724)</a></li>
+	<li id="menu-item-61836" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61836"><a href="https://vacatorrentmov.com/category/filmes-de-crime/">Filmes de Crime (314)</a></li>
+	<li id="menu-item-61848" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61848"><a href="https://vacatorrentmov.com/category/filmes-documentario/">Filmes de Documentário (114)</a></li>
+	<li id="menu-item-61838" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61838"><a href="https://vacatorrentmov.com/category/filmes-drama/">Filmes de Drama (1188)</a></li>
+	<li id="menu-item-61914" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61914"><a href="https://vacatorrentmov.com/category/filmes-esporte/">Filmes de Esporte (38)</a></li>
+	<li id="menu-item-61882" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61882"><a href="https://vacatorrentmov.com/category/filmes-familia/">Filmes de Família (56)</a></li>
+	<li id="menu-item-61867" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61867"><a href="https://vacatorrentmov.com/category/filmes-fantasia/">Filmes de Fantasia (228)</a></li>
+	<li id="menu-item-61884" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61884"><a href="https://vacatorrentmov.com/category/filmes-faroeste/">Filmes de Faroeste (29)</a></li>
+	<li id="menu-item-61864" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61864"><a href="https://vacatorrentmov.com/category/filmes-ficcao/">Filmes de Ficção (291)</a></li>
+	<li id="menu-item-61916" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61916"><a href="https://vacatorrentmov.com/category/filmes-guerra/">Filmes de Guerra (66)</a></li>
+	<li id="menu-item-61840" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61840"><a href="https://vacatorrentmov.com/category/filmes-historia/">Filmes de História (89)</a></li>
+	<li id="menu-item-61898" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61898"><a href="https://vacatorrentmov.com/category/filmes-misterio/">Filmes de Mistério (253)</a></li>
+	<li id="menu-item-61918" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61918"><a href="https://vacatorrentmov.com/category/filmes-musical/">Filmes de Musical (56)</a></li>
+	<li id="menu-item-61920" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61920"><a href="https://vacatorrentmov.com/category/filmes-religioso/">Filmes de Religioso (1)</a></li>
+	<li id="menu-item-61922" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61922"><a href="https://vacatorrentmov.com/category/filmes-romance/">Filmes de Romance (266)</a></li>
+	<li id="menu-item-61822" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61822"><a href="https://vacatorrentmov.com/category/filmes-suspense/">Filmes de Suspense (975)</a></li>
+	<li id="menu-item-61834" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61834"><a href="https://vacatorrentmov.com/category/filmes-terror/">Filmes de Terror (593)</a></li>
+</ul>
+</li>
+<li id="menu-item-47702" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-has-children menu-item-47702"><a href="https://vacatorrentmov.com/category/series/">Séries (593)</a>
+<ul class="sub-menu">
+	<li id="menu-item-61842" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61842"><a href="https://vacatorrentmov.com/category/series-acao/">Séries de Ação (46)</a></li>
+	<li id="menu-item-61821" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61821"><a href="https://vacatorrentmov.com/category/series-animacao/">Séries de Animação (50)</a></li>
+	<li id="menu-item-61890" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61890"><a href="https://vacatorrentmov.com/category/series-anime/">Séries de Anime (88)</a></li>
+	<li id="menu-item-61833" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61833"><a href="https://vacatorrentmov.com/category/series-aventura/">Séries de Aventura (156)</a></li>
+	<li id="menu-item-61829" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61829"><a href="https://vacatorrentmov.com/category/series-biografia/">Séries de Biografia (14)</a></li>
+	<li id="menu-item-61831" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61831"><a href="https://vacatorrentmov.com/category/series-comedia/">Séries de Comédia (123)</a></li>
+	<li id="menu-item-61837" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61837"><a href="https://vacatorrentmov.com/category/series-crime/">Séries de Crime (126)</a></li>
+	<li id="menu-item-61849" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61849"><a href="https://vacatorrentmov.com/category/series-documentario/">Séries de Documentário (11)</a></li>
+	<li id="menu-item-61839" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61839"><a href="https://vacatorrentmov.com/category/series-drama/">Séries de Drama (366)</a></li>
+	<li id="menu-item-61915" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61915"><a href="https://vacatorrentmov.com/category/series-esporte/">Séries de Esporte (4)</a></li>
+	<li id="menu-item-61883" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61883"><a href="https://vacatorrentmov.com/category/series-familia/">Series de Família (4)</a></li>
+	<li id="menu-item-61868" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61868"><a href="https://vacatorrentmov.com/category/series-fantasia/">Series de Fantasia (126)</a></li>
+	<li id="menu-item-61885" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61885"><a href="https://vacatorrentmov.com/category/series-faroeste/">Séries de Faroeste (6)</a></li>
+	<li id="menu-item-61865" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61865"><a href="https://vacatorrentmov.com/category/series-ficcao/">Séries de Ficção (113)</a></li>
+	<li id="menu-item-61917" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61917"><a href="https://vacatorrentmov.com/category/series-guerra/">Séries de Guerra (3)</a></li>
+	<li id="menu-item-61841" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61841"><a href="https://vacatorrentmov.com/category/series-historia/">Séries de História (17)</a></li>
+	<li id="menu-item-61899" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61899"><a href="https://vacatorrentmov.com/category/series-misterio/">Séries de Mistério (84)</a></li>
+	<li id="menu-item-61919" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61919"><a href="https://vacatorrentmov.com/category/series-musical/">Séries de Musical (4)</a></li>
+	<li id="menu-item-61921" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61921"><a href="https://vacatorrentmov.com/category/series-religioso/">Séries de Religioso (1)</a></li>
+	<li id="menu-item-61923" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61923"><a href="https://vacatorrentmov.com/category/series-romance/">Séries de Romance (32)</a></li>
+	<li id="menu-item-61823" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61823"><a href="https://vacatorrentmov.com/category/series-suspense/">Séries de Suspense (111)</a></li>
+	<li id="menu-item-61835" class="menu-item menu-item-type-taxonomy menu-item-object-category menu-item-61835"><a href="https://vacatorrentmov.com/category/series-terror/">Séries de Terror (66)</a></li>
+</ul>
+</li>
+</ul>	  <!-- Idioma para mobile - menu interno -->
+<div class="mobile-language-container mobile-only">
+  <div class="mobile-lang-toggle" onclick="toggleMobileLang()">Languages</div>
+  <ul class="mobile-lang-list" id="mobile-lang-list">
+    <li><a href="#" onclick="setLanguage('pt-BR')">Português (BR)</a></li>
+    <li><a href="#" onclick="setLanguage('en-US')">English (US)</a></li>
+  </ul>
+</div>
+
+    </div>
+    <header id="header">
+        <div class="unique-container">
+			<div class="sub_media">
+			    <button aria-label="Pesquisar" class="btn-search-moba"><svg width="24" height="38" viewBox="0 0 24 24" style="fill: aqua;" xmlns="http://www.w3.org/2000/svg"><path d="M10 2.75a7.25 7.25 0 015.63 11.82l4.9 4.9a.75.75 0 01-.98 1.13l-.08-.07-4.9-4.9A7.25 7.25 0 1110 2.75zm0 1.5a5.75 5.75 0 100 11.5 5.75 5.75 0 000-11.5z"></path></svg></button>
+                            <div class="logo">
+                 <a href="https://vacatorrentmov.com/">
+                 <img src="https://vacatorrentmov.com/wp-content/uploads/2025/08/logo-natal-1-menor-e1756172496421.png" alt="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" title="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" width="200" height="auto">
+                </a>
+            </div>
+          
+    <div class="search">
+        <form method="get" action="https://vacatorrentmov.com/">
+	<button type="submit" aria-label="Pesquisar"><svg width="24" height="38" viewBox="0 0 24 24" style="fill: aqua;" xmlns="http://www.w3.org/2000/svg" style><path d="M10 2.75a7.25 7.25 0 015.63 11.82l4.9 4.9a.75.75 0 01-.98 1.13l-.08-.07-4.9-4.9A7.25 7.25 0 1110 2.75zm0 1.5a5.75 5.75 0 100 11.5 5.75 5.75 0 000-11.5z"></path></svg></button>
+    <input type="text" id="palavraPesquisa" name="s" placeholder="Pesquisar por um filme ou série televisiva......" value="" autocomplete="off">
+</form>
+<div id="caixaBusca"></div>
+
+<style>
+    a {
+        cursor: pointer;
+        color: #ccc;
+    }
+    #caixaBusca {
+    position: fixed;
+    margin-top: 10px;
+    padding: 0px;
+    font-size: 0.75em;
+    z-index: 1000;
+    width: 300px;
+    }
+	.listaBusca:hover{
+		background-color:  #000;
+		cursor: pointer;
+	}
+    .listaBusca {
+		cursor: pointer;
+		border-radius:5px;
+		 background-color: #282828;
+        padding: 2px;
+        color: #ccc;
+        display: flex;
+        align-items: center;
+        border-bottom: 4px solid #000;
+    }
+    .listaBusca img {
+		border-radius: 4px;
+    	object-fit: cover;
+    	width: 4em;
+    	height: 6em;
+        
+    }
+    .flutuaPesquisa {
+		font-size: 0.9em;
+    	width: 100%;
+		padding: 0.5em;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+		max-width: 240px; /* Defina um valor adequado para a largura máxima */
+    overflow: hidden;
+    }
+    .letraBusca {
+            padding: 0.0em 0;
+    }
+	
+	.thumbnail-wrapper{
+		width: 4em;
+   	 	height: 6em;
+	}
+	.flutuaPesquisa .titulo {
+    white-space: nowrap; /* Impede a quebra de linha */
+    overflow: hidden; /* Oculta o excesso de texto */
+    text-overflow: ellipsis; /* Adiciona reticências (...) no final do texto que exceder o limite */
+    display: block; /* Garante que o comportamento seja aplicado corretamente */
+    max-width: calc(100% - 10px); /* Ajusta a largura máxima para o tamanho da div, menos uma margem de 10px */
+}
+
+
+
+
+</style>
+
+<script>
+
+// Função para pegar o objeto AJAX do navegador
+function xmlhttp() {
+    if (window.XMLHttpRequest) {
+        return new XMLHttpRequest();
+    }
+    var versao = ['Microsoft.XMLHttp', 'Msxml2.XMLHttp', 'Msxml2.XMLHttp.6.0', 'Msxml2.XMLHttp.5.0', 'Msxml2.XMLHttp.4.0', 'Msxml2.XMLHttp.3.0', 'Msxml2.DOMDocument.3.0'];
+    for (var i = 0; i < versao.length; i++) {
+        try {
+            return new ActiveXObject(versao[i]);
+        } catch (e) {
+            alert("Seu navegador não possui recursos para o uso do AJAX!");
+        }
+    }
+    return null;
+}
+
+var typingTimer;
+var doneTypingInterval = 200;
+
+
+function carregar() {
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(function() {
+        var searchTerm = document.getElementById('palavraPesquisa').value;
+        if (searchTerm.length > 2) {
+            var ajax = xmlhttp();
+            if (ajax) {
+                ajax.open('GET', '/wp-admin/admin-ajax.php?action=search_posts&s=' + encodeURIComponent(searchTerm), true);
+                ajax.onreadystatechange = function() {
+                    if (ajax.readyState === 4 && ajax.status === 200) {
+                        const response = JSON.parse(ajax.responseText);
+                        const caixaBusca = document.getElementById('caixaBusca');
+                        caixaBusca.innerHTML = '';
+                        response.forEach(post => {
+                            const postHTML = `
+                                <a href="${post.link}">
+                                    <div class="listaBusca">
+                                        <div class="thumbnail-wrapper">
+                                            <img src="${post.thumbnail}" class="post-thumbnail">
+                                        </div>
+                                        <div class="flutuaPesquisa">
+                                            <span class="titulo">${post.title}</span>
+											<span class="letraBusca">${post.idioma}</span>
+                                            <span class="letraBusca">${post.torrent}</span>
+                                            <span class="letraBusca">${post.year}</span>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                            caixaBusca.innerHTML += postHTML;
+                        });
+                        // Após adicionar todos os resultados, exibe o contêiner
+                        caixaBusca.style.display = 'block';
+                    }
+                };
+                ajax.send(null);
+            }
+        } else {
+            document.getElementById('caixaBusca').style.display = 'none';
+        }
+    }, doneTypingInterval);
+}
+
+document.getElementById('palavraPesquisa').addEventListener('input', function() {
+    clearTimeout(typingTimer);
+    if (this.value) {
+        typingTimer = setTimeout(carregar, doneTypingInterval);
+    }
+});
+
+document.body.addEventListener('click', function(event) {
+    if (!event.target.closest('#caixaBusca, #palavraPesquisa')) {
+        document.getElementById('caixaBusca').style.display = 'none';
+    }
+});
+
+</script>
+    </div>
+		</div>	
+			<div class="flex">
+<div class="user-menu-container" onclick="toggleUserMenuMobile(this)">
+            <span class="user-name">Junte-se</span>
+        <img class="user-avatar" src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/images/glyphicons-basic-4-user-grey-d8fe957375e70239d6ab555591fadf1a91f5df19ffd15df9af.svg" alt="Avatar padrão" loading="lazy" decoding="async">
+        <div class="user-dropdown">
+            <a href="https://vacatorrentmov.com/login">Fazer Login</a>
+        </div>
+    </div>
+
+
+<script>
+function toggleUserMenuMobile(el) {
+    if (window.innerWidth <= 768) {
+        const menu = el.querySelector('.user-dropdown');
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    }
+}
+</script>
+
+		<div class="menu-overlay"></div>
+<button aria-label="Menu" class="btn-menu">
+   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 32 32" class="h-7 w-7 size-6" style="">
+        <rect width="19.386" height="3.497" x="5.282" y="5.58" rx=".6" style="fill: #00d6ff;"></rect>
+        <rect width="13.879" height="3.497" x="5.925" y="13.83" rx=".6" style="fill: #00d6ff;"></rect>
+        <rect width="19.386" height="3.497" x="5.282" y="22.08" rx=".6" style="fill: #00d6ff;"></rect>
+        <path d="M27.797 14.714a1 1 0 0 1 0 1.728l-4.178 2.432a1 1 0 0 1-1.503-.864v-4.863a1 1 0 0 1 1.503-.865l4.178 2.432Z" style="fill: #0eff18;"></path>
+    </svg>
+</button>		
+			<!-- Menu de Idioma estilo TMDB – visível apenas no desktop -->
+<div class="language-menu desktop-only" tabindex="0">
+  <button class="lang-button" onclick="toggleLangMenu()">
+    <span class="lang-code-only" id="lang-short">PT</span>
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+  </button>
+  <ul class="lang-options" id="lang-options">
+    <li><a href="#" onclick="setLanguage('pt-BR')"><span class="lang-code">BR</span> Português (BR)</a></li>
+    <li><a href="#" onclick="setLanguage('en-US')"><span class="lang-code">US</span> English (US)</a></li>
+  </ul>
+</div>
+				</div>	
+		<script>
+function setLanguage(lang) {
+  localStorage.setItem("preferredLang", lang);
+document.cookie = "preferredLang=" + lang + ";path=/;max-age=31536000";
+
+
+  const url = new URL(window.location.href);
+
+  if (lang === "pt-BR") {
+    url.searchParams.delete("lang");
+  } else {
+    url.searchParams.set("lang", lang);
+  }
+
+  // Remove o hash se tiver
+  url.hash = "";
+
+  window.location.href = url.toString();
+}
+
+
+function toggleLangMenu() {
+  const menu = document.getElementById("lang-options");
+  menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+function toggleMobileLang() {
+  const list = document.getElementById("mobile-lang-list");
+  list.style.display = list.style.display === "block" ? "none" : "block";
+}
+
+// Redirecionar automaticamente se o idioma estiver salvo
+window.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentLang = urlParams.get("lang");
+  const savedLang = localStorage.getItem("preferredLang");
+
+  // Exibir no botão o idioma atual
+  const langShort = document.getElementById("lang-short");
+  if (langShort) {
+    langShort.textContent = (currentLang || savedLang || "pt-BR").startsWith("en") ? "EN" : "PT";
+  }
+});
+
+
+// Fechar menu ao clicar fora
+document.addEventListener("click", function (e) {
+  const menu = document.getElementById("lang-options");
+  const btn = document.querySelector(".lang-button");
+  if (!btn.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = "none";
+  }
+});
+</script>
+
+</div>
+</header>
+
+
+		<div class="split">
+<ul id="menu-menu-header-sub" class="menu"><li id="menu-item-61361" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-61361"><a href="https://vacatorrentmov.com/contribua/">CONTRIBUA</a></li>
+<li id="menu-item-62113" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-62113"><a href="https://vacatorrentmov.com/tag/breve/">EM BREVE NAS TELAS</a></li>
+<li id="menu-item-67115" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-67115"><a href="https://vacatorrentmov.com/tag/ongoing/">INCOMPLETO</a></li>
+<li id="menu-item-67116" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-67116"><a href="https://vacatorrentmov.com/tag/completo/">COMPLETO</a></li>
+</ul>
+      </div><br>
+<div id="main">
+		<div class="ot">
+		<div class="ot_2">
+			<div class="iframe-container">
+				<div id="frame" style="width: 320px;margin: auto;z-index: 99998;height: auto">
+          <iframe data-aa='2379899' src='//ad.a-ads.com/2379899/?size=320x50'
+                            style='border:0; padding:0; width:320px; height:50px; overflow:hidden;display: block;margin: auto'></iframe>
+        </div>			</div>
+		</div>
+	</div>
+
+		
+	<div class="unique-container">
+		<style>.see-more-link-lastadd{    display: flex; align-items: center}</style>
+		<div class="block-header">
+			<a href="https://vacatorrentmov.com/page/3/" class="see-more-link-lastadd"><h2 class="title_in_main_page"><div class="befo-custom-titi"></div>
+				Atualizações Recentes</h2><svg width="16" height="16" xmlns="http://www.w3.org/2000/svg" class="ipc-icon ipc-icon--chevron-right-inline ipc-icon--inline ipc-title-link ipc-title-link-chevron" viewBox="0 0 24 24" fill="currentColor" role="presentation" style="color: #006cdf;margin-left: .5em;"><path d="M5.622.631A2.153 2.153 0 0 0 5 2.147c0 .568.224 1.113.622 1.515l8.249 8.34-8.25 8.34a2.16 2.16 0 0 0-.548 2.07c.196.74.768 1.317 1.499 1.515a2.104 2.104 0 0 0 2.048-.555l9.758-9.866a2.153 2.153 0 0 0 0-3.03L8.62.61C7.812-.207 6.45-.207 5.622.63z"></path></svg></a>
+		</div>
+		<div class="movies-list">
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/luccas-e-gi-em-amor-de-mae/" class="tooltip-container">
+        
+                    <span class="audio">NACIONAL</span>
+                
+        
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/uBnDrMltvhdFv67LZ80VCG4yhfv-342x513.webp"     data-title="Luccas e Gi em: Amor de Mãe"
+     data-categories="Filmes, Filmes de Família"
+     data-excerpt="Em Luccas e Gi em: Amor de Mãe, o jovem Luccas enfrenta o maior desafio de sua vida: ajudar a...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/luccas-e-gi-em-amor-de-mae/" title="Luccas e Gi em: Amor de Mãe">
+                <h3>Luccas e Gi em: Amor de Mãe</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/baramulla/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/bQ6ZZg73jxOUK8bERtDS250xAiN-342x513.webp"     data-title="Baramulla"
+     data-categories="Filmes, Filmes de Terror"
+     data-excerpt="Em Baramulla, um policial determinado é lançado em um pesadelo quando um simples caso de sequestro infantil se transforma em...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/baramulla/" title="Baramulla">
+                <h3>Baramulla</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/frankenstein/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/10/wWuB5zIdCLxpjO0tzTjwE9TTLjg-342x513.jpg"     data-title="Frankenstein"
+     data-categories="Filmes, Filmes de Drama, Filmes de Fantasia"
+     data-excerpt="Frankenstein (2025) traz a visão sombria e poética de Guillermo del Toro para o clássico imortal de Mary Shelley, reinventando...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/frankenstein/" title="Frankenstein">
+                <h3>Frankenstein</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/os-caras-malvados-no-pedaco/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        <span class="tag-label-statu">completo</span>
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries serie">SÉRIE</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/2MwexoT6ErCY8CBe80dBEV866oF-342x513.jpg"     data-title="Os Caras Malvados No Pedaço"
+     data-categories="Séries, Séries de Animação, Séries de Aventura"
+     data-excerpt="Antes de se tornarem os criminosos mais procurados — e mais estilosos — do mundo, Sr. Lobo, Sr. Cobra, Sr....">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/os-caras-malvados-no-pedaco/" title="Os Caras Malvados No Pedaço">
+                <h3>Os Caras Malvados No Pedaço</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/a-agente-polonesa/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/kUSX6LLvEZWRZIdrz9guOG5hFvd-342x513.webp"     data-title="A Agente Polonesa"
+     data-categories="Filmes, Filmes de Ação, Filmes de Guerra"
+     data-excerpt="Ambientado na turbulenta Segunda Guerra Mundial, A Agente Polonesa acompanha a trajetória de uma espiã polonesa recrutada pelos">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/a-agente-polonesa/" title="A Agente Polonesa">
+                <h3>A Agente Polonesa</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/prisioneiro-de-guerra/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/zCsGDUdCBUXMNGANdyXSDFZPCMO-342x513.webp"     data-title="Prisioneiro de Guerra"
+     data-categories="Filmes, Filmes de Ação, Filmes de Guerra"
+     data-excerpt="Durante os anos sombrios da Segunda Guerra Mundial, um destemido oficial britânico do SAS é capturado após uma missão fracassada...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/prisioneiro-de-guerra/" title="Prisioneiro de Guerra">
+                <h3>Prisioneiro de Guerra</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/soberano/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/gJ3yt6ZxXJUoHA9Vf1j0i6U7s3y-342x513.webp"     data-title="Soberano"
+     data-categories="Filmes, Filmes de Ação, Filmes de Drama"
+     data-excerpt="Em meio a tensões crescentes nos Estados Unidos, um pai e seu filho, autodeclarados Cidadãos Soberanos — um grupo extremista...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/soberano/" title="Soberano">
+                <h3>Soberano</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/animais-perigosos/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/07/klWzsDlz85ry8prWsPgQ97FQVpW-342x513.webp"     data-title="Animais Perigosos"
+     data-categories="Filmes, Filmes de Suspense, Filmes de Terror"
+     data-excerpt="Animais Perigosos (2025) No meio do oceano azul profundo, onde a liberdade parece infinita e os perigos espreitam sob as...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/animais-perigosos/" title="Animais Perigosos">
+                <h3>Animais Perigosos</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/a-melhor-mae-do-mundo/" class="tooltip-container">
+        
+                    <span class="audio">NACIONAL</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/dhi0SnZvSSg8G13oTjapCkapZGe-342x513.webp"     data-title="A Melhor Mãe do Mundo"
+     data-categories="Filmes, Filmes de Drama"
+     data-excerpt="Uma história poderosa e profundamente humana sobre resistência, maternidade e dignidade. O filme acompanha uma catadora de materiais recicláveis que,">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/a-melhor-mae-do-mundo/" title="A Melhor Mãe do Mundo">
+                <h3>A Melhor Mãe do Mundo</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/quarteto-fantastico-primeiros-passos/" class="tooltip-container">
+        
+                    <span class="audio">DUBLADO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            2        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/07/hlWOAWRKSno6UxaE0IXDFVvmzTf-342x513.webp"     data-title="Quarteto Fantástico: Primeiros Passos"
+     data-categories="Filmes, Filmes de Ação, Filmes de Aventura"
+     data-excerpt="Em um universo retrofuturista visualmente deslumbrante inspirado na estética dos anos 1960, Reed Richards, Sue Storm, Johnny Storm e Ben...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/quarteto-fantastico-primeiros-passos/" title="Quarteto Fantástico: Primeiros Passos">
+                <h3>Quarteto Fantástico: Primeiros Passos</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/the-witcher/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        <span class="tag-label-statu">completo</span>
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries serie">SÉRIE</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/AoGsDM02UVt0npBA8OvpDcZbaMi-342x513.webp"     data-title="The Witcher"
+     data-categories="Séries, Séries de Ação, Séries de Aventura"
+     data-excerpt="The Witcher – 4ª Temporada (2025) retoma a saga épica de Geralt de Rivia após os acontecimentos explosivos da terceira...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/the-witcher/" title="The Witcher">
+                <h3>The Witcher</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/os-ratos-uma-historia-de-the-witcher/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/kC3RUDlTk0KcOFWEPWlgtDxcTTz-342x513.webp"     data-title="Os Ratos: Uma História de The Witcher"
+     data-categories="Filmes, Filmes de Ação"
+     data-excerpt="Os Ratos: Uma História de The Witcher (2025) acompanha um grupo de seis jovens criminosos — conhecidos como Os Ratos...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/os-ratos-uma-historia-de-the-witcher/" title="Os Ratos: Uma História de The Witcher">
+                <h3>Os Ratos: Uma História de The Witcher</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/goat/" class="tooltip-container">
+        
+                    <span class="audio">DUAL ÁUDIO</span>
+                
+        
+                    <span class="qualidade">
+                <i class="icon-film"></i>
+                WEB-DL            </span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/d40M65yUQ0a92vynDJDeXpek7io-342x513.webp"     data-title="GOAT"
+     data-categories="Filmes, Filmes de Esporte, Filmes de Suspense"
+     data-excerpt="GOAT (2025) acompanha a trajetória intensa de um jovem atleta promissor que vê sua vida mudar ao ser convidado para...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/goat/" title="GOAT">
+                <h3>GOAT</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+							<div class="lo-col-m">
+    <div class="i-tem_ht">
+        <div class="image">
+    <a href="https://vacatorrentmov.com/panico-7/" class="tooltip-container">
+        
+                
+        <span class="tag-label-statu">Em Breve</span>
+        
+        <span class="filmesouseries filme">FILME</span>
+        <span class="comments">
+            <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="comments" role="img"
+                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon-comments">
+                <path fill="currentColor"
+                      d="M416 192c0-88.4-93.1-160-208-160S0 103.6 0 192c0 34.3 14.1 65.9 38 92-13.4 30.2-35.5 54.2-35.8 54.5-2.2 2.3-2.8 5.7-1.5 8.7S4.8 352 8 352c36.6 0 66.9-12.3 88.7-25 32.2 15.7 70.3 25 111.3 25 114.9 0 208-71.6 208-160zm122 220c23.9-26 38-57.7 38-92 0-66.9-53.5-124.2-129.3-148.1.9 6.6 1.3 13.3 1.3 20.1 0 105.9-107.7 192-240 192-10.8 0-21.3-.8-31.7-1.9C207.8 439.6 281.8 480 368 480c41 0 79.1-9.2 111.3-25 21.8 12.7 52.1 25 88.7 25 3.2 0 6.1-1.9 7.3-4.8 1.3-2.9.7-6.3-1.5-8.7-.3-.3-22.4-24.2-35.8-54.5z">
+                </path>
+            </svg>
+            0        </span>
+
+        
+        <!-- Imagem com lazyload via background -->
+       <div class="lazy-placeholder tooltip-trigger"
+      data-bg="https://vacatorrentmov.com/wp-content/uploads/2025/11/8U7427mn6okLBDc1jfcQvurtwVm-342x513.webp"     data-title="Pânico 7"
+     data-categories="Filmes, Filmes de Mistério, Filmes de Terror"
+     data-excerpt="Pânico 7 (2026) marca o retorno explosivo da icônica franquia de terror, trazendo Sidney Prescott de volta ao centro do...">
+</div>
+
+        
+    </a>
+</div>
+
+        <div class="custom-main-title">
+            <a href="https://vacatorrentmov.com/panico-7/" title="Pânico 7">
+                <h3>Pânico 7</h3>
+            </a>
+        </div>
+    </div>
+</div>
+
+					</div>
+    <div class="pagination-wrap">
+        <a class="prev page-numbers" href="https://vacatorrentmov.com/page/1/">«</a>
+<a class="page-numbers" href="https://vacatorrentmov.com/page/1/">1</a>
+<span aria-current="page" class="page-numbers current">2</span>
+<a class="page-numbers" href="https://vacatorrentmov.com/page/3/">3</a>
+<a class="page-numbers" href="https://vacatorrentmov.com/page/4/">4</a>
+<span class="page-numbers dots">&hellip;</span>
+<a class="page-numbers" href="https://vacatorrentmov.com/page/250/">250</a>
+<a class="next page-numbers" href="https://vacatorrentmov.com/page/3/">»</a>    </div>
+
+
+			</div>
+	<div class="ot">
+		<div class="ot_2">
+			<div class="iframe-container">
+				<div id="frame" style="width: 320px;margin: auto;z-index: 99998;height: auto">
+          <iframe data-aa='2379899' src='//ad.a-ads.com/2379899/?size=320x50'
+                            style='border:0; padding:0; width:320px; height:50px; overflow:hidden;display: block;margin: auto'></iframe>
+        </div>			</div>
+		</div>
+	</div>
+	</div>
+<div id="pre-footer">
+    <div class="unique-container">
+        <nav class="menu">
+            <ul id="menu-menu-rodape" class="menu"><li id="menu-item-47706" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-47706"><a href="https://darkmahou.org/">darkmahou.org</a></li>
+</ul>        </nav>
+    </div>
+</div>
+
+<footer id="footer">
+	
+    <div class="unique-container">
+        <p>Filmes e Séries Torrent - Baixe com Segurança
+               <a href="https://vacatorrentmov.com/sitemap_index.xml"><span class="people">Sitemap.xml</span></a></p>
+        <br>
+
+                    <img src="https://vacatorrentmov.com/wp-content/uploads/2025/08/logo-natal-1-menor-e1756172496421.png" alt="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online" title="Vaca Torrent – Baixe Filmes e Séries, Leia HQs e Mangás Online"
+                 loading="lazy" width="250" height="auto">
+            </div>
+    <div class="unique-containerr">
+        <center>
+            <p>© 2009-2025 by vacatorrentmov.com, Inc.</p>
+			<p>Todas as informações fornecidas neste site são apenas para fins informativos. Este site não hospeda nenhum material protegido por direitos autorais em seus servidores. As informações exibidas neste site, incluindo, entre outros, títulos, descrições e outros dados relacionados, são coletadas de fontes disponíveis publicamente.</p>
+        </center>
+    </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const observerBlocks = (block) => {
+        const placeholders = block.querySelectorAll('.lazy-placeholder[data-bg]');
+        placeholders.forEach(placeholder => {
+            if (!placeholder.classList.contains('loaded')) {
+                const imageUrl = placeholder.getAttribute('data-bg');
+                if (imageUrl) {
+                    const img = new Image();
+                    img.src = imageUrl;
+                    img.onload = () => {
+                        placeholder.style.backgroundImage = `url('${imageUrl}')`;
+                        placeholder.classList.add('loaded');
+                    };
+                }
+            }
+        });
+    };
+
+    // Observer para blocos já existentes
+    const contentBlocks = document.querySelectorAll('.popular-moviet-op, #popular-movies, .movies-list, .movies-list1, .movies-list-right');
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                observerBlocks(entry.target);
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.2 });
+    contentBlocks.forEach(block => observer.observe(block));
+
+    // Observer para blocos que podem aparecer depois (AJAX)
+    const bodyObserver = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1 && node.matches('.popular-moviet-op, #popular-movies, .movies-list, .movies-list1, .movies-list-right')) {
+                    observer.observe(node);
+                }
+            });
+        });
+    });
+    bodyObserver.observe(document.body, { childList: true, subtree: true });
+});
+
+</script>
+
+<style>
+/* Placeholder inicial */
+.lazy-placeholder {
+    position: absolute;
+    inset: 0;
+    background-color: #2c2c2c;
+    background-size: cover;
+    background-position: center;
+    animation: pulseOpacity 1.5s ease-in-out infinite;
+    opacity: 0.3;
+    transition: opacity 0.4s ease-in-out;
+}
+
+/* Quando imagem carregou */
+.lazy-placeholder.loaded {
+    animation: none;
+    opacity: 1;
+}
+
+/* Animação pulsante estilo Netflix/TMDB */
+@keyframes pulseOpacity {
+    0%   { opacity: 0.3; }
+    50%  { opacity: 0.0; }
+    100% { opacity: 0.3; }
+}
+</style>
+
+</footer>
+
+<script src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/jquery.min.js"></script>
+<script src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/main.js"></script>
+<script src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/clickout.min.js" ></script>
+<script src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/modernizr.min.js" ></script>
+<script src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/t_oo_ltip.js"></script>
+<script defer>
+document.addEventListener("DOMContentLoaded", function () {
+    const btnMenu = document.querySelector(".btn-menu");
+    const overlay = document.querySelector(".menu-overlay");
+
+    if (btnMenu && overlay) { // Evita erros caso os elementos não existam
+        btnMenu.addEventListener("click", function () {
+            document.body.classList.toggle("menu-open");
+        });
+
+        overlay.addEventListener("click", function () {
+            document.body.classList.remove("menu-open");
+        });
+    }
+});
+</script>
+<script type="speculationrules">
+{"prefetch":[{"source":"document","where":{"and":[{"href_matches":"\/*"},{"not":{"href_matches":["\/wp-*.php","\/wp-admin\/*","\/wp-content\/uploads\/*","\/wp-content\/*","\/wp-content\/plugins\/*","\/wp-content\/themes\/VacaTorrent\/*","\/*\\?(.+)"]}},{"not":{"selector_matches":"a[rel~=\"nofollow\"]"}},{"not":{"selector_matches":".no-prefetch, .no-prefetch a"}}]},"eagerness":"conservative"}]}
+</script>
+<style id='core-block-supports-inline-css' type='text/css'>
+/**
+ * Core styles: block-supports
+ */
+
+</style>
+<script type="text/javascript" id="like-dislike-js-extra">
+/* <![CDATA[ */
+var likeDislikeAjax = {"ajax_url":"https:\/\/vacatorrentmov.com\/wp-admin\/admin-ajax.php","nonce":"c9a285b909"};
+/* ]]> */
+</script>
+<script type="text/javascript" src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/like-dislike.js" id="like-dislike-js"></script>
+<script type="text/javascript" id="favorites-js-js-extra">
+/* <![CDATA[ */
+var favoritosObj = {"ajaxurl":"https:\/\/vacatorrentmov.com\/wp-admin\/admin-ajax.php","nonce":"858d8c56d8","loggedIn":"","currentPostId":"0","isFavorited":"","loginUrl":"https:\/\/vacatorrentmov.com\/wp-login.php?redirect_to=https%3A%2F%2Fvacatorrentmov.com%2Fluccas-e-gi-em-amor-de-mae%2F","limitReached":"Limite de favoritos atingido."};
+/* ]]> */
+</script>
+<script type="text/javascript" src="https://vacatorrentmov.com/wp-content/themes/VacaTorrent/js/favorites.js?ver=1.0" id="favorites-js-js"></script>
+</body>
+</html>
