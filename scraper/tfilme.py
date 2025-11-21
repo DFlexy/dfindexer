@@ -282,17 +282,35 @@ class TfilmeScraper(BaseScraper):
                 year = y
             sizes.extend(find_sizes_from_text(text))
         
-        # Extrai links magnet
+        # Extrai links magnet - também busca links protegidos (protlink, encurtador, systemads/get.php, etc.)
         text_content = article.find('div', class_='content')
         if not text_content:
             return []
         
         magnet_links = []
-        for magnet in text_content.select('a[href^="magnet:"]'):
+        for magnet in text_content.select('a[href^="magnet:"], a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], a[href*="get.php"], a[href*="systemads"]'):
             href = magnet.get('href', '')
-            if href:
+            if not href:
+                continue
+            
+            # Link direto magnet
+            if href.startswith('magnet:'):
                 href = href.replace('&#038;', '&').replace('&amp;', '&')
-                magnet_links.append(html.unescape(href))
+                unescaped_href = html.unescape(href)
+                if unescaped_href not in magnet_links:
+                    magnet_links.append(unescaped_href)
+            # Link protegido - resolve antes de adicionar
+            else:
+                from utils.parsing.link_resolver import is_protected_link, resolve_protected_link
+                if is_protected_link(href):
+                    try:
+                        resolved_magnet = resolve_protected_link(href, self.session, self.base_url, redis=self.redis)
+                        if resolved_magnet and resolved_magnet not in magnet_links:
+                            magnet_links.append(resolved_magnet)
+                    except Exception as e:
+                        logger.debug(f"Erro ao resolver link protegido {href}: {e}")
+                # Se não for link protegido, ignora (pode ser outro tipo de link)
+                continue
         
         if not magnet_links:
             return []
