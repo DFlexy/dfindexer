@@ -22,14 +22,15 @@ settings:
   - name: scraper_type
     type: select
     label: Scraper
-    default: starck
+    default: "1"
     options:
-      starck: Starck Filmes
-      rede: Rede Torrent
-      limao: Limao Torrent
-      tfilme: Torrent dos Filmes
-      vaca: Vaca Torrent
-      comand: Comando Torrents
+      "1": Starck Filmes
+      "2": Rede Torrent
+      "3": Limao Torrent
+      "4": Torrent dos Filmes
+      "5": Vaca Torrent
+      "6": Comando Torrents
+      "7": Bludv Filmes
   
   - name: use_flaresolverr
     type: select
