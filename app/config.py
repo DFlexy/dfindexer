@@ -42,7 +42,8 @@ class Config:
     )
     
     # Scraper padrão utilizado quando nenhum tipo é informado
-    DEFAULT_SCRAPER_TYPE: str = 'starck'
+    # Aceita números (1-7) ou nomes de scrapers (starck, rede, etc)
+    DEFAULT_SCRAPER_TYPE: str = os.getenv('DEFAULT_SCRAPER_TYPE', '1')
     
     # Logging
     # LOG_LEVEL: 0 (debug), 1 (info), 2 (warn), 3 (error) - valores numéricos como no Go
@@ -63,5 +64,5 @@ class Config:
     
     # Query vazia (testes do Prowlarr)
     EMPTY_QUERY_COLLECT_METADATA_TRACKERS: bool = os.getenv('EMPTY_QUERY_COLLECT_METADATA_TRACKERS', 'true').lower() == 'true'  # Padrão: true (coleta e salva metadata/trackers durante testes, mas não salva HTML)
-    EMPTY_QUERY_MAX_LINKS: int = int(os.getenv('EMPTY_QUERY_MAX_LINKS', '20'))  # Padrão: 20 - Limite de links individuais a processar da página 1 durante testes sem query
+    EMPTY_QUERY_MAX_LINKS: int = int(os.getenv('EMPTY_QUERY_MAX_LINKS', '15'))  # Padrão: 15 - Limite de links individuais a processar da página 1 durante testes sem query
     
