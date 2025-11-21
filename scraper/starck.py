@@ -155,16 +155,32 @@ class StarckScraper(BaseScraper):
         
         # Extrai links magnet - busca TODOS os magnets em todo o post
         # Isso garante que capture magnets de todas as seções (DUAL ÁUDIO, LEGENDADO, etc.)
-        all_magnets = post.select('a[href^="magnet:"]')
+        # Também busca links protegidos (protlink, encurtador, systemads/get.php, etc.)
+        all_magnets = post.select('a[href^="magnet:"], a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], a[href*="get.php"], a[href*="systemads"]')
         
         magnet_links = []
         for magnet in all_magnets:
             href = magnet.get('href', '')
-            if href:
-                # Remove duplicados usando unescape para normalizar
+            if not href:
+                continue
+            
+            # Link direto magnet
+            if href.startswith('magnet:'):
                 unescaped_href = html.unescape(href)
                 if unescaped_href not in magnet_links:
                     magnet_links.append(unescaped_href)
+            # Link protegido - resolve antes de adicionar
+            else:
+                from utils.parsing.link_resolver import is_protected_link, resolve_protected_link
+                if is_protected_link(href):
+                    try:
+                        resolved_magnet = resolve_protected_link(href, self.session, self.base_url, redis=self.redis)
+                        if resolved_magnet and resolved_magnet not in magnet_links:
+                            magnet_links.append(resolved_magnet)
+                    except Exception as e:
+                        logger.debug(f"Erro ao resolver link protegido {href}: {e}")
+                # Se não for link protegido, ignora (pode ser outro tipo de link)
+                continue
         
         if not magnet_links:
             return []
