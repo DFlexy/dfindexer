@@ -114,12 +114,12 @@ class LimaoScraper(BaseScraper):
             # Obtém limite efetivo usando função utilitária
             effective_max = get_effective_max_items(max_items)
             
-            # Log para debug: mostra quantos links foram encontrados e qual o limite
+            # Log para info: mostra quantos links foram encontrados e qual o limite
             total_links = len(links)
             if effective_max > 0:
-                logger.debug(f"[Limao] Encontrados {total_links} links na página, limitando para {effective_max}")
+                logger.info(f"[Limao] Encontrados {total_links} links na página, limitando para {effective_max}")
             else:
-                logger.debug(f"[Limao] Encontrados {total_links} links na página (sem limite)")
+                logger.info(f"[Limao] Encontrados {total_links} links na página (sem limite)")
             
             # Limita links se houver limite (EMPTY_QUERY_MAX_LINKS limita quantos links processar)
             links = limit_list(links, effective_max)
@@ -405,9 +405,10 @@ class LimaoScraper(BaseScraper):
 
         # Extrai links magnet (podem estar codificados em base64 ou protegidos com protlink)
         # Busca em div.content, div.entry-content, div.modal-downloads, div#modal-downloads (como no Go)
+        # Também busca links protegidos (systemads/get.php, etc.)
         magnet_links = []
         for text_content in doc.select('div.content, div.entry-content, div.modal-downloads, div#modal-downloads'):
-            for a in text_content.select('a.customButton, a[href*="encurta"], a[href*="protlink"], a[href^="magnet"]'):
+            for a in text_content.select('a.customButton, a[href*="encurta"], a[href*="protlink"], a[href^="magnet"], a[href*="get.php"], a[href*="systemads"]'):
                 href = a.get('href', '')
                 if not href:
                     continue
@@ -417,35 +418,26 @@ class LimaoScraper(BaseScraper):
                     magnet_links.append(href)
                     continue
                 
-                # Link protegido com protlink (ex: https://limonfilmes.org/?protlink=...)
-                if 'protlink=' in href:
+                # Link protegido - resolve usando função utilitária
+                from utils.parsing.link_resolver import is_protected_link
+                if is_protected_link(href):
                     try:
                         magnet_link = self._resolve_protected_link(href)
                         if magnet_link:
-                            # Verifica se o magnet_link resolvido tem trackers
-                            try:
-                                test_data = MagnetParser.parse(magnet_link)
-                                trackers_count = len(test_data.get('trackers', []))
-                                if trackers_count == 0:
-                                    logger.debug(f"[Limao] Link protegido resolvido sem trackers: {href[:50]}...")
-                                else:
-                                    logger.debug(f"[Limao] Link protegido resolvido com {trackers_count} trackers: {href[:50]}...")
-                            except Exception:
-                                pass
+                            # Verifica se o magnet_link resolvido tem trackers (apenas para protlink)
+                            if 'protlink=' in href:
+                                try:
+                                    test_data = MagnetParser.parse(magnet_link)
+                                    trackers_count = len(test_data.get('trackers', []))
+                                    if trackers_count == 0:
+                                        logger.debug(f"[Limao] Link protegido resolvido sem trackers: {href[:50]}...")
+                                    else:
+                                        logger.debug(f"[Limao] Link protegido resolvido com {trackers_count} trackers: {href[:50]}...")
+                                except Exception:
+                                    pass
                             magnet_links.append(magnet_link)
                     except Exception as e:
                         logger.debug(f"Erro ao resolver link protegido {href}: {e}")
-                        # Continua sem adicionar o link se falhar
-                    continue
-                
-                # Link encurtador (ex: https://vialink.sbs/encurtador/?prot=...)
-                if 'encurtador' in href or 'encurta' in href:
-                    try:
-                        magnet_link = self._resolve_protected_link(href)
-                        if magnet_link:
-                            magnet_links.append(magnet_link)
-                    except Exception as e:
-                        logger.debug(f"Erro ao resolver link encurtador {href}: {e}")
                         # Continua sem adicionar o link se falhar
                     continue
                 
