@@ -15,6 +15,17 @@ from core.processors.torrent_processor import TorrentProcessor
 
 logger = logging.getLogger(__name__)
 
+# Mapeamento de números para nomes de scrapers (usado pelo Prowlarr)
+SCRAPER_NUMBER_MAP = {
+    "1": "starck",
+    "2": "rede",
+    "3": "limao",
+    "4": "tfilme",
+    "5": "vaca",
+    "6": "comand",
+    "7": "bludv",
+}
+
 
 # Serviço de indexação - lógica de negócio separada dos handlers
 class IndexerService:
@@ -78,6 +89,10 @@ class IndexerService:
     
     def validate_scraper_type(self, scraper_type: str) -> tuple[bool, Optional[str]]:
         """Valida tipo de scraper e retorna tipo normalizado"""
+        # Converte número para nome do scraper se necessário
+        if scraper_type in SCRAPER_NUMBER_MAP:
+            scraper_type = SCRAPER_NUMBER_MAP[scraper_type]
+        
         types_info = available_scraper_types()
         normalized_type = normalize_scraper_type(scraper_type)
         
