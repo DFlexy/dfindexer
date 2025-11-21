@@ -97,7 +97,7 @@ def indexer_handler(site_name: str = None):
         else:
             torrents = _indexer_service.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test)
         
-        logger.info(f"{log_prefix} <<<<<  Retornando {len(torrents)} resultados >>>>>")
+        logger.info(f"{log_prefix} [[[[[ Retornando {len(torrents)} resultados ]]]]]")
         
         # Prepara resposta JSON
         response_data = {
