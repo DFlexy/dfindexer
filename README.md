@@ -3,7 +3,6 @@
 
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
-<br>
 **This project is 100% independent and open-source.**  
 💜 Your support keeps development active and makes the project continue evolving.
 
@@ -17,7 +16,7 @@ Indexador em Python que organiza torrents brasileiros em formato padronizado, pr
 Python indexer that organizes Brazilian torrents in a standardized format, ready for consumption by tools like **Prowlarr**, **Sonarr** and **Radarr**.
 
 ## 🚀 Características Principais
-- ✅ **Múltiplos Scrapers**: Suporte para 6 sites de torrents brasileiros
+- ✅ **Múltiplos Scrapers**: Suporte para 7 sites de torrents brasileiros
 - ✅ **Padronização Inteligente**: Títulos padronizados para facilitar matching automático
 - ✅ **Metadata API**: Busca automática de tamanhos, datas e nomes via iTorrents.org
 - ✅ **Tracker Scraping**: Consulta automática de trackers UDP para seeds/leechers
@@ -27,7 +26,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
 
 ## 🚀 Main Features
-- ✅ **Multiple Scrapers**: Support for 6 Brazilian torrent sites
+- ✅ **Multiple Scrapers**: Support for 7 Brazilian torrent sites
 - ✅ **Smart Standardization**: Standardized titles to facilitate automatic matching
 - ✅ **Metadata API**: Automatic search for sizes, dates and names via iTorrents.org
 - ✅ **Tracker Scraping**: Automatic UDP tracker queries for seeds/leechers
@@ -44,6 +43,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** vª¢ª–tørrεnτ–m◎√
 - ✅ ** l¡mªø–tørrεnτ–Ωrg
 - ✅ ** ¢ømªnd◎–łå (Necessário selecionar o FlareSolverr)
+- ✅ ** błµđv–ƒ¡lmεš♡
 
 ## Supported Sites
 - ✅ ** st❂rçƙ–f¡lmΞs_v③
@@ -52,6 +52,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** vª¢ª–tørrεnτ–m◎√
 - ✅ ** l¡mªø–tørrεnτ–Ωrg
 - ✅ ** ¢ømªnd◎–łå (FlareSolverr selection required)
+- ✅ ** błµđv–ƒ¡lmεš♡
 
 ## 🐳 Execução com Docker
 ### Opção 1: Docker Compose (Recomendado)
@@ -75,23 +76,24 @@ docker-compose down
 docker-compose down -v
 ```
 
-### Opção 2: Docker Run CLI
-Se preferir executar manualmente:
 O Docker Compose irá:
 - ✅ Iniciar o serviço Redis automaticamente
 - ✅ Iniciar o serviço FlareSolverr automaticamente (opcional, para resolver Cloudflare)
 - ✅ Configurar a rede entre os containers
 - ✅ Persistir dados do Redis em volume nomeado
 - ✅ Configurar restart automático
+### Opção 2: Docker Run CLI
+Se preferir executar manualmente:
 
-### Option 2: Docker Run CLI
-If you prefer to run manually:
 Docker Compose will:
 - ✅ Automatically start the Redis service
 - ✅ Automatically start the FlareSolverr service (optional, to resolve Cloudflare)
 - ✅ Configure the network between containers
 - ✅ Persist Redis data in a named volume
 - ✅ Configure automatic restart
+### Option 2: Docker Run CLI
+If you prefer to run manually:
+
 
 ```bash
 # Primeiro, inicie o Redis
@@ -123,7 +125,6 @@ docker run -d \
 ```
 
 **Nota**: O FlareSolverr é opcional. Se não for iniciado, o indexer funcionará normalmente, mas sites protegidos por Cloudflare podem retornar erro 403.
-
 **Note**: FlareSolverr is optional. If not started, the indexer will work normally, but Cloudflare-protected sites may return a 403 error.
 
 ## 🔌 Integração com Prowlarr
@@ -206,7 +207,7 @@ All titles are standardized in the format:
 | `TRACKER_SCRAPING_ENABLED`              | Habilita scraping de trackers UDP para seeds/leechers                    | `true`             |
 | `CIRCUIT_BREAKER_ENABLED`               | Habilita circuit breakers para proteção contra sobrecarga de serviços    | `true`             |
 | `EMPTY_QUERY_COLLECT_METADATA_TRACKERS` | Permite coletar e salvar metadata/trackers quando query está vazia       | `true`             |
-| `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `20`             |
+| `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `15`             |
 | `FLARESOLVERR_ADDRESS`                  | Endereço do servidor FlareSolverr (ex: http://flaresolverr:8191)         | `None` (opcional)  |
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                            | `console` ou `json`                                                      | `console`          |
@@ -225,7 +226,7 @@ All titles are standardized in the format:
 | `TRACKER_SCRAPING_ENABLED`               | Enables UDP tracker scraping for seeds/leechers                          | `true`             |
 | `CIRCUIT_BREAKER_ENABLED`                | Enables circuit breakers for protection against service overload         | `true`             |
 | `EMPTY_QUERY_COLLECT_METADATA_TRACKERS`  | Allows collecting and saving metadata/trackers when query is empty      | `true`             |
-| `EMPTY_QUERY_MAX_LINKS`                  | Limit of individual links to process from page 1                          | `20`             |
+| `EMPTY_QUERY_MAX_LINKS`                  | Limit of individual links to process from page 1                          | `15`             |
 | `FLARESOLVERR_ADDRESS`                   | FlareSolverr server address (ex: http://flaresolverr:8191)               | `None` (optional)  |
 | `LOG_LEVEL`                              | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                             | `console` or `json`                                                      | `console`          |
@@ -307,26 +308,6 @@ The system uses two-level caching for page HTML. Behavior varies according to re
 }
 ```
 
-## 🎯 Otimizações
-- **Filtro Inteligente**: Aplicado antes de enriquecimento pesado (metadata/trackers)
-- **Busca Seletiva**: Metadata para títulos apenas quando necessário
-- **Processamento Paralelo**: Processamento paralelo de páginas e metadata para melhor performance
-- **FlareSolverr Otimizado**: Sessões reutilizáveis por site, cache de HTML evita chamadas desnecessárias
-- **Testes Inteligentes**: Prowlarr tests fazem requisições HTTP reais para verificar se o site está UP
-- **Ordenação por Data**: Resultados ordenados por data (mais recentes primeiro) para sincronização RSS/Sonarr
-- **Circuit Breakers**: Proteção automática contra serviços indisponíveis
-- **Extração de Datas Aprimorada**: Suporte para múltiplas meta tags
-
-## 🎯 Optimizations
-- **Smart Filter**: Applied before heavy enrichment (metadata/trackers)
-- **Selective Search**: Metadata for titles only when necessary
-- **Parallel Processing**: Parallel processing of pages and metadata for better performance
-- **Optimized FlareSolverr**: Reusable sessions per site, HTML cache avoids unnecessary calls
-- **Smart Tests**: Prowlarr tests make real HTTP requests to verify if the site is UP
-- **Date Sorting**: Results sorted by date (newest first) for RSS/Sonarr synchronization
-- **Circuit Breakers**: Automatic protection against unavailable services
-- **Enhanced Date Extraction**: Support for multiple meta tags
-
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
 ## 🤝 Contribuindo
@@ -340,6 +321,4 @@ This project is maintained by **DFlexy**.
 Contributions are welcome! Feel free to open issues or pull requests.
 ---
 **Note**: This is a torrent indexing project. Use responsibly and respect copyrights.
-
-
 
