@@ -3,12 +3,16 @@
 
 import re
 import html
+import logging
 from datetime import datetime
 from typing import List, Optional
 from bs4 import BeautifulSoup, Tag
 from urllib.parse import unquote
+import requests
 
 from utils.parsing.date_parser import parse_date_from_string
+
+logger = logging.getLogger(__name__)
 
 
 # Extrai data de publicação de uma página HTML - tenta múltiplas fontes: URL, meta tag article:published_time, ou usa data atual
@@ -52,22 +56,54 @@ def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = 
 
 
 # Extrai links magnet de uma página HTML - tenta primeiro nos containers especificados, depois em fallback
-def extract_magnet_links(doc: BeautifulSoup, container_selectors: List[str], fallback_selectors: Optional[List[str]] = None) -> List[str]:
+# Também resolve links protegidos (protlink, encurtador, etc.) automaticamente
+def extract_magnet_links(
+    doc: BeautifulSoup, 
+    container_selectors: List[str], 
+    fallback_selectors: Optional[List[str]] = None,
+    session: Optional[requests.Session] = None,
+    base_url: str = '',
+    redis=None
+) -> List[str]:
     if fallback_selectors is None:
         fallback_selectors = ['a[href^="magnet:"]']
     
     magnet_links = []
     
+    # Seletores para buscar links protegidos também
+    protected_selectors = ['a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], a[href*="get.php"], a[href*="systemads"]']
+    
     # Tenta primeiro nos containers especificados
     for container_selector in container_selectors:
         container = doc.select_one(container_selector)
         if container:
+            # Busca links magnet diretos
             magnets = container.select('a[href^="magnet:"]')
             for magnet in magnets:
                 href = magnet.get('href', '')
                 if href:
                     href = href.replace('&#038;', '&').replace('&amp;', '&')
-                    magnet_links.append(html.unescape(href))
+                    unescaped_href = html.unescape(href)
+                    if unescaped_href not in magnet_links:
+                        magnet_links.append(unescaped_href)
+            
+            # Busca links protegidos e resolve
+            if session:
+                from utils.parsing.link_resolver import is_protected_link
+                for protected_selector in protected_selectors:
+                    protected_links = container.select(protected_selector)
+                    for protected_link in protected_links:
+                        href = protected_link.get('href', '')
+                        if href and is_protected_link(href):
+                            try:
+                                from utils.parsing.link_resolver import resolve_protected_link
+                                resolved_magnet = resolve_protected_link(href, session, base_url, redis=redis)
+                                if resolved_magnet and resolved_magnet not in magnet_links:
+                                    magnet_links.append(resolved_magnet)
+                            except Exception as e:
+                                logger.debug(f"Erro ao resolver link protegido {href}: {e}")
+                                continue
+            
             if magnet_links:
                 return magnet_links
     
@@ -78,11 +114,28 @@ def extract_magnet_links(doc: BeautifulSoup, container_selectors: List[str], fal
             href = magnet.get('href', '')
             if href:
                 href = href.replace('&#038;', '&').replace('&amp;', '&')
-                magnet_links.append(html.unescape(href))
-        if magnet_links:
-            return magnet_links
+                unescaped_href = html.unescape(href)
+                if unescaped_href not in magnet_links:
+                    magnet_links.append(unescaped_href)
     
-    return []
+    # Busca links protegidos no fallback também
+    if session:
+        from utils.parsing.link_resolver import is_protected_link
+        for protected_selector in protected_selectors:
+            protected_links = doc.select(protected_selector)
+            for protected_link in protected_links:
+                href = protected_link.get('href', '')
+                if href and is_protected_link(href):
+                    try:
+                        from utils.parsing.link_resolver import resolve_protected_link
+                        resolved_magnet = resolve_protected_link(href, session, base_url, redis=redis)
+                        if resolved_magnet and resolved_magnet not in magnet_links:
+                            magnet_links.append(resolved_magnet)
+                    except Exception as e:
+                        logger.debug(f"Erro ao resolver link protegido {href}: {e}")
+                        continue
+    
+    return magnet_links
 
 
 # Extrai texto de um elemento BeautifulSoup, removendo tags HTML
