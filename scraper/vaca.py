@@ -351,11 +351,27 @@ class VacaScraper(BaseScraper):
             except ValueError:
                 pass
 
-        # Extrai links magnet
+        # Extrai links magnet - também busca links protegidos (protlink, encurtador, systemads/get.php, etc.)
         magnet_entries = []
-        for magnet in doc.select('a[href^="magnet:"]'):
+        for magnet in doc.select('a[href^="magnet:"], a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], a[href*="get.php"], a[href*="systemads"]'):
             href = magnet.get('href', '')
-            if href:
+            if not href:
+                continue
+            
+            # Link protegido - resolve antes de processar
+            from utils.parsing.link_resolver import is_protected_link, resolve_protected_link
+            if is_protected_link(href):
+                try:
+                    resolved_magnet = resolve_protected_link(href, self.session, self.base_url, redis=self.redis)
+                    if not resolved_magnet:
+                        continue
+                    href = resolved_magnet
+                except Exception as e:
+                    logger.debug(f"Erro ao resolver link protegido {href}: {e}")
+                    continue
+            
+            # Processa apenas se for magnet válido
+            if href.startswith('magnet:'):
                 # Decodifica entidades HTML e URL encoding (pode precisar decodificar múltiplas vezes)
                 href = html.unescape(href)
                 # Decodifica URL encoding (pode estar duplamente codificado)
