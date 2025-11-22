@@ -4,6 +4,7 @@
 import logging
 from typing import Optional
 from cache.redis_client import get_redis_client
+from cache.redis_keys import html_long_key, html_short_key
 from app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -21,13 +22,13 @@ class HTMLCache:
         
         try:
             # Tenta cache de longa duração primeiro
-            cache_key = f"doc:{url}"
+            cache_key = html_long_key(url)
             cached = self.redis.get(cache_key)
             if cached:
                 return cached
             
             # Tenta cache de curta duração
-            short_cache_key = f"short:{url}"
+            short_cache_key = html_short_key(url)
             cached = self.redis.get(short_cache_key)
             if cached:
                 return cached
@@ -43,7 +44,7 @@ class HTMLCache:
         
         try:
             # Cache de curta duração
-            short_cache_key = f"short:{url}"
+            short_cache_key = html_short_key(url)
             self.redis.setex(
                 short_cache_key,
                 Config.HTML_CACHE_TTL_SHORT,
@@ -51,7 +52,7 @@ class HTMLCache:
             )
             
             # Cache de longa duração
-            cache_key = f"doc:{url}"
+            cache_key = html_long_key(url)
             self.redis.setex(
                 cache_key,
                 Config.HTML_CACHE_TTL_LONG,
