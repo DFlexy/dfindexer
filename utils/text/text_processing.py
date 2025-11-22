@@ -93,6 +93,32 @@ def prepare_release_title(
         except Exception:
             pass
         normalized = normalized.strip()
+        
+        # Remove duplicações consecutivas do release_title antes de processar
+        # Ex: "S01E04.S01E04.2025..." -> "S01E04.2025..."
+        # Normaliza espaços para pontos para facilitar detecção de duplicações
+        temp_normalized = re.sub(r'\s+', '.', normalized.strip())
+        temp_normalized = re.sub(r'\.{2,}', '.', temp_normalized)
+        
+        # Remove duplicações consecutivas de qualquer parte
+        parts = temp_normalized.split('.')
+        cleaned_parts = []
+        prev_part = None
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            # Compara ignorando case e normalizando
+            part_lower = part.lower()
+            prev_lower = prev_part.lower() if prev_part else None
+            # Só adiciona se não for duplicação consecutiva
+            if part_lower != prev_lower:
+                cleaned_parts.append(part)
+                prev_part = part
+        
+        normalized = '.'.join(cleaned_parts).strip('.')
+        # Volta espaços para facilitar processamento posterior
+        normalized = normalized.replace('.', ' ').strip()
 
     # FALLBACK 1: Busca do metadata quando falta dn (apenas se não for para pular)
     if (not normalized or len(normalized) < 3) and missing_dn and info_hash and not skip_metadata:
@@ -163,6 +189,30 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     
     # Processa release_title para extrair apenas informações técnicas (SxxExx, Sx, ano, qualidade, codec, etc.)
     clean_release = clean_title(release_title)
+    
+    # Remove duplicações consecutivas do clean_release antes de processar
+    # Ex: "S01E04.S01E04.2025..." -> "S01E04.2025..."
+    # Normaliza espaços para pontos para facilitar detecção de duplicações
+    temp_clean = re.sub(r'\s+', '.', clean_release.strip())
+    temp_clean = re.sub(r'\.{2,}', '.', temp_clean)
+    
+    # Remove duplicações consecutivas de qualquer parte
+    parts = temp_clean.split('.')
+    cleaned_parts = []
+    prev_part = None
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Compara ignorando case e normalizando
+        part_lower = part.lower()
+        prev_lower = prev_part.lower() if prev_part else None
+        # Só adiciona se não for duplicação consecutiva
+        if part_lower != prev_lower:
+            cleaned_parts.append(part)
+            prev_part = part
+    
+    clean_release = '.'.join(cleaned_parts).strip('.')
     
     # EPISÓDIOS MÚLTIPLOS: Title.S02E01-02-03.restodomagnet - detecta antes de normalizar espaços
     # Regex para detectar múltiplos episódios: S02E01-02-03, S02E01-02, S02E01.02.03, etc.
