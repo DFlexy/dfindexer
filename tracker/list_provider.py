@@ -10,13 +10,13 @@ from typing import List, Optional
 import requests
 
 from cache.redis_client import get_redis_client
+from cache.redis_keys import tracker_list_key, circuit_tracker_key
 
 logger = logging.getLogger(__name__)
 
 # Cache em memória temporário por requisição (evita buscas duplicadas quando cache Redis está desligado)
 _request_cache = threading.local()
 
-_TRACKERS_LIST_CACHE_KEY = "dynamic_trackers_list"
 _TRACKERS_LIST_TTL_SECONDS = 24 * 3600
 
 # Cache para evitar logs duplicados de carregamento de trackers
@@ -49,7 +49,7 @@ def _log_redis_error(operation: str, error: Exception) -> None:
         logger.debug(f"Erro ao {operation} no Redis: {error}")
 
 # Circuit breaker para evitar consultas quando há muitos timeouts
-_CIRCUIT_BREAKER_KEY = "tracker:circuit_breaker"
+_CIRCUIT_BREAKER_KEY = circuit_tracker_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3  # Número de timeouts consecutivos antes de desabilitar
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60  # 1 minuto de desabilitação após muitos timeouts
 
@@ -76,14 +76,14 @@ def _is_circuit_breaker_open() -> bool:
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            disabled_until = redis.get(_CIRCUIT_BREAKER_KEY)
-            if disabled_until:
-                disabled_until_float = float(disabled_until)
+            disabled_until_str = redis.hget(_CIRCUIT_BREAKER_KEY, 'disabled')
+            if disabled_until_str:
+                disabled_until_float = float(disabled_until_str)
                 now = time.time()
                 if now < disabled_until_float:
                     return True
-                # Período expirou, limpa a chave
-                redis.delete(_CIRCUIT_BREAKER_KEY)
+                # Período expirou, limpa o campo
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception:
             pass
     
@@ -115,20 +115,21 @@ def _record_timeout():
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            timeout_key = f"{_CIRCUIT_BREAKER_KEY}:timeouts"
-            timeout_count = redis.incr(timeout_key)
-            redis.expire(timeout_key, 60)  # Expira contador após 1 minuto
+            # Usa Redis Hash para armazenar contadores
+            timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
+            redis.expire(_CIRCUIT_BREAKER_KEY, 60)  # Expira hash após 1 minuto
             
             # Se atingiu o limite, abre o circuit breaker
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
-                redis.setex(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION, str(disabled_until))
+                redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
                     f"Tracker desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
                 # Reseta contador
-                redis.delete(timeout_key)
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts')
             return
         except Exception as e:
             logger.debug(f"Erro ao registrar timeout: {e}")
@@ -166,8 +167,8 @@ def _record_success():
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            timeout_key = f"{_CIRCUIT_BREAKER_KEY}:timeouts"
-            redis.delete(timeout_key)
+            # Reseta contador no Hash
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts')
         except Exception:
             pass
     
@@ -224,7 +225,8 @@ class TrackerListProvider:
         # Se Redis está disponível, usa apenas Redis
         if self.redis:
             try:
-                cached = self.redis.get(_TRACKERS_LIST_CACHE_KEY)
+                cache_key = tracker_list_key()
+                cached = self.redis.get(cache_key)
                 if not cached:
                     return None
                 trackers = json.loads(cached.decode("utf-8"))
@@ -337,9 +339,10 @@ class TrackerListProvider:
         # Se Redis está disponível, salva apenas no Redis
         if self.redis:
             try:
-                encoded = json.dumps(trackers).encode("utf-8")
+                cache_key = tracker_list_key()
+                encoded = json.dumps(trackers, separators=(',', ':')).encode("utf-8")
                 self.redis.setex(
-                    _TRACKERS_LIST_CACHE_KEY, _TRACKERS_LIST_TTL_SECONDS, encoded
+                    cache_key, _TRACKERS_LIST_TTL_SECONDS, encoded
                 )
                 return
             except Exception as exc:  # noqa: BLE001
