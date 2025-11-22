@@ -9,6 +9,7 @@ from typing import Optional
 from urllib.parse import urljoin, urlparse, parse_qs, unquote
 from bs4 import BeautifulSoup
 import requests
+from cache.redis_keys import protlink_key
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,9 @@ def is_protected_link(href: str) -> bool:
         'encurtador',
         'encurta',
         'get.php',
-        'systemads'
+        'systemads',
+        '?go=',
+        '&go='
     ]
     
     return any(pattern in href for pattern in protected_patterns)
@@ -141,7 +144,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
     # Tenta obter do cache primeiro
     if redis:
         try:
-            cache_key = f"protlink:{protlink_url}"
+            cache_key = protlink_key(protlink_url)
             cached = redis.get(cache_key)
             if cached:
                 magnet_link = cached.decode('utf-8')
@@ -158,7 +161,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
             # Salva no cache
             if redis:
                 try:
-                    cache_key = f"protlink:{protlink_url}"
+                    cache_key = protlink_key(protlink_url)
                     redis.setex(cache_key, PROTECTED_LINK_CACHE_TTL, decoded_magnet)
                 except Exception:
                     pass
@@ -169,23 +172,61 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
         current_url = protlink_url
         max_redirects = 20  # Aumentado para 20 para systemads/autotop que podem ter muitos redirects
         redirect_count = 0
-        timeout = 5  # Reduzido para 5s para melhor performance
+        timeout = 5  # Timeout padrão de 5s
         
         while redirect_count < max_redirects:
-            response = session.get(
-                current_url,
-                allow_redirects=False,
-                timeout=timeout,
-                headers={
-                    'Referer': base_url if redirect_count == 0 else current_url,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate',  # Removido 'br' que pode causar problemas
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
-            )
+            # Aumenta timeout para links do Twitter que podem demorar mais
+            request_timeout = 10 if 't.co' in current_url else timeout
+            
+            try:
+                response = session.get(
+                    current_url,
+                    allow_redirects=False,
+                    timeout=request_timeout,
+                    headers={
+                        'Referer': base_url if redirect_count == 0 else current_url,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Accept-Encoding': 'gzip, deflate',  # Removido 'br' que pode causar problemas
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
+                )
+            except requests.exceptions.ReadTimeout as e:
+                # Se for timeout no Twitter, tenta seguir sem esperar (pode estar bloqueado)
+                if 't.co' in current_url:
+                    logger.debug(f"Timeout ao acessar link do Twitter {current_url[:50]}... Pulando.")
+                    # Tenta seguir o redirect usando allow_redirects=True como fallback
+                    try:
+                        response = session.get(
+                            current_url,
+                            allow_redirects=True,
+                            timeout=10,
+                            headers={
+                                'Referer': base_url if redirect_count == 0 else current_url,
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                                'Accept-Encoding': 'gzip, deflate',
+                                'Connection': 'keep-alive',
+                                'Upgrade-Insecure-Requests': '1'
+                            }
+                        )
+                        # Se conseguiu seguir, atualiza current_url para a URL final
+                        current_url = response.url
+                        # Continua processando a resposta
+                    except Exception:
+                        logger.debug(f"Não foi possível seguir redirect do Twitter {current_url[:50]}...")
+                        break
+                else:
+                    # Para outros timeouts, apenas loga e quebra
+                    logger.debug(f"Timeout ao acessar {current_url[:50]}...")
+                    break
+            except requests.exceptions.RequestException as e:
+                # Outros erros de requisição (conexão, SSL, etc.)
+                logger.debug(f"Erro ao acessar {current_url[:50]}...: {type(e).__name__}")
+                break
             
             # Se recebeu um redirect, segue para o próximo
             if response.status_code in (301, 302, 303, 307, 308):
@@ -195,7 +236,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                     # Se encontrou magnet diretamente no redirect, salva no cache
                     if redis:
                         try:
-                            cache_key = f"protlink:{protlink_url}"
+                            cache_key = protlink_key(protlink_url)
                             redis.setex(cache_key, PROTECTED_LINK_CACHE_TTL, location)
                         except Exception:
                             pass  # Ignora erros de cache
@@ -315,7 +356,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                     if magnet_check:
                         if redis:
                             try:
-                                cache_key = f"protlink:{protlink_url}"
+                                cache_key = protlink_key(protlink_url)
                                 redis.setex(cache_key, PROTECTED_LINK_CACHE_TTL, magnet_check)
                             except Exception:
                                 pass
@@ -545,7 +586,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                 if magnet_link:
                     if redis:
                         try:
-                            cache_key = f"protlink:{protlink_url}"
+                            cache_key = protlink_key(protlink_url)
                             redis.setex(cache_key, PROTECTED_LINK_CACHE_TTL, magnet_link)
                         except Exception:
                             pass  # Ignora erros de cache
@@ -561,7 +602,8 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
             break
         
     except Exception as e:
-        logger.error(f"Erro ao resolver link protegido {protlink_url[:80]}...: {e}", exc_info=True)
+        # Loga apenas como debug para evitar spam de logs (timeouts são esperados)
+        logger.debug(f"Erro ao resolver link protegido {protlink_url[:80]}...: {type(e).__name__}")
     
     logger.warning(f"Falha ao resolver link protegido após {redirect_count} redirects: {protlink_url[:80]}...")
     return None
