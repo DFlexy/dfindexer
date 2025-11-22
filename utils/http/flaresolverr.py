@@ -7,11 +7,12 @@ import uuid
 from typing import Optional
 import requests
 from cache.redis_client import get_redis_client
+from cache.redis_keys import flaresolverr_session_key, flaresolverr_created_key
 
 logger = logging.getLogger(__name__)
 
-# TTL padrão para sessões FlareSolverr (30 minutos)
-SESSION_TTL = 30 * 60  # 1800 segundos
+# TTL padrão para sessões FlareSolverr (2 horas)
+SESSION_TTL = 2 * 60 * 60  # 7200 segundos
 
 
 # Cliente para comunicação com FlareSolverr com gerenciamento de sessões
@@ -25,14 +26,11 @@ class FlareSolverrClient:
     
     # Gera chave Redis para sessão baseada no base_url
     def _get_session_key(self, base_url: str) -> str:
-        # Normaliza base_url para usar como identificador único
-        normalized = base_url.rstrip('/').replace('https://', '').replace('http://', '')
-        return f"flaresolverr:session:{normalized}"
+        return flaresolverr_session_key(base_url)
     
     # Gera chave Redis para timestamp de criação da sessão
     def _get_session_created_key(self, base_url: str) -> str:
-        normalized = base_url.rstrip('/').replace('https://', '').replace('http://', '')
-        return f"flaresolverr:session:created:{normalized}"
+        return flaresolverr_created_key(base_url)
     
     # Cria nova sessão no FlareSolverr - retorna session_id ou None em caso de erro
     def _create_session(self, base_url: str, skip_redis: bool = False) -> Optional[str]:
