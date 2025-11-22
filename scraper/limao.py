@@ -81,7 +81,6 @@ class LimaoScraper(BaseScraper):
                             links.append(href)
         else:
             # Fallback: se não encontrar a seção, usa comportamento padrão
-            logger.debug("[Limao] Seção 'Novidades de Hoje' não encontrada, usando todos os posts")
             for item in doc.select('.post'):
                 link_elem = item.select_one('div.title > a')
                 if link_elem:
@@ -427,12 +426,8 @@ class LimaoScraper(BaseScraper):
                             # Verifica se o magnet_link resolvido tem trackers (apenas para protlink)
                             if 'protlink=' in href:
                                 try:
-                                    test_data = MagnetParser.parse(magnet_link)
-                                    trackers_count = len(test_data.get('trackers', []))
-                                    if trackers_count == 0:
-                                        logger.debug(f"[Limao] Link protegido resolvido sem trackers: {href[:50]}...")
-                                    else:
-                                        logger.debug(f"[Limao] Link protegido resolvido com {trackers_count} trackers: {href[:50]}...")
+                                    # Verifica se o link resolvido tem trackers (apenas validação silenciosa)
+                                    MagnetParser.parse(magnet_link)
                                 except Exception:
                                     pass
                             magnet_links.append(magnet_link)
@@ -541,13 +536,8 @@ class LimaoScraper(BaseScraper):
                         if dynamic_trackers:
                             # Filtra apenas trackers UDP (compatíveis com o sistema de scrape)
                             trackers = [t for t in dynamic_trackers if t.lower().startswith('udp://')]
-                            logger.debug(f"[Limao] Usando {len(trackers)} trackers dinâmicos como fallback para {info_hash[:8]}...")
-                        else:
-                            logger.debug(f"[Limao] Nenhum tracker extraído do magnet para {info_hash[:8]}... (magnet_link tem {len(magnet_data.get('trackers', []))} trackers brutos)")
-                    except Exception as e:
-                        logger.debug(f"[Limao] Erro ao obter trackers dinâmicos: {e}")
-                else:
-                    logger.debug(f"[Limao] {len(trackers)} trackers extraídos para {info_hash[:8]}...")
+                    except Exception:
+                        pass
                 
                 torrent = {
                     'title': final_title,
