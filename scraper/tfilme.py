@@ -6,7 +6,7 @@ import re
 import logging
 from datetime import datetime
 from utils.parsing.date_parser import parse_date_from_string
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Tuple
 from urllib.parse import quote, unquote
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
@@ -36,7 +36,7 @@ class TfilmeScraper(BaseScraper):
         return self._default_search(query, filter_func)
     
     # Extrai links da página inicial (lógica especial para separar filmes e séries)
-    def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
+    def _extract_links_from_page(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:
         # Separa links de filmes e séries dentro das seções específicas
         filmes_links = []
         series_links = []
@@ -95,9 +95,8 @@ class TfilmeScraper(BaseScraper):
                                 series_links.append(href)
                     current = current.find_next_sibling()
         
-        # Combina os links (filmes primeiro, depois séries)
-        # O limite será aplicado no _default_get_page
-        return filmes_links + series_links
+        # Retorna tupla com filmes e séries separados
+        return (filmes_links, series_links)
     
     # Obtém torrents de uma página específica (usa helper padrão com extração customizada)
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
@@ -116,8 +115,8 @@ class TfilmeScraper(BaseScraper):
             if not doc:
                 return []
             
-            # Extrai links usando método específico do scraper
-            links = self._extract_links_from_page(doc)
+            # Extrai links usando método específico do scraper (retorna tupla separada)
+            filmes_links, series_links = self._extract_links_from_page(doc)
             
             # Obtém limite efetivo usando função utilitária
             effective_max = get_effective_max_items(max_items)
@@ -125,10 +124,6 @@ class TfilmeScraper(BaseScraper):
             # Quando há limite configurado, coleta metade de cada seção
             # Caso contrário, coleta todos de ambas as seções
             if effective_max > 0:
-                # Separa novamente para aplicar limite por seção
-                filmes_links = [l for l in links if any('filme' in l.lower() or 'movie' in l.lower() for _ in [1])]
-                series_links = [l for l in links if l not in filmes_links]
-                
                 # Calcula metade do limite para cada seção
                 half_limit = max(1, effective_max // 2)
                 
@@ -139,10 +134,9 @@ class TfilmeScraper(BaseScraper):
                 logger.info(f"[TFilme] Limite configurado: {effective_max} - Coletando {len(filmes_links)} filmes e {len(series_links)} séries")
                 links = filmes_links + series_links
             else:
-                logger.debug(f"[TFilme] Sem limite - Coletando {len(links)} links")
-            
-            # Limita links se houver limite (EMPTY_QUERY_MAX_LINKS limita quantos links processar)
-            links = limit_list(links, effective_max)
+                # Sem limite, combina todos os links
+                links = filmes_links + series_links
+                logger.debug(f"[TFilme] Sem limite - Coletando {len(filmes_links)} filmes e {len(series_links)} séries")
             
             # Quando há limite configurado, processa sequencialmente para manter ordem original
             # Caso contrário, processa em paralelo para melhor performance
