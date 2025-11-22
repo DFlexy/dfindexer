@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Callable, Tuple
 from bs4 import BeautifulSoup
 import requests
 from cache.redis_client import get_redis_client
+from cache.redis_keys import html_long_key, html_short_key
 from app.config import Config
 from tracker import get_tracker_service  # type: ignore[import]
 from magnet.parser import MagnetParser
@@ -57,7 +58,7 @@ class BaseScraper(ABC):
         # Tenta obter do cache de longa duração (se Redis disponível e não for teste)
         if self.redis and not self._is_test:
             try:
-                cache_key = f"doc:{url}"
+                cache_key = html_long_key(url)
                 cached = self.redis.get(cache_key)
                 if cached:
                     return BeautifulSoup(cached, 'html.parser')
@@ -67,7 +68,7 @@ class BaseScraper(ABC):
         # Tenta obter do cache de curta duração (se Redis disponível e não for teste)
         if self.redis and not self._is_test:
             try:
-                short_cache_key = f"short:{url}"
+                short_cache_key = html_short_key(url)
                 cached = self.redis.get(short_cache_key)
                 if cached:
                     return BeautifulSoup(cached, 'html.parser')
@@ -104,14 +105,14 @@ class BaseScraper(ABC):
                         # Sucesso com FlareSolverr, salva no cache (se não for teste)
                         if self.redis and not self._is_test:
                             try:
-                                short_cache_key = f"short:{url}"
+                                short_cache_key = html_short_key(url)
                                 self.redis.setex(
                                     short_cache_key,
                                     Config.HTML_CACHE_TTL_SHORT,
                                     html_content
                                 )
                                 
-                                cache_key = f"doc:{url}"
+                                cache_key = html_long_key(url)
                                 self.redis.setex(
                                     cache_key,
                                     Config.HTML_CACHE_TTL_LONG,
@@ -164,14 +165,14 @@ class BaseScraper(ABC):
                                     if self.redis and not self._is_test:
                                         try:
                                             self.redis.delete(failure_key)
-                                            short_cache_key = f"short:{url}"
+                                            short_cache_key = html_short_key(url)
                                             self.redis.setex(
                                                 short_cache_key,
                                                 Config.HTML_CACHE_TTL_SHORT,
                                                 html_content
                                             )
                                             
-                                            cache_key = f"doc:{url}"
+                                            cache_key = html_long_key(url)
                                             self.redis.setex(
                                                 cache_key,
                                                 Config.HTML_CACHE_TTL_LONG,
@@ -202,14 +203,14 @@ class BaseScraper(ABC):
             # Salva no cache (se Redis disponível e não for teste)
             if self.redis and not self._is_test:
                 try:
-                    short_cache_key = f"short:{url}"
+                    short_cache_key = html_short_key(url)
                     self.redis.setex(
                         short_cache_key,
                         Config.HTML_CACHE_TTL_SHORT,
                         html_content
                     )
                     
-                    cache_key = f"doc:{url}"
+                    cache_key = html_long_key(url)
                     self.redis.setex(
                         cache_key,
                         Config.HTML_CACHE_TTL_LONG,
