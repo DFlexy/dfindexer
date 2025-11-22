@@ -39,13 +39,16 @@ class BludvScraper(BaseScraper):
     # Extrai links da página inicial
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
         links = []
+        seen_links = set()  # Para deduplicar links
+        
         for item in doc.select('.post'):
             # Busca o link dentro de div.title > a
             link_elem = item.select_one('div.title > a')
             if link_elem:
                 href = link_elem.get('href')
-                if href:
+                if href and href not in seen_links:
                     links.append(href)
+                    seen_links.add(href)
         
         return links
     
@@ -71,6 +74,8 @@ class BludvScraper(BaseScraper):
             if first_word not in STOP_WORDS:
                 variations.append(query_words[0])
         
+        seen_links = set()  # Para deduplicar links durante a busca
+        
         for variation in variations:
             search_url = f"{self.base_url}{self.search_url}{quote(variation)}"
             doc = self.get_document(search_url, self.base_url)
@@ -81,10 +86,11 @@ class BludvScraper(BaseScraper):
                 link_elem = item.select_one('div.title > a')
                 if link_elem:
                     href = link_elem.get('href')
-                    if href:
+                    if href and href not in seen_links:
                         links.append(href)
+                        seen_links.add(href)
         
-        return list(set(links))  # Remove duplicados
+        return links  # Já está deduplicado via seen_links
     
     # Extrai torrents de uma página
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
@@ -119,65 +125,79 @@ class BludvScraper(BaseScraper):
             content_div = doc.find('article')
         
         if content_div:
-            # Busca por padrões de título original e traduzido
-            content_text = content_div.get_text(' ', strip=True)
-            content_html = str(content_div)
+            # Busca por padrões de título original e traduzido usando BeautifulSoup
+            # Procura em todos os elementos que possam conter essas informações
             
             # Extrai título original
-            original_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*([^\n<]+)', content_html)
-            if original_match:
-                original_title = original_match.group(1).strip()
-                # Remove tags HTML se houver
-                original_title = re.sub(r'<[^>]+>', '', original_title).strip()
-                # Remove entidades HTML
-                original_title = html.unescape(original_title)
-                # Para no primeiro separador comum
-                for stop in ['<br', '</span', '</p', '</div', '\n']:
-                    if stop in original_title:
-                        original_title = original_title.split(stop)[0].strip()
-                        break
-            
-            # Extrai título traduzido
-            translated_match = re.search(r'(?i)T[íi]tulo\s+Traduzido\s*:?\s*([^\n<]+)', content_html)
-            if translated_match:
-                translated_title = translated_match.group(1).strip()
-                # Remove tags HTML se houver
-                translated_title = re.sub(r'<[^>]+>', '', translated_title).strip()
-                # Remove entidades HTML
-                translated_title = html.unescape(translated_title)
-                # Para no primeiro separador comum
-                for stop in ['<br', '</span', '</p', '</div', '\n']:
-                    if stop in translated_title:
-                        translated_title = translated_title.split(stop)[0].strip()
-                        break
-            
-            # Se não encontrou via regex, tenta busca por elementos
-            if not original_title:
-                for elem in content_div.find_all(['p', 'span', 'div']):
-                    text = elem.get_text(strip=True)
-                    if 'Título Original:' in text:
-                        parts = text.split('Título Original:')
-                        if len(parts) > 1:
-                            original_title = parts[1].strip()
-                            # Para no primeiro separador
-                            for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:']:
-                                if stop in original_title:
-                                    original_title = original_title.split(stop)[0].strip()
-                                    break
+            for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
+                elem_html = str(elem)
+                elem_text = elem.get_text(' ', strip=True)
+                
+                # Verifica se contém "Título Original:" no texto ou HTML
+                if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', elem_html):
+                    # Usa BeautifulSoup para extrair texto após o label
+                    # Procura pelo texto "Título Original:" e pega o que vem depois
+                    text_parts = elem_text.split('Título Original:')
+                    if len(text_parts) > 1:
+                        # Pega o texto após o label
+                        original_title = text_parts[1].strip()
+                        
+                        # Tenta extrair do HTML de forma mais precisa
+                        # Procura pelo padrão no HTML: Título Original: ... até <br ou </span
+                        html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br|</span|</p|</div|$)', elem_html, re.DOTALL)
+                        if html_match:
+                            html_text = html_match.group(1)
+                            # Remove todas as tags HTML
+                            html_text = re.sub(r'<[^>]+>', '', html_text)
+                            html_text = html_text.strip()
+                            if html_text:
+                                original_title = html_text
+                        
+                        # Remove entidades HTML
+                        original_title = html.unescape(original_title)
+                        # Remove espaços múltiplos
+                        original_title = re.sub(r'\s+', ' ', original_title).strip()
+                        # Para no primeiro separador comum
+                        for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:', 'Título Traduzido:']:
+                            if stop in original_title:
+                                original_title = original_title.split(stop)[0].strip()
+                                break
+                        if original_title:
                             break
             
-            if not translated_title:
-                for elem in content_div.find_all(['p', 'span', 'div']):
-                    text = elem.get_text(strip=True)
-                    if 'Título Traduzido:' in text:
-                        parts = text.split('Título Traduzido:')
-                        if len(parts) > 1:
-                            translated_title = parts[1].strip()
-                            # Para no primeiro separador
-                            for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:']:
-                                if stop in translated_title:
-                                    translated_title = translated_title.split(stop)[0].strip()
-                                    break
+            # Extrai título traduzido
+            for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
+                elem_html = str(elem)
+                elem_text = elem.get_text(' ', strip=True)
+                
+                # Verifica se contém "Título Traduzido:" no texto ou HTML
+                if re.search(r'(?i)T[íi]tulo\s+Traduzido\s*:?', elem_html):
+                    # Usa BeautifulSoup para extrair texto após o label
+                    text_parts = elem_text.split('Título Traduzido:')
+                    if len(text_parts) > 1:
+                        # Pega o texto após o label
+                        translated_title = text_parts[1].strip()
+                        
+                        # Tenta extrair do HTML de forma mais precisa
+                        html_match = re.search(r'(?i)T[íi]tulo\s+Traduzido\s*:?\s*(.*?)(?:<br|</span|</p|</div|$)', elem_html, re.DOTALL)
+                        if html_match:
+                            html_text = html_match.group(1)
+                            # Remove todas as tags HTML
+                            html_text = re.sub(r'<[^>]+>', '', html_text)
+                            html_text = html_text.strip()
+                            if html_text:
+                                translated_title = html_text
+                        
+                        # Remove entidades HTML
+                        translated_title = html.unescape(translated_title)
+                        # Remove espaços múltiplos
+                        translated_title = re.sub(r'\s+', ' ', translated_title).strip()
+                        # Para no primeiro separador comum
+                        for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:']:
+                            if stop in translated_title:
+                                translated_title = translated_title.split(stop)[0].strip()
+                                break
+                        if translated_title:
                             break
         
         # Fallback: usa título da página se não encontrou título original
@@ -255,11 +275,19 @@ class BludvScraper(BaseScraper):
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
         
+        # Set para rastrear info_hashes já processados (deduplicação)
+        seen_info_hashes = set()
+        
         # Processa cada magnet
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
+                
+                # Deduplica por info_hash - se já vimos este hash, pula
+                if info_hash in seen_info_hashes:
+                    continue
+                seen_info_hashes.add(info_hash)
                 
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
@@ -282,6 +310,8 @@ class BludvScraper(BaseScraper):
                 final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
                 
                 # Extrai tamanho do magnet se disponível
+                # Tenta associar tamanho ao magnet pelo índice, mas se não houver tamanho suficiente,
+                # deixa vazio (será preenchido via metadata se disponível)
                 size = ''
                 if sizes and idx < len(sizes):
                     size = sizes[idx]
