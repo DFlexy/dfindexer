@@ -5,10 +5,12 @@ import logging
 import re
 import time
 import threading
+import json
 from typing import Dict, Optional, Tuple
 from urllib.parse import unquote
 import requests
 from cache.redis_client import get_redis_client
+from cache.redis_keys import metadata_key, circuit_metadata_key
 from app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ _rate_limiter_min_interval = 1.0  # 1 req/s = 1s entre requisições (mais conse
 _rate_limiter_burst_tokens = 2  # Burst reduzido
 
 # Circuit breaker para evitar consultas quando há muitos timeouts/503s
-_CIRCUIT_BREAKER_KEY = "metadata:circuit_breaker"
+_CIRCUIT_BREAKER_KEY = circuit_metadata_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3  # Número de timeouts consecutivos antes de desabilitar
 _CIRCUIT_BREAKER_503_THRESHOLD = 5  # Número de 503s consecutivos antes de desabilitar
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60  # 1 minuto de desabilitação após muitos erros
@@ -126,9 +128,9 @@ def _is_circuit_breaker_open() -> bool:
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            disabled_until = redis.get(_CIRCUIT_BREAKER_KEY)
-            if disabled_until:
-                disabled_until_float = float(disabled_until)
+            disabled_until_str = redis.hget(_CIRCUIT_BREAKER_KEY, 'disabled')
+            if disabled_until_str:
+                disabled_until_float = float(disabled_until_str)
                 now = time.time()
                 if now < disabled_until_float:
                     remaining = int(disabled_until_float - now)
@@ -144,9 +146,9 @@ def _is_circuit_breaker_open() -> bool:
                     if should_log:
                         logger.debug(f"Circuit breaker aberto no Redis - metadata desabilitado por mais {remaining}s")
                     return True
-                # Período expirou, limpa a chave
+                # Período expirou, limpa o campo
                 logger.debug("Circuit breaker expirou no Redis - reabilitando metadata")
-                redis.delete(_CIRCUIT_BREAKER_KEY)
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception as e:
             _log_redis_error("verificar circuit breaker", e)
     
@@ -179,20 +181,21 @@ def _record_timeout():
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            timeout_key = f"{_CIRCUIT_BREAKER_KEY}:timeouts"
-            timeout_count = redis.incr(timeout_key)
-            redis.expire(timeout_key, 60)  # Expira contador após 1 minuto
+            # Usa Redis Hash para armazenar contadores
+            timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
+            redis.expire(_CIRCUIT_BREAKER_KEY, 60)  # Expira hash após 1 minuto
             
             # Se atingiu o limite, abre o circuit breaker
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
-                redis.setex(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION, str(disabled_until))
+                redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
                 # Reseta contador
-                redis.delete(timeout_key)
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts')
             return
         except Exception as e:
             _log_redis_error("registrar timeout", e)
@@ -231,20 +234,21 @@ def _record_503():
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            error_503_key = f"{_CIRCUIT_BREAKER_KEY}:503s"
-            error_503_count = redis.incr(error_503_key)
-            redis.expire(error_503_key, 60)  # Expira contador após 1 minuto
+            # Usa Redis Hash para armazenar contadores
+            error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
+            redis.expire(_CIRCUIT_BREAKER_KEY, 60)  # Expira hash após 1 minuto
             
             # Se atingiu o limite, abre o circuit breaker
             if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
-                redis.setex(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION, str(disabled_until))
+                redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
                 # Reseta contador
-                redis.delete(error_503_key)
+                redis.hdel(_CIRCUIT_BREAKER_KEY, '503s')
             return
         except Exception as e:
             _log_redis_error("registrar 503", e)
@@ -283,10 +287,8 @@ def _record_success():
     # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            timeout_key = f"{_CIRCUIT_BREAKER_KEY}:timeouts"
-            error_503_key = f"{_CIRCUIT_BREAKER_KEY}:503s"
-            redis.delete(timeout_key)
-            redis.delete(error_503_key)
+            # Reseta contadores no Hash
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
         except Exception:
             pass
     
@@ -308,14 +310,16 @@ def _is_failure_cached(info_hash: str) -> bool:
     # Tenta usar Redis primeiro (cache persistente entre requisições)
     if redis:
         try:
-            # Verifica cache de falha geral
-            failure_key = f"metadata:failure:{info_hash_lower}"
-            if redis.exists(failure_key) > 0:
-                return True
-            # Verifica cache específico de 503
-            failure_503_key = f"metadata:failure_503:{info_hash_lower}"
-            if redis.exists(failure_503_key) > 0:
-                return True
+            # Verifica campo failure no Hash do metadata
+            key = metadata_key(info_hash_lower)
+            failure_timestamp = redis.hget(key, 'failure')
+            if failure_timestamp:
+                # Verifica se ainda está dentro do TTL (60s para falhas normais, 300s para 503)
+                failure_time = float(failure_timestamp)
+                now = time.time()
+                # Assume TTL de 60s (pode ser 300s para 503, mas não temos como distinguir)
+                if now - failure_time < 300:  # Máximo TTL de 503
+                    return True
         except Exception:
             pass
     
@@ -342,13 +346,13 @@ def _cache_failure(info_hash: str, is_503: bool = False):
     # Tenta usar Redis primeiro (cache persistente entre requisições)
     if redis:
         try:
+            from cache.metadata_cache import MetadataCache
+            metadata_cache = MetadataCache()
             if is_503:
                 # Erros 503 são cacheados por mais tempo
-                failure_key = f"metadata:failure_503:{info_hash_lower}"
-                redis.setex(failure_key, _CIRCUIT_BREAKER_503_CACHE_TTL, "1")
+                metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_503_CACHE_TTL)
             else:
-                failure_key = f"metadata:failure:{info_hash_lower}"
-                redis.setex(failure_key, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL, "1")
+                metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL)
             return
         except Exception:
             pass
@@ -601,11 +605,10 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
     # Verifica cache Redis
     if redis:
         try:
-            cache_key = f"metadata:{info_hash_lower}"
-            cached = redis.get(cache_key)
-            if cached:
-                import json
-                data = json.loads(cached)
+            from cache.metadata_cache import MetadataCache
+            metadata_cache = MetadataCache()
+            data = metadata_cache.get(info_hash_lower)
+            if data:
                 logger.debug(f"Cache Redis hit para metadata: {info_hash}")
                 # Armazena também no cache em memória
                 _request_cache.metadata_cache[info_hash_lower] = data
@@ -619,11 +622,10 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         # Verifica cache novamente após adquirir lock (outra thread pode ter cacheado)
         if redis:
             try:
-                cache_key = f"metadata:{info_hash_lower}"
-                cached = redis.get(cache_key)
-                if cached:
-                    import json
-                    data = json.loads(cached)
+                from cache.metadata_cache import MetadataCache
+                metadata_cache = MetadataCache()
+                data = metadata_cache.get(info_hash_lower)
+                if data:
                     logger.debug(f"Cache Redis hit para metadata (após lock): {info_hash}")
                     _request_cache.metadata_cache[info_hash_lower] = data
                     return data
@@ -692,9 +694,9 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         # Cacheia no Redis se disponível (24 horas)
         if redis:
             try:
-                import json
-                cache_key = f"metadata:{info_hash_lower}"
-                redis.setex(cache_key, 24 * 3600, json.dumps(result))
+                from cache.metadata_cache import MetadataCache
+                metadata_cache = MetadataCache()
+                metadata_cache.set(info_hash_lower, result)
             except Exception:
                 pass
         
