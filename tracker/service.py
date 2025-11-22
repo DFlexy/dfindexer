@@ -9,13 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from cache.redis_client import get_redis_client
+from cache.redis_keys import tracker_key
 
 from .list_provider import TrackerListProvider
 from .udp_scraper import UDPScraper
 
 logger = logging.getLogger(__name__)
-
-_CACHE_PREFIX = "tracker:peers:"
 
 
 # Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível)
@@ -253,7 +252,8 @@ class TrackerService:
             return None
 
     def _cache_key(self, info_hash: str) -> str:
-        return f"{_CACHE_PREFIX}{info_hash.lower()}"
+        # Mantém para compatibilidade com cache em memória
+        return tracker_key(info_hash)
 
     def _get_cached(self, info_hash: str) -> Optional[Tuple[int, int]]:
         key = self._cache_key(info_hash)
@@ -261,10 +261,11 @@ class TrackerService:
         # Se Redis está disponível, usa apenas Redis
         if self.redis:
             try:
-                cached = self.redis.get(key)
-                if not cached:
+                # Usa Redis Hash para armazenar peers
+                peers_str = self.redis.hget(key, 'peers')
+                if not peers_str:
                     return None
-                data = json.loads(cached.decode("utf-8"))
+                data = json.loads(peers_str.decode("utf-8"))
                 return int(data.get("leech", 0)), int(data.get("seed", 0))
             except Exception as exc:  # noqa: BLE001
                 _log_redis_error("ler cache de peers", exc)
@@ -287,8 +288,13 @@ class TrackerService:
         # Se Redis está disponível, salva apenas no Redis
         if self.redis:
             try:
-                payload = json.dumps({"leech": peers[0], "seed": peers[1]}).encode("utf-8")
-                self.redis.setex(key, self.cache_ttl, payload)
+                # Usa Redis Hash para armazenar peers
+                import time
+                peers_data = json.dumps({"leech": peers[0], "seed": peers[1]}, separators=(',', ':'))
+                self.redis.hset(key, 'peers', peers_data)
+                self.redis.hset(key, 'last_scrape', str(int(time.time())))
+                self.redis.hset(key, 'created', str(int(time.time())))
+                self.redis.expire(key, self.cache_ttl)
                 return
             except Exception as exc:  # noqa: BLE001
                 _log_redis_error("gravar cache de peers", exc)
