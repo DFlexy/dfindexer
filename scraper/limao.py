@@ -379,14 +379,9 @@ class LimaoScraper(BaseScraper):
             # Extrai tamanhos
             sizes.extend(find_sizes_from_text(text))
         
-        # Extrai IMDB
-        for a in article.select('div.content a, div.entry-content a'):
-            href = a.get('href', '')
-            if 'imdb.com' in href:
-                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                if imdb_match:
-                    imdb = imdb_match.group(1)
-                    break
+        # Extrai IMDB - limonfilmes não tem IMDB no HTML, será buscado do metadata como fallback
+        # (não faz nada aqui, deixa vazio para buscar do metadata depois)
+        imdb = ''
         
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
@@ -516,8 +511,8 @@ class LimaoScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho
                 size = ''
