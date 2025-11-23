@@ -189,15 +189,40 @@ class RedeScraper(BaseScraper):
         if not magnet_links:
             return []
         
-        # Extrai IMDB
+        # Extrai IMDB - prioriza links dentro de div#informacoes (conteúdo principal)
         imdb = ''
-        for a in article.select('a'):
-            href = a.get('href', '')
-            if 'imdb.com' in href:
-                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                if imdb_match:
-                    imdb = imdb_match.group(1)
-                    break
+        # Primeiro busca dentro de div#informacoes (conteúdo principal)
+        info_div = article.find('div', id='informacoes')
+        if info_div:
+            for a in info_div.select('a'):
+                href = a.get('href', '')
+                if 'imdb.com' in href:
+                    # Tenta padrão /pt/title/tt
+                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+                    # Tenta padrão /title/tt
+                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+        
+        # Se não encontrou em div#informacoes, busca em toda a página
+        if not imdb:
+            for a in article.select('a'):
+                href = a.get('href', '')
+                if 'imdb.com' in href:
+                    # Tenta padrão /pt/title/tt
+                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+                    # Tenta padrão /title/tt
+                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
         
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
@@ -225,8 +250,8 @@ class RedeScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho
                 size = ''
