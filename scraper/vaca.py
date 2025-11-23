@@ -294,15 +294,8 @@ class VacaScraper(BaseScraper):
                 if y:
                     year = y
             
-            # Extrai IMDB
-            if not imdb:
-                for a in li.select('a'):
-                    href = a.get('href', '')
-                    if 'imdb.com' in href:
-                        imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                        if imdb_match:
-                            imdb = imdb_match.group(1)
-                            break
+            # Extrai IMDB - vacatorrentmov não tem IMDB no HTML, será buscado do metadata como fallback
+            # (não faz nada aqui, deixa vazio para buscar do metadata depois)
             
             # Extrai tamanhos
             sizes.extend(find_sizes_from_text(html_content))
@@ -443,8 +436,8 @@ class VacaScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
 
                 if episode_number:
                     effective_season = season_number or '01'
