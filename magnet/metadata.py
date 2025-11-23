@@ -686,6 +686,37 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         except Exception:
             pass
         
+        # Tenta extrair campos customizados que possam conter IMDB
+        # Alguns trackers adicionam campos como "imdb", "imdb_id", "imdb-id", etc.
+        try:
+            # Padrões comuns para campos IMDB no bencode
+            imdb_patterns = [
+                rb'4:imdb(\d+):',           # Campo "imdb"
+                rb'7:imdb_id(\d+):',       # Campo "imdb_id"
+                rb'8:imdb-id(\d+):',       # Campo "imdb-id"
+                rb'9:imdb\.com(\d+):',     # Campo "imdb.com"
+            ]
+            
+            for pattern in imdb_patterns:
+                imdb_match = re.search(pattern, torrent_data)
+                if imdb_match:
+                    imdb_len = int(imdb_match.group(1))
+                    start_pos = imdb_match.end()
+                    if start_pos + imdb_len <= len(torrent_data):
+                        imdb_bytes = torrent_data[start_pos:start_pos + imdb_len]
+                        imdb_value = imdb_bytes.decode('utf-8', errors='ignore').strip()
+                        # Verifica se é um formato válido de IMDB ID (tt1234567)
+                        if re.match(r'^tt\d+$', imdb_value):
+                            result['imdb'] = imdb_value
+                            break
+                        # Ou pode ser uma URL completa, extrai o ID
+                        url_match = re.search(r'imdb\.com/title/(tt\d+)', imdb_value)
+                        if url_match:
+                            result['imdb'] = url_match.group(1)
+                            break
+        except Exception:
+            pass
+        
         # Armazena no cache em memória (evita buscas duplicadas na mesma requisição)
         if not hasattr(_request_cache, 'metadata_cache'):
             _request_cache.metadata_cache = {}
