@@ -222,15 +222,50 @@ class BludvScraper(BaseScraper):
                 # Extrai tamanhos
                 sizes.extend(find_sizes_from_text(html_content))
                 
-                # Extrai IMDB
+                # Extrai IMDB - padrão específico do bludv
+                # Formato: <strong><em>IMDb:</em></strong> <a href='https://www.imdb.com/pt/title/tt16358384/' target='_blank' rel='noopener'>7,9
                 if not imdb:
-                    for a in p.select('a'):
-                        href = a.get('href', '')
-                        if 'imdb.com' in href:
+                    # Busca padrão específico: <strong><em>IMDb:</em></strong> seguido de link
+                    imdb_em = p.find('em', string=re.compile(r'IMDb:', re.I))
+                    if imdb_em:
+                        # Procura link IMDB próximo ao <em>IMDb:</em>
+                        parent = imdb_em.parent
+                        if parent:
+                            for a in parent.select('a[href*="imdb.com"]'):
+                                href = a.get('href', '')
+                                # Tenta padrão /pt/title/tt
+                                imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                                if imdb_match:
+                                    imdb = imdb_match.group(1)
+                                    break
+                                # Tenta padrão /title/tt
+                                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                                if imdb_match:
+                                    imdb = imdb_match.group(1)
+                                    break
+                    
+                    # Fallback: busca por texto "IMDB" ou "IMDb" próximo
+                    if not imdb:
+                        text_lower = text.lower()
+                        has_imdb_label = 'imdb' in text_lower or 'imdb:' in text_lower
+                        for a in p.select('a[href*="imdb.com"]'):
+                            href = a.get('href', '')
+                            # Tenta padrão /pt/title/tt
+                            imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                            if imdb_match:
+                                imdb = imdb_match.group(1)
+                                # Se tem label IMDB, usa este. Caso contrário, continua procurando
+                                if has_imdb_label:
+                                    break
+                                continue
+                            # Tenta padrão /title/tt
                             imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
                             if imdb_match:
                                 imdb = imdb_match.group(1)
-                                break
+                                # Se tem label IMDB, usa este. Caso contrário, continua procurando
+                                if has_imdb_label:
+                                    break
+                                continue
         
         # Extrai links magnet - busca TODOS os magnets em todo o conteúdo
         # Também busca links protegidos (protlink, encurtador, systemads/get.php, etc.)
@@ -306,8 +341,8 @@ class BludvScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho do magnet se disponível
                 # Tenta associar tamanho ao magnet pelo índice, mas se não houver tamanho suficiente,
