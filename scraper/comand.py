@@ -317,21 +317,42 @@ class ComandScraper(BaseScraper):
             # Remove duplicados de tamanhos
             sizes = list(dict.fromkeys(sizes))
             
-            # Busca IMDB - tenta múltiplos padrões
-            # Padrão 1: Link direto
-            imdb_links = entry_content.select('a[href*="imdb.com"]')
-            for imdb_link in imdb_links:
-                href = imdb_link.get('href', '')
-                # Tenta padrão pt/title/tt
-                imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                if imdb_match:
-                    imdb = imdb_match.group(1)
-                    break
-                # Tenta padrão title/tt (sem /pt/)
-                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                if imdb_match:
-                    imdb = imdb_match.group(1)
-                    break
+            # Busca IMDB - padrão específico do comando
+            # Formato: <strong>IMDb</strong>:  <a href="https://www.imdb.com/title/tt19244304/" target="_blank" rel="noopener">8,0
+            # Padrão 1: Busca <strong>IMDb</strong> seguido de link
+            imdb_strong = entry_content.find('strong', string=re.compile(r'IMDb', re.I))
+            if imdb_strong:
+                # Procura link IMDB próximo ao <strong>IMDb</strong>
+                parent = imdb_strong.parent
+                if parent:
+                    for a in parent.select('a[href*="imdb.com"]'):
+                        href = a.get('href', '')
+                        # Tenta padrão /pt/title/tt
+                        imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                        if imdb_match:
+                            imdb = imdb_match.group(1)
+                            break
+                        # Tenta padrão /title/tt
+                        imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                        if imdb_match:
+                            imdb = imdb_match.group(1)
+                            break
+            
+            # Padrão 2: Se não encontrou, busca todos os links IMDB
+            if not imdb:
+                imdb_links = entry_content.select('a[href*="imdb.com"]')
+                for imdb_link in imdb_links:
+                    href = imdb_link.get('href', '')
+                    # Tenta padrão pt/title/tt
+                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+                    # Tenta padrão title/tt (sem /pt/)
+                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
         
         # Se não encontrou título original, usa o título da página
         if not original_title:
@@ -392,8 +413,8 @@ class ComandScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho do magnet se disponível
                 size = ''
