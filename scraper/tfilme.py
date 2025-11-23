@@ -16,6 +16,7 @@ from utils.text.text_processing import (
     find_year_from_text, find_sizes_from_text, STOP_WORDS,
     add_audio_tag_if_needed, create_standardized_title, prepare_release_title
 )
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -309,15 +310,44 @@ class TfilmeScraper(BaseScraper):
         if not magnet_links:
             return []
         
-        # Extrai IMDB
+        # Extrai IMDB - padrão específico do torrentdosfilmes
+        # Formato: <strong>IMDb</strong>: <a href="https://www.imdb.com/title/tt33484460/" target="_blank" rel="noopener">5,7
         imdb = ''
-        for a in article.select('div.content a'):
-            href = a.get('href', '')
-            if 'imdb.com' in href:
-                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                if imdb_match:
-                    imdb = imdb_match.group(1)
-                    break
+        # Busca padrão específico: <strong>IMDb</strong> seguido de link
+        imdb_strong = article.find('strong', string=re.compile(r'IMDb', re.I))
+        if imdb_strong:
+            # Procura link IMDB próximo ao <strong>IMDb</strong>
+            parent = imdb_strong.parent
+            if parent:
+                for a in parent.select('a[href*="imdb.com"]'):
+                    href = a.get('href', '')
+                    # Tenta padrão /pt/title/tt
+                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+                    # Tenta padrão /title/tt
+                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+        
+        # Se não encontrou, busca em toda a página dentro de div.content
+        if not imdb:
+            content_div = article.find('div', class_='content')
+            if content_div:
+                for a in content_div.select('a[href*="imdb.com"]'):
+                    href = a.get('href', '')
+                    # Tenta padrão /pt/title/tt
+                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
+                    # Tenta padrão /title/tt
+                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if imdb_match:
+                        imdb = imdb_match.group(1)
+                        break
         
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
@@ -345,8 +375,8 @@ class TfilmeScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho
                 size = ''
