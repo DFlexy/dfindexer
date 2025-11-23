@@ -214,9 +214,11 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     
     clean_release = '.'.join(cleaned_parts).strip('.')
     
-    # EPISÓDIOS MÚLTIPLOS: Title.S02E01-02-03.restodomagnet - detecta antes de normalizar espaços
+    # EPISÓDIOS MÚLTIPLOS: Formato Sonarr compatível - detecta antes de normalizar espaços
     # Regex para detectar múltiplos episódios: S02E01-02-03, S02E01-02, S02E01.02.03, etc.
-    # Padrão: S02E01-02-03, S02E01-02, S02E01.02, S02E01 - 02 - 03 (mas não S02E12.2025)
+    # Padrão Sonarr:
+    # - 2 episódios: S02E01-02 (hífen)
+    # - 3+ episódios: S02E01E02E03 (E repetido - lista explícita) ou S02E01-E05 (intervalo)
     # Busca padrão completo: S02E01-02-03 ou S02E01.02.03
     # Usa lookahead negativo para garantir que não capture ano (2025)
     season_ep_multi_match = re.search(r'(?i)S(\d{1,2})E(\d{1,2})(?:\s*[\.\-]\s*\d{1,2}){1,}(?![0-9])', clean_release)
@@ -249,10 +251,29 @@ def create_standardized_title(original_title: str, year: str, release_title: str
         
         # Se tem pelo menos 2 episódios válidos, formata como múltiplos
         if len(episodes) >= 2:
-            episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
-            season_ep_str = f"S{season}E{episode_str}"
+            # Novo padrão Sonarr:
+            # - 2 episódios: S02E01-02 (mantém hífen)
+            # - 3-4 episódios: S02E01E02E03 (E repetido - lista explícita)
+            # - 5+ episódios: S02E01-E05 (intervalo - primeiro-último)
+            if len(episodes) == 2:
+                # Duplos: mantém formato com hífen
+                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
+            elif len(episodes) >= 5:
+                # 5+ episódios: usa formato de intervalo (primeiro-último)
+                first_ep = str(episodes[0]).zfill(2)
+                last_ep = str(episodes[-1]).zfill(2)
+                season_ep_str = f"S{season}E{first_ep}-E{last_ep}"
+            elif len(episodes) >= 3:
+                # 3-4 episódios: usa E repetido para lista explícita
+                episode_str = 'E'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
+            else:
+                # Fallback (não deveria acontecer)
+                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
             
-            # Normaliza espaços para pontos no restante (após SxxExx-xx-xx)
+            # Normaliza espaços para pontos no restante (após SxxExxExx...)
             remaining_text = clean_release[season_ep_multi_match.end():]
             remaining_text = re.sub(r'\s+', '.', remaining_text)
             remaining_text = re.sub(r'\.{2,}', '.', remaining_text)
@@ -294,10 +315,29 @@ def create_standardized_title(original_title: str, year: str, release_title: str
         
         # Se tem pelo menos 2 episódios válidos, formata como múltiplos
         if len(episodes) >= 2:
-            episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
-            season_ep_str = f"S{season}E{episode_str}"
+            # Novo padrão Sonarr:
+            # - 2 episódios: S02E01-02 (mantém hífen)
+            # - 3-4 episódios: S02E01E02E03 (E repetido - lista explícita)
+            # - 5+ episódios: S02E01-E05 (intervalo - primeiro-último)
+            if len(episodes) == 2:
+                # Duplos: mantém formato com hífen
+                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
+            elif len(episodes) >= 5:
+                # 5+ episódios: usa formato de intervalo (primeiro-último)
+                first_ep = str(episodes[0]).zfill(2)
+                last_ep = str(episodes[-1]).zfill(2)
+                season_ep_str = f"S{season}E{first_ep}-E{last_ep}"
+            elif len(episodes) >= 3:
+                # 3-4 episódios: usa E repetido para lista explícita
+                episode_str = 'E'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
+            else:
+                # Fallback (não deveria acontecer)
+                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                season_ep_str = f"S{season}E{episode_str}"
             
-            # Extrai apenas informações técnicas do restante (após SxxExx-xx-xx)
+            # Extrai apenas informações técnicas do restante (após SxxExxExx...)
             remaining_text = clean_release[season_ep_multi_match.end():]
             remaining = _extract_technical_info(remaining_text)
             remaining = _clean_remaining(remaining)
@@ -589,13 +629,25 @@ def _reorder_title_components(title: str) -> str:
     season_only = None
     year = None
     base_parts: List[str] = []
-    other_parts: List[str] = []
+    quality_parts: List[str] = []  # Qualidade: 1080p, 720p, etc.
+    source_parts: List[str] = []  # Fonte: WEB-DL, WEBRip, BluRay, etc.
+    codec_parts: List[str] = []  # Codec: x264, x265, etc.
+    audio_parts: List[str] = []  # Áudio: DUAL, DUBLADO, etc.
+    other_parts: List[str] = []  # Outros: HDR, 5.1, release groups, etc.
     structure_started = False
     
     quality_tokens = {
+        '1080P', '720P', '480P', '2160P', '4K', 'HD', 'FHD', 'UHD', 'SD', 'HDR'
+    }
+    source_tokens = {
         'WEB-DL', 'WEBRIP', 'BLURAY', 'DVDRIP', 'HDRIP', 'HDTV', 'BDRIP',
-        'BRRIP', 'CAMRIP', 'CAM', 'TSRIP', 'TS', 'TC', 'R5', 'SCR', 'DVDSCR',
-        'UHD', 'FHD', 'SD', 'HDR', '4K', '2160P', '1080P', '720P', '480P'
+        'BRRIP', 'CAMRIP', 'CAM', 'TSRIP', 'TS', 'TC', 'R5', 'SCR', 'DVDSCR'
+    }
+    codec_tokens = {
+        'X264', 'X265', 'H.264', 'H.265', 'AVC', 'HEVC'
+    }
+    audio_tokens = {
+        'DUAL', 'DUBLADO', 'DDP5.1', 'ATMOS', 'AC3', 'AAC', 'MP3', 'FLAC', 'DTS', 'NACIONAL', 'LEGENDADO'
     }
     
     for part in parts:
@@ -603,15 +655,16 @@ def _reorder_title_components(title: str) -> str:
         if not clean_part:
             continue
         
-        # Verifica episódios múltiplos primeiro: S02E05-06, S02E05-06-07, etc.
-        match_episode_multi = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})(?:[\.\-](\d{1,2}))+$', clean_part)
+        # Verifica episódios múltiplos primeiro: S02E05-06, S02E05E06E07, S02E01-E05, etc.
+        # Suporta formatos: S02E01-02 (duplo), S02E01E02E03 (lista explícita), S02E01-E05 (intervalo)
+        match_episode_multi = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})(?:[\.\-E](\d{1,2}))+$', clean_part)
         if match_episode_multi:
             season = match_episode_multi.group(1).zfill(2)
             episode1 = int(match_episode_multi.group(2))
             episodes = [episode1]
             
-            # Extrai todos os números após o primeiro episódio
-            episode_numbers = re.findall(r'[\.\-](\d{1,2})', clean_part)
+            # Extrai todos os números após o primeiro episódio (suporta hífen, ponto e E)
+            episode_numbers = re.findall(r'[\.\-E](\d{1,2})', clean_part)
             for ep_str in episode_numbers:
                 ep_num = int(ep_str)
                 if ep_num > episodes[-1] and ep_num <= 99 and (ep_num - episodes[-1]) <= 20:
@@ -621,8 +674,25 @@ def _reorder_title_components(title: str) -> str:
             
             # Se tem pelo menos 2 episódios válidos, formata como múltiplos
             if len(episodes) >= 2:
-                episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
-                season_episode = f"S{season}E{episode_str}"
+                # Novo padrão Sonarr:
+                # - 2 episódios: S02E01-02 (mantém hífen)
+                # - 3-4 episódios: S02E01E02E03 (E repetido - lista explícita)
+                # - 5+ episódios: S02E01-E05 (intervalo - primeiro-último)
+                if len(episodes) == 2:
+                    episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                    season_episode = f"S{season}E{episode_str}"
+                elif len(episodes) >= 5:
+                    # 5+ episódios: usa formato de intervalo (primeiro-último)
+                    first_ep = str(episodes[0]).zfill(2)
+                    last_ep = str(episodes[-1]).zfill(2)
+                    season_episode = f"S{season}E{first_ep}-E{last_ep}"
+                elif len(episodes) >= 3:
+                    # 3-4 episódios: usa E repetido para lista explícita
+                    episode_str = 'E'.join(str(ep).zfill(2) for ep in episodes)
+                    season_episode = f"S{season}E{episode_str}"
+                else:
+                    episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
+                    season_episode = f"S{season}E{episode_str}"
                 structure_started = True
                 continue
         
@@ -645,18 +715,52 @@ def _reorder_title_components(title: str) -> str:
             continue
         
         upper_part = clean_part.upper()
-        if upper_part in quality_tokens or re.match(r'^\d+\.?\d*(GB|MB)$', clean_part, re.IGNORECASE):
-            other_parts.append('WEB-DL' if upper_part == 'WEB-DL' else clean_part)
+        
+        # Classifica componentes técnicos na ordem correta
+        if upper_part in quality_tokens:
+            # Qualidade: 1080p, 720p, etc. (normaliza para minúsculas)
+            normalized_quality = clean_part.lower()
+            if normalized_quality not in [q.lower() for q in quality_parts]:
+                quality_parts.append(clean_part)
+            structure_started = True
+            continue
+        elif upper_part in source_tokens:
+            # Fonte: WEB-DL, WEBRip, BluRay, etc. (normaliza WEB-DL)
+            normalized_source = 'WEB-DL' if upper_part == 'WEB-DL' else clean_part
+            if normalized_source not in source_parts:
+                source_parts.append(normalized_source)
+            structure_started = True
+            continue
+        elif upper_part in codec_tokens or re.match(r'^(x264|x265|H\.264|H\.265|AVC|HEVC)$', clean_part, re.IGNORECASE):
+            # Codec: x264, x265, etc. (normaliza para minúsculas)
+            normalized_codec = clean_part.lower()
+            if normalized_codec not in [c.lower() for c in codec_parts]:
+                codec_parts.append(clean_part)
+            structure_started = True
+            continue
+        elif upper_part in audio_tokens or re.match(r'^(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado)$', clean_part, re.IGNORECASE):
+            # Áudio: DUAL, DUBLADO, etc. (mantém case original)
+            normalized_audio = clean_part.upper()
+            if normalized_audio not in [a.upper() for a in audio_parts]:
+                audio_parts.append(clean_part)
+            structure_started = True
+            continue
+        elif re.match(r'^\d+\.?\d*(GB|MB)$', clean_part, re.IGNORECASE):
+            # Tamanho: não inclui na ordenação técnica
             structure_started = True
             continue
         
-        if re.match(r'^-[A-Z0-9]+$', clean_part, re.IGNORECASE) or re.match(r'^[A-Z0-9]+$', clean_part, re.IGNORECASE) and structure_started:
-            other_parts.append(clean_part)
+        if re.match(r'^-[A-Z0-9]+$', clean_part, re.IGNORECASE) or (re.match(r'^[A-Z0-9]+$', clean_part, re.IGNORECASE) and structure_started):
+            # Release groups e outros
+            if clean_part not in other_parts:
+                other_parts.append(clean_part)
             structure_started = True
             continue
         
         if structure_started:
-            other_parts.append(clean_part)
+            # Outros componentes técnicos não classificados
+            if clean_part not in other_parts:
+                other_parts.append(clean_part)
         else:
             base_parts.append(clean_part)
     
@@ -674,6 +778,13 @@ def _reorder_title_components(title: str) -> str:
     if year:
         ordered_parts.append(year)
     
+    # Ordem correta dos componentes técnicos: Qualidade → Fonte → Codec → Áudio → Outros
+    ordered_parts.extend(quality_parts)
+    ordered_parts.extend(source_parts)
+    ordered_parts.extend(codec_parts)
+    ordered_parts.extend(audio_parts)
+    
+    # Remove duplicados dos outros componentes
     dedup_other = []
     seen = set()
     for part in other_parts:
@@ -726,24 +837,67 @@ def format_bytes(size: int) -> str:
     return f"{value:.2f} {units[idx]}"
 
 
-# Acrescenta tags de idioma (br-dub / br-leg) quando detectadas no release
-def add_audio_tag_if_needed(title: str, release_title: str) -> str:
-    if not release_title:
+# Acrescenta tags de idioma [Brazilian] e/ou [Eng] quando detectadas no release ou metadata
+def add_audio_tag_if_needed(title: str, release_title: str, info_hash: Optional[str] = None, skip_metadata: bool = False) -> str:
+    # Remove apenas as tags que queremos usar antes de processar
+    title = title.replace('[Brazilian]', '').replace('[Eng]', '')
+    title = re.sub(r'\s+', ' ', title).strip()
+    
+    # Verifica se já tem as tags corretas no título
+    has_brazilian = '[Brazilian]' in title
+    has_eng = '[Eng]' in title
+    
+    # Se já tem ambas as tags, retorna
+    if has_brazilian and has_eng:
         return title
-
-    release_lower = release_title.lower()
-    tags = []
-
-    if 'dual' in release_lower or 'dublado' in release_lower or 'nacional' in release_lower:
-        tags.append('[br-dub]')
-
-    if 'legendado' in release_lower or 'legenda' in release_lower:
-        tags.append('[br-leg]')
-
-    if tags:
-        existing_tags = title.split()
-        if all(tag not in existing_tags for tag in tags):
-            title = f"{title} {' '.join(tags)}"
+    
+    # Tenta detectar áudio no release_title primeiro
+    has_brazilian_audio = False
+    has_eng_audio = False
+    
+    if release_title:
+        release_lower = release_title.lower()
+        # Detecta português (DUAL, DUBLADO, NACIONAL)
+        if 'dual' in release_lower or 'dublado' in release_lower or 'nacional' in release_lower:
+            has_brazilian_audio = True
+            # DUAL significa que tem português E inglês
+            if 'dual' in release_lower:
+                has_eng_audio = True
+        # Detecta legendado (LEGENDADO, LEGENDA, LEG)
+        if 'legendado' in release_lower or 'legenda' in release_lower or re.search(r'\bleg\b', release_lower):
+            has_eng_audio = True
+    
+    # Se não encontrou no release_title e temos info_hash, tenta buscar no metadata
+    if info_hash and not skip_metadata:
+        try:
+            from app.config import Config
+            if Config.MAGNET_METADATA_ENABLED:
+                from magnet.metadata import fetch_metadata_from_itorrents
+                metadata = fetch_metadata_from_itorrents(info_hash)
+                if metadata and metadata.get('name'):
+                    metadata_name = metadata.get('name', '').lower()
+                    # Detecta português no metadata
+                    if not has_brazilian_audio and ('dual' in metadata_name or 'dublado' in metadata_name or 'nacional' in metadata_name):
+                        has_brazilian_audio = True
+                        # DUAL significa que tem português E inglês
+                        if 'dual' in metadata_name:
+                            has_eng_audio = True
+                    # Detecta legendado no metadata
+                    if not has_eng_audio and ('legendado' in metadata_name or 'legenda' in metadata_name or re.search(r'\bleg\b', metadata_name)):
+                        has_eng_audio = True
+        except Exception:
+            pass
+    
+    # Adiciona tags conforme detectado
+    tags_to_add = []
+    if has_brazilian_audio and not has_brazilian:
+        tags_to_add.append('[Brazilian]')
+    if has_eng_audio and not has_eng:
+        tags_to_add.append('[Eng]')
+    
+    if tags_to_add:
+        title = title.rstrip()
+        title = f"{title} {' '.join(tags_to_add)}"
 
     return title
 
