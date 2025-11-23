@@ -289,7 +289,6 @@ class TrackerService:
         if self.redis:
             try:
                 # Usa Redis Hash para armazenar peers
-                import time
                 peers_data = json.dumps({"leech": peers[0], "seed": peers[1]}, separators=(',', ':'))
                 self.redis.hset(key, 'peers', peers_data)
                 self.redis.hset(key, 'last_scrape', str(int(time.time())))
