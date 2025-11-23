@@ -143,15 +143,18 @@ class StarckScraper(BaseScraper):
                     original_title = spans[1].get_text(strip=True)
                     break
         
-        # Extrai ano e tamanhos
+        # Extrai ano, tamanhos e IMDB
         year = ''
         sizes = []
+        imdb = ''
         for p in capa.select('.post-description p'):
             text = ' '.join(span.get_text() for span in p.find_all('span'))
             y = find_year_from_text(text, page_title)
             if y:
                 year = y
             sizes.extend(find_sizes_from_text(text))
+            # Extrai IMDB - starckfilmes não tem IMDB no HTML, será buscado do metadata como fallback
+            # (não faz nada aqui, deixa vazio para buscar do metadata depois)
         
         # Extrai links magnet - busca TODOS os magnets em todo o post
         # Isso garante que capture magnets de todas as seções (DUAL ÁUDIO, LEGENDADO, etc.)
@@ -208,8 +211,8 @@ class StarckScraper(BaseScraper):
                     original_title, year, original_release_title
                 )
                 
-                # Adiciona (pt-br) se o título do magnet contém DUAL, DUBLADO ou NACIONAL
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title)
+                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
                 # Extrai tamanho do magnet se disponível
                 size = ''
@@ -221,7 +224,7 @@ class StarckScraper(BaseScraper):
                     'original_title': original_title if original_title else page_title,  # Usa nome original se disponível
                     'details': link,
                     'year': year,
-                    'imdb': '',
+                    'imdb': imdb,
                     'audio': [],
                     'magnet_link': magnet_link,
                     'date': date.isoformat(),
