@@ -143,6 +143,57 @@ class StarckScraper(BaseScraper):
                     original_title = spans[1].get_text(strip=True)
                     break
         
+        # Extrai título traduzido
+        translated_title = ''
+        for p in capa.select('.post-description p'):
+            spans = p.find_all('span')
+            if len(spans) >= 2:
+                span_text = spans[0].get_text()
+                if 'Título Traduzido:' in span_text or 'Titulo Traduzido:' in span_text:
+                    # Pega o texto do segundo span, removendo qualquer HTML interno
+                    span2 = spans[1]
+                    # Remove todas as tags HTML internas antes de pegar o texto
+                    for tag in span2.find_all(['strong', 'em', 'b', 'i']):
+                        tag.unwrap()  # Remove a tag mas mantém o conteúdo
+                    translated_title = span2.get_text(strip=True)
+                    # Remove entidades HTML
+                    translated_title = html.unescape(translated_title)
+                    # Limpa o título traduzido
+                    from utils.text.text_processing import clean_translated_title
+                    translated_title_before = translated_title
+                    translated_title = clean_translated_title(translated_title)
+                    # Debug temporário
+                    if self._is_test:
+                        print(f"    🔍 STARCK DEBUG: translated_title extraído: '{translated_title_before}' -> limpo: '{translated_title}'")
+                    break
+        
+        # Fallback: se não encontrou "Título Traduzido", usa o título do post (h2.post-title)
+        # mas só se o original_title tem não-latinos (indica que precisa de tradução)
+        if not translated_title:
+            post_title_elem = capa.select_one('h2.post-title')
+            if post_title_elem:
+                # Verifica se original_title tem não-latinos
+                if original_title:
+                    has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u097f\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff]', original_title))
+                    if has_non_latin:
+                        # Remove tags HTML e pega apenas o texto
+                        translated_title = post_title_elem.get_text(strip=True)
+                        # Remove entidades HTML
+                        translated_title = html.unescape(translated_title)
+                        # Limpa o título traduzido
+                        from utils.text.text_processing import clean_translated_title
+                        translated_title = clean_translated_title(translated_title)
+        
+        # Garante que não há HTML restante (remove qualquer tag que possa ter sobrado)
+        if translated_title:
+            # Remove todas as tags HTML que possam ter sobrado
+            translated_title = re.sub(r'<[^>]+>', '', translated_title)
+            # Remove entidades HTML novamente (caso tenha sobrado)
+            translated_title = html.unescape(translated_title)
+            # Aplica limpeza final
+            from utils.text.text_processing import clean_translated_title
+            translated_title = clean_translated_title(translated_title)
+        
         # Extrai ano, tamanhos e IMDB
         year = ''
         sizes = []
@@ -189,11 +240,14 @@ class StarckScraper(BaseScraper):
             return []
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -208,7 +262,7 @@ class StarckScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
