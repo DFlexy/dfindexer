@@ -267,6 +267,59 @@ class TfilmeScraper(BaseScraper):
                         if lines:
                             original_title = lines[0].strip()
         
+        # Extrai título traduzido
+        translated_title = ''
+        for content_div in article.select('div.content'):
+            html_content = str(content_div)
+            
+            # Tenta regex no HTML
+            title_regex = re.compile(r'(?i)t[íi]tulo\s+traduzido:\s*</b>\s*([^<\n\r]+)')
+            match = title_regex.search(html_content)
+            if match:
+                translated_title = match.group(1).strip()
+                # Remove qualquer HTML que possa ter sobrado
+                translated_title = re.sub(r'<[^>]+>', '', translated_title)
+                import html
+                translated_title = html.unescape(translated_title)
+            else:
+                # Tenta extrair do texto
+                text = content_div.get_text()
+                if 'Título Traduzido:' in text:
+                    parts = text.split('Título Traduzido:')
+                    if len(parts) > 1:
+                        title_part = parts[1].strip()
+                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse', 'Título Original']
+                        for stop_word in stop_words:
+                            if stop_word in title_part:
+                                idx = title_part.index(stop_word)
+                                title_part = title_part[:idx]
+                                break
+                        lines = title_part.split('\n')
+                        if lines:
+                            translated_title = lines[0].strip()
+                elif 'Titulo Traduzido:' in text:
+                    parts = text.split('Titulo Traduzido:')
+                    if len(parts) > 1:
+                        title_part = parts[1].strip()
+                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse', 'Título Original']
+                        for stop_word in stop_words:
+                            if stop_word in title_part:
+                                idx = title_part.index(stop_word)
+                                title_part = title_part[:idx]
+                                break
+                        lines = title_part.split('\n')
+                        if lines:
+                            translated_title = lines[0].strip()
+            if translated_title:
+                # Remove qualquer HTML que possa ter sobrado
+                translated_title = re.sub(r'<[^>]+>', '', translated_title)
+                import html
+                translated_title = html.unescape(translated_title)
+                # Limpa o título traduzido
+                from utils.text.text_processing import clean_translated_title
+                translated_title = clean_translated_title(translated_title)
+                break
+        
         # Extrai ano e tamanhos
         year = ''
         sizes = []
@@ -353,11 +406,14 @@ class TfilmeScraper(BaseScraper):
         sizes = list(dict.fromkeys(sizes))
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -372,7 +428,7 @@ class TfilmeScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
