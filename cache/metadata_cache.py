@@ -27,7 +27,22 @@ class MetadataCache:
             # Usa Redis Hash para armazenar metadata
             data_str = self.redis.hget(key, 'data')
             if data_str:
-                return json.loads(data_str.decode('utf-8'))
+                data = json.loads(data_str.decode('utf-8'))
+                # Verifica quando foi criado para debug
+                created_str = self.redis.hget(key, 'created')
+                if created_str:
+                    created_time = int(created_str.decode('utf-8'))
+                    age = int(time.time()) - created_time
+                    size_info = f"size={data.get('size', 'N/A')}"
+                    name_info = f"name={data.get('name', 'N/A')[:50]}" if data.get('name') else ""
+                    info_parts = [size_info]
+                    if name_info:
+                        info_parts.append(name_info)
+                    info_str = " | ".join(info_parts)
+                    logger.debug(f"[CACHE REDIS HIT] Metadata: {info_hash[:16]}... (idade: {age}s | {info_str})")
+                else:
+                    logger.debug(f"[CACHE REDIS HIT] Metadata: {info_hash[:16]}... (sem timestamp)")
+                return data
         except Exception:
             pass
         
@@ -40,11 +55,23 @@ class MetadataCache:
         
         try:
             key = metadata_key(info_hash)
+            # Verifica se já existe no cache antes de salvar
+            exists = self.redis.exists(key)
             # Usa Redis Hash para armazenar metadata
             self.redis.hset(key, 'data', json.dumps(metadata, separators=(',', ':')))
             self.redis.hset(key, 'created', str(int(time.time())))
             # Define TTL no hash inteiro
             self.redis.expire(key, Config.METADATA_CACHE_TTL)
+            if not exists:
+                size_info = f"size={metadata.get('size', 'N/A')}"
+                name_info = f"name={metadata.get('name', 'N/A')[:50]}" if metadata.get('name') else ""
+                info_parts = [size_info]
+                if name_info:
+                    info_parts.append(name_info)
+                info_str = " | ".join(info_parts)
+                logger.debug(f"[CACHE REDIS SAVE] Metadata salvo: {info_hash[:16]}... (TTL: {Config.METADATA_CACHE_TTL}s | {info_str})")
+            else:
+                logger.debug(f"[CACHE REDIS UPDATE] Metadata atualizado: {info_hash[:16]}...")
         except Exception:
             pass  # Ignora erros de cache
     
