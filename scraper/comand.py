@@ -354,6 +354,64 @@ class ComandScraper(BaseScraper):
                         imdb = imdb_match.group(1)
                         break
         
+        # Extrai título traduzido
+        translated_title = ''
+        if entry_content:
+            html_content = str(entry_content)
+            
+            # Padrão 1: HTML com tags <strong>Título Traduzido</strong>: texto<br />
+            title_traduzido_match = re.search(
+                r'<strong>T[íi]tulo Traduzido</strong>\s*[:\s]\s*(?:<br\s*/?>)?\s*([^<]+?)(?:<br|</p|</strong|$)',
+                html_content,
+                re.IGNORECASE | re.DOTALL
+            )
+            if title_traduzido_match:
+                translated_title = title_traduzido_match.group(1).strip()
+                translated_title = re.sub(r'<[^>]+>', '', translated_title).strip()
+                translated_title = html.unescape(translated_title)
+                translated_title = re.sub(r'\s+', ' ', translated_title).strip()
+                translated_title = translated_title.rstrip(' .,:;-')
+                # Limpa usando função auxiliar
+                from utils.text.text_processing import clean_translated_title
+                translated_title = clean_translated_title(translated_title)
+            
+            # Padrão 2: HTML com tags <b>Título Traduzido:</b> texto<br />
+            if not translated_title:
+                title_traduzido_match = re.search(
+                    r'<b>T[íi]tulo Traduzido[:\s]*</b>\s*(?:<br\s*/?>)?\s*([^<]+?)(?:<br|</p|$)', 
+                    html_content,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if title_traduzido_match:
+                    translated_title = title_traduzido_match.group(1).strip()
+                    translated_title = re.sub(r'<[^>]+>', '', translated_title).strip()
+                    translated_title = html.unescape(translated_title)
+                    translated_title = re.sub(r'\s+', ' ', translated_title).strip()
+                    translated_title = translated_title.rstrip(' .,:;-')
+                    # Limpa usando função auxiliar
+                    from utils.text.text_processing import clean_translated_title
+                    translated_title = clean_translated_title(translated_title)
+            
+            # Padrão 3: Texto puro (fallback)
+            if not translated_title:
+                content_text = entry_content.get_text()
+                title_traduzido_match = re.search(
+                    r'T[íi]tulo Traduzido[:\s]+([^\n]+?)(?:\n|$)',
+                    content_text,
+                    re.IGNORECASE
+                )
+                if title_traduzido_match:
+                    translated_title = title_traduzido_match.group(1).strip()
+                    translated_title = translated_title.rstrip(' .,:;-')
+        
+        # Limpa o título traduzido se encontrou
+        if translated_title:
+            # Remove qualquer HTML que possa ter sobrado
+            translated_title = re.sub(r'<[^>]+>', '', translated_title)
+            translated_title = html.unescape(translated_title)
+            from utils.text.text_processing import clean_translated_title
+            translated_title = clean_translated_title(translated_title)
+        
         # Se não encontrou título original, usa o título da página
         if not original_title:
             original_title = page_title
@@ -391,11 +449,14 @@ class ComandScraper(BaseScraper):
             return []
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -410,7 +471,7 @@ class ComandScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
