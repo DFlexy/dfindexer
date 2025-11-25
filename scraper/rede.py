@@ -139,6 +139,38 @@ class RedeScraper(BaseScraper):
                     original_title = original_title.rstrip(' .,:;-')
                     break
         
+        # Extrai título traduzido
+        translated_title = ''
+        for p in article.select('div#informacoes > p'):
+            html_content = str(p)
+            html_content = html_content.replace('\n', '').replace('\t', '')
+            html_content = re.sub(r'<br\s*\/?>', '<br>', html_content)
+            lines = html_content.split('<br>')
+            
+            for line in lines:
+                line_clean = re.sub(r'<[^>]*>', '', line).strip()
+                if 'Título Traduzido:' in line_clean:
+                    title_regex = re.compile(r'Título Traduzido:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|Título Original|$))')
+                    match = title_regex.search(line_clean)
+                    if match:
+                        translated_title = match.group(1).strip()
+                    else:
+                        parts = line_clean.split('Título Traduzido:')
+                        if len(parts) > 1:
+                            extracted = parts[1].strip()
+                            if len(extracted) > 200:
+                                extracted = extracted[:200]
+                            stop_regex = re.compile(r'^[^.!?]*[.!?]')
+                            stop_match = stop_regex.search(extracted)
+                            if stop_match:
+                                extracted = stop_match.group(0)
+                            translated_title = extracted.strip()
+                    
+                    translated_title = translated_title.rstrip(' .,:;-')
+                    break
+            if translated_title:
+                break
+        
         if not original_title:
             original_title = title
         
@@ -228,11 +260,14 @@ class RedeScraper(BaseScraper):
         sizes = list(dict.fromkeys(sizes))
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -247,7 +282,7 @@ class RedeScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
