@@ -148,7 +148,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
             cached = redis.get(cache_key)
             if cached:
                 magnet_link = cached.decode('utf-8')
-                logger.debug(f"Link protegido resolvido do cache: {protlink_url[:50]}...")
+                logger.debug(f"[CACHE REDIS HIT] Link protegido: {protlink_url[:50]}...")
                 return magnet_link
         except Exception:
             pass  # Ignora erros de cache
