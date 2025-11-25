@@ -15,7 +15,8 @@ from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.text_processing import (
     find_year_from_text, find_sizes_from_text,
-    add_audio_tag_if_needed, create_standardized_title, prepare_release_title
+    add_audio_tag_if_needed, create_standardized_title, prepare_release_title,
+    STOP_WORDS
 )
 
 logger = logging.getLogger(__name__)
@@ -32,23 +33,60 @@ class LimaoScraper(BaseScraper):
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
     
+    # Busca com variações da query
+    def _search_variations(self, query: str) -> List[str]:
+        links = []
+        variations = [query]
+        
+        # Remove stop words
+        words = [w for w in query.split() if w.lower() not in STOP_WORDS]
+        if words and ' '.join(words) != query:
+            variations.append(' '.join(words))
+        
+        # Primeira palavra (se não for stop word)
+        query_words = query.split()
+        if len(query_words) > 1:
+            first_word = query_words[0].lower()
+            if first_word not in STOP_WORDS:
+                variations.append(query_words[0])
+        
+        # Primeiras 2-3 palavras (útil para títulos longos em japonês)
+        if len(query_words) > 3:
+            first_words = ' '.join(query_words[:3])
+            variations.append(first_words)
+        
+        for variation in variations:
+            # Normaliza query para FlareSolverr
+            from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
+            normalized_variation = normalize_query_for_flaresolverr(variation, self.use_flaresolverr)
+            search_url = f"{self.base_url}{self.search_url}{quote(normalized_variation)}"
+            doc = self.get_document(search_url, self.base_url)
+            if not doc:
+                continue
+            
+            # Busca links nos resultados
+            for item in doc.select('.post'):
+                link_elem = item.select_one('div.title > a')
+                if link_elem:
+                    href = link_elem.get('href')
+                    if href:
+                        links.append(href)
+            
+            # Se encontrou resultados, pode parar (ou continuar para coletar mais)
+            # Por enquanto continua para coletar todos os resultados possíveis
+        
+        return list(set(links))  # Remove duplicados
+    
     # Busca torrents
     def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
         # Normaliza query para FlareSolverr (substitui dois pontos por espaço)
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
-        search_url = f"{self.base_url}{self.search_url}{quote(query)}"
-        doc = self.get_document(search_url, self.base_url)
-        if not doc:
-            return []
+        # Usa busca com variações para melhorar resultados
+        links = self._search_variations(query)
         
-        links = []
-        for item in doc.select('.post'):
-            link_elem = item.select_one('div.title > a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
+        if not links:
+            return []
         
         all_torrents = []
         for link in links:
