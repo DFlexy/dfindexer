@@ -198,6 +198,9 @@ class BludvScraper(BaseScraper):
                                 translated_title = translated_title.split(stop)[0].strip()
                                 break
                         if translated_title:
+                            # Limpa o título traduzido
+                            from utils.text.text_processing import clean_translated_title
+                            translated_title = clean_translated_title(translated_title)
                             break
         
         # Fallback: usa título da página se não encontrou título original
@@ -314,6 +317,7 @@ class BludvScraper(BaseScraper):
         seen_info_hashes = set()
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
@@ -324,6 +328,8 @@ class BludvScraper(BaseScraper):
                     continue
                 seen_info_hashes.add(info_hash)
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -338,7 +344,7 @@ class BludvScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
