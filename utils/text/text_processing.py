@@ -278,6 +278,8 @@ def create_standardized_title(original_title: str, year: str, release_title: str
             remaining_text = re.sub(r'\s+', '.', remaining_text)
             remaining_text = re.sub(r'\.{2,}', '.', remaining_text)
             remaining_text = remaining_text.strip('.')
+            # Separa componentes colados antes de extrair informações técnicas
+            remaining_text = _split_technical_components(remaining_text)
             
             remaining = _extract_technical_info(remaining_text)
             remaining = _clean_remaining(remaining)
@@ -289,6 +291,9 @@ def create_standardized_title(original_title: str, year: str, release_title: str
     clean_release = re.sub(r'\s+', '.', clean_release)
     clean_release = re.sub(r'\.{2,}', '.', clean_release)
     clean_release = clean_release.strip('.')
+    
+    # Separa componentes técnicos colados antes de processar
+    clean_release = _split_technical_components(clean_release)
     
     # EPISÓDIOS MÚLTIPLOS: detecta após normalizar também
     # Regex para detectar múltiplos episódios após normalização
@@ -339,6 +344,8 @@ def create_standardized_title(original_title: str, year: str, release_title: str
             
             # Extrai apenas informações técnicas do restante (após SxxExxExx...)
             remaining_text = clean_release[season_ep_multi_match.end():]
+            # Separa componentes colados antes de extrair informações técnicas
+            remaining_text = _split_technical_components(remaining_text)
             remaining = _extract_technical_info(remaining_text)
             remaining = _clean_remaining(remaining)
             result = finalize_title(f"{base_title}.{season_ep_str}{remaining}")
@@ -355,6 +362,8 @@ def create_standardized_title(original_title: str, year: str, release_title: str
         
         # Extrai apenas informações técnicas do restante (após SxxExx)
         remaining_text = clean_release[season_ep_match.end():]
+        # Separa componentes colados antes de extrair informações técnicas
+        remaining_text = _split_technical_components(remaining_text)
         remaining = _extract_technical_info(remaining_text)
         remaining = _clean_remaining(remaining)
         return finalize_title(f"{base_title}.{season_ep_str}{remaining}")
@@ -469,10 +478,16 @@ def _extract_base_title_from_release(release_title: str) -> str:
     for pattern in tech_patterns:
         clean_release = re.sub(pattern, '', clean_release, flags=re.IGNORECASE)
     
+    # Separa SxxExx colado ao título (ex: "OnePunchManS03E05" -> "OnePunchMan" e "S03E05")
+    clean_release = re.sub(r'(?i)([A-Za-z])(S\d{1,2}(?:E\d{1,2})?)', r'\1.\2', clean_release)
+    
     # Pega a primeira parte significativa (até encontrar ano ou informação técnica)
     parts = clean_release.split('.')
     base_parts = []
     for part in parts:
+        # Para se encontrar SxxExx (já separado)
+        if re.match(r'^S\d{1,2}(?:E\d{1,2})?$', part, re.IGNORECASE):
+            break
         # Para se encontrar ano
         if re.match(r'^(19|20)\d{2}$', part):
             break
@@ -489,6 +504,57 @@ def _extract_base_title_from_release(release_title: str) -> str:
     return base_title
 
 
+# Separa componentes técnicos colados (ex: "WEB-DL1080px264" -> "WEB-DL.1080p.x264")
+def _split_technical_components(text: str) -> str:
+    if not text:
+        return text
+    
+    # Se já tem pontos suficientes, verifica se precisa processar
+    if '.' in text:
+        parts = text.split('.')
+        # Se já tem mais de 2 partes separadas, provavelmente já está bem formatado
+        if len(parts) >= 3:
+            # Verifica se alguma parte tem componentes colados
+            has_colados = any(
+                re.search(r'(WEB-DL|WEBRip|1080p|720p|x264|x265|LEGENDADO|DUAL)', part, re.IGNORECASE) 
+                and len(part) > 10  # Partes muito longas provavelmente têm componentes colados
+                for part in parts
+            )
+            if not has_colados:
+                return text
+    
+    result = text
+    
+    # Padrões técnicos conhecidos (em ordem de prioridade - mais específicos primeiro)
+    # Usa lookbehind/lookahead negativo para evitar adicionar pontos onde já existem
+    patterns = [
+        # Fontes (devem vir antes de qualidades para evitar conflito com "WEB")
+        (r'(?<!\.)(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|CAMRip|CAM|TSRip|TS|TC|R5|SCR|DVDScr)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Qualidades (deve vir depois de fontes para evitar conflito)
+        (r'(?<!\.)(2160p|1080p|720p|480p|4K|UHD|FHD|HD|SD|HDR)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Codecs
+        (r'(?<!\.)(x264|x265|H\.264|H\.265|AVC|HEVC)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Áudio
+        (r'(?<!\.)(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado|DTS-HD|TrueHD)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Formatos
+        (r'(?<!\.)(MKV|MP4|AVI|MPEG|MOV)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Anos (deve vir antes de números decimais para evitar conflito)
+        (r'(?<!\.)((19|20)\d{2})(?!\.)', r'.\1.', re.IGNORECASE),
+        # Áudio específico (5.1, 2.0, 7.1) - cuidado para não quebrar anos
+        (r'(?<!\.)(\d+\.\d+)(?!\.)(?!\d)', r'.\1.', re.IGNORECASE),
+    ]
+    
+    # Aplica cada padrão para separar componentes colados
+    for pattern, replacement, flags in patterns:
+        result = re.sub(pattern, replacement, result, flags=flags)
+    
+    # Limpa pontos duplicados e normaliza
+    result = re.sub(r'\.{2,}', '.', result)
+    result = result.strip('.')
+    
+    return result
+
+
 # Mantém apenas informações técnicas relevantes (qualidade, codec, etc.)
 def _extract_technical_info(text: str) -> str:
     if not text:
@@ -501,6 +567,9 @@ def _extract_technical_info(text: str) -> str:
     
     if not text:
         return ''
+    
+    # Separa componentes técnicos colados antes de processar
+    text = _split_technical_components(text)
     
     technical_parts = []
     parts = text.split('.')
@@ -621,6 +690,9 @@ def _reorder_title_components(title: str) -> str:
     if not title:
         return title
     
+    # Separa componentes técnicos colados antes de processar
+    title = _split_technical_components(title)
+    
     parts = [part for part in title.split('.') if part]
     if not parts:
         return title
@@ -657,7 +729,7 @@ def _reorder_title_components(title: str) -> str:
         
         # Verifica episódios múltiplos primeiro: S02E05-06, S02E05E06E07, S02E01-E05, etc.
         # Suporta formatos: S02E01-02 (duplo), S02E01E02E03 (lista explícita), S02E01-E05 (intervalo)
-        match_episode_multi = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})(?:[\.\-E](\d{1,2}))+$', clean_part)
+        match_episode_multi = re.match(r'^S(\d{1,2})E(\d{1,2})(?:[\.\-E](\d{1,2}))+$', clean_part, re.IGNORECASE)
         if match_episode_multi:
             season = match_episode_multi.group(1).zfill(2)
             episode1 = int(match_episode_multi.group(2))
@@ -696,13 +768,13 @@ def _reorder_title_components(title: str) -> str:
                 structure_started = True
                 continue
         
-        match_episode = re.match(r'(?i)^S(\d{1,2})E(\d{1,2})$', clean_part)
+        match_episode = re.match(r'^S(\d{1,2})E(\d{1,2})$', clean_part, re.IGNORECASE)
         if match_episode:
             season_episode = f"S{match_episode.group(1).zfill(2)}E{match_episode.group(2).zfill(2)}"
             structure_started = True
             continue
         
-        match_season = re.match(r'(?i)^S(\d{1,2})$', clean_part)
+        match_season = re.match(r'^S(\d{1,2})$', clean_part, re.IGNORECASE)
         if match_season:
             season_only = f"S{match_season.group(1).zfill(2)}"
             structure_started = True
@@ -743,6 +815,12 @@ def _reorder_title_components(title: str) -> str:
             normalized_audio = clean_part.upper()
             if normalized_audio not in [a.upper() for a in audio_parts]:
                 audio_parts.append(clean_part)
+            structure_started = True
+            continue
+        elif re.match(r'^(HDR|5\.1|2\.0|7\.1|DTS-HD|TrueHD)$', clean_part, re.IGNORECASE):
+            # Outros técnicos de áudio/vídeo: HDR, 5.1, 2.0, etc.
+            if clean_part not in other_parts:
+                other_parts.append(clean_part)
             structure_started = True
             continue
         elif re.match(r'^\d+\.?\d*(GB|MB)$', clean_part, re.IGNORECASE):
