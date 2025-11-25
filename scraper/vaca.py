@@ -262,6 +262,57 @@ class VacaScraper(BaseScraper):
                         original_title = match.group(1).strip()
                         break
         
+        # Extrai título traduzido
+        translated_title = ''
+        for content_div in doc.select('.col-left, .content'):
+            html_content = str(content_div)
+            
+            # Tenta regex no HTML
+            title_regex1 = re.compile(r'(?i)<b>\s*t[íi]tulo\s+traduzido\s*:?\s*</b>\s*([^<\n\r]+)')
+            match = title_regex1.search(html_content)
+            if match:
+                translated_title = match.group(1).strip()
+                # Remove qualquer HTML que possa ter sobrado
+                translated_title = re.sub(r'<[^>]+>', '', translated_title)
+                translated_title = html.unescape(translated_title)
+                break
+            else:
+                title_regex2 = re.compile(r'(?i)t[íi]tulo\s+traduzido\s*:?\s*</b>\s*([^<\n\r]+)')
+                match = title_regex2.search(html_content)
+                if match:
+                    translated_title = match.group(1).strip()
+                    # Remove qualquer HTML que possa ter sobrado
+                    translated_title = re.sub(r'<[^>]+>', '', translated_title)
+                    translated_title = html.unescape(translated_title)
+                    break
+        
+        # Tenta extrair do texto se não encontrou no HTML
+        if not translated_title:
+            for content_div in doc.select('.col-left, .content'):
+                text = content_div.get_text()
+                if 'Título Traduzido:' in text:
+                    parts = text.split('Título Traduzido:')
+                    if len(parts) > 1:
+                        title_part = parts[1].strip()
+                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse', 'Título Original']
+                        for stop_word in stop_words:
+                            if stop_word in title_part:
+                                idx = title_part.index(stop_word)
+                                title_part = title_part[:idx]
+                                break
+                        lines = title_part.split('\n')
+                        if lines:
+                            translated_title = lines[0].strip()
+                            break
+        
+        # Limpa o título traduzido se encontrou
+        if translated_title:
+            # Remove qualquer HTML que possa ter sobrado
+            translated_title = re.sub(r'<[^>]+>', '', translated_title)
+            translated_title = html.unescape(translated_title)
+            from utils.text.text_processing import clean_translated_title
+            translated_title = clean_translated_title(translated_title)
+        
         # Fallback para título principal
         if not original_title:
             title_raw = doc.find('h1', class_='custom-main-title')
@@ -399,11 +450,14 @@ class VacaScraper(BaseScraper):
         sizes = list(dict.fromkeys(sizes))
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, (magnet_link, episode_number) in enumerate(magnet_entries):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
@@ -433,7 +487,7 @@ class VacaScraper(BaseScraper):
                             original_release_title = f"{original_release_title} {rest_release}".strip()
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
