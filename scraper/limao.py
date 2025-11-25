@@ -399,6 +399,83 @@ class LimaoScraper(BaseScraper):
         original_title = original_title.replace(' Torrent Legendado', '').strip()
         original_title = original_title.replace(' Torrent', '').strip()
         
+        # Extrai título traduzido
+        translated_title = ''
+        if entry_meta:
+            # Busca por <b> que contém "Título Traduzido"
+            for b_tag in entry_meta.find_all('b'):
+                b_text = b_tag.get_text(strip=True).lower()
+                if 'título traduzido' in b_text or 'titulo traduzido' in b_text:
+                    parent_html = str(b_tag.parent)
+                    patterns = [
+                        r'(?i)</b>\s*([^<]+?)\s*<br\s*/?>',
+                        r'(?i)</b>\s*([^<]+?)(?:<br|</div|</p|$)',
+                        r'(?i)T[íi]tulo\s+Traduzido\s*:?\s*</b>\s*([^<]+?)\s*<br',
+                    ]
+                    next_text = ''
+                    for pattern in patterns:
+                        match = re.search(pattern, parent_html)
+                        if match:
+                            next_text = match.group(1).strip()
+                            break
+                    if next_text:
+                        next_text = re.sub(r'<[^>]+>', '', next_text).strip()
+                        next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-').replace('&iacute;', 'í')
+                        next_text = ' '.join(next_text.split())
+                        if next_text:
+                            translated_title = next_text
+                            break
+        
+        # Busca em div.content e div.entry-content se não encontrou
+        if not translated_title:
+            for content_div in doc.select('div.content, div.entry-content, .left'):
+                if translated_title:
+                    break
+                for b_tag in content_div.find_all('b'):
+                    b_text = b_tag.get_text(strip=True).lower()
+                    if 'título traduzido' in b_text or 'titulo traduzido' in b_text:
+                        parent_html = str(b_tag.parent)
+                        match = re.search(r'(?i)</b>\s*([^<]+?)(?:<br\s*/?>|</div|</p|$)', parent_html)
+                        if match:
+                            next_text = match.group(1).strip()
+                            next_text = re.sub(r'<[^>]+>', '', next_text).strip()
+                            next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
+                            next_text = ' '.join(next_text.split())
+                            if next_text:
+                                translated_title = next_text
+                                break
+                if translated_title:
+                    break
+        
+        # Busca em todo o article se não encontrou (mas não usa h1 como fallback)
+        if not translated_title and article:
+            # Busca em elementos específicos, não no texto geral do article
+            for elem in article.find_all(['p', 'div', 'span', 'li']):
+                elem_text = elem.get_text(' ', strip=True)
+                if 'Título Traduzido:' in elem_text:
+                    parts = elem_text.split('Título Traduzido:')
+                    if len(parts) > 1:
+                        title_part = parts[1].strip()
+                        stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:', 'Título Original:']
+                        for stop in stops:
+                            if stop in title_part:
+                                idx = title_part.index(stop)
+                                title_part = title_part[:idx]
+                                break
+                        title_part = ' '.join(title_part.split())
+                        if title_part:
+                            translated_title = title_part
+                            break
+        
+        # Limpa o título traduzido se encontrou
+        if translated_title:
+            # Remove qualquer HTML que possa ter sobrado
+            translated_title = re.sub(r'<[^>]+>', '', translated_title)
+            import html
+            translated_title = html.unescape(translated_title)
+            from utils.text.text_processing import clean_translated_title
+            translated_title = clean_translated_title(translated_title)
+        
         title = original_title
         
         # Extrai metadados
@@ -498,29 +575,25 @@ class LimaoScraper(BaseScraper):
         article_text_cached = None
         
         # Processa cada magnet
+        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '') or ''
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
                 
                 fallback_title = title
+                # Usa raw_release_title diretamente, sem modificações prévias
+                # As modificações de temporada devem ser feitas apenas quando missing_dn
                 working_release_title = raw_release_title if not missing_dn else ''
                 
-                if not missing_dn:
-                    try:
-                        if 'temporada' not in working_release_title.lower():
-                            if article_text_cached is None:
-                                article_text_cached = article.get_text(' ', strip=True).lower()
-                            season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text_cached)
-                            if season_match:
-                                season_number = season_match.group(1)
-                                working_release_title = f"{working_release_title} temporada {season_number}"
-                    except Exception:
-                        pass
-
+                # NÃO modifica working_release_title quando não está missing_dn
+                # Isso evita adicionar informações extras que podem causar duplicação
+                
                 original_release_title = prepare_release_title(
                     working_release_title,
                     fallback_title,
@@ -531,6 +604,7 @@ class LimaoScraper(BaseScraper):
                 )
                 
                 # Adiciona temporada do HTML apenas se não tiver informação de temporada/episódio no metadata
+                # E apenas quando missing_dn (quando não tem display_name do magnet)
                 if missing_dn:
                     has_season_ep_info = re.search(r'(?i)S\d{1,2}(?:E\d{1,2}(?:-\d{1,2})?)?', original_release_title)
                     if not has_season_ep_info and 'temporada' not in original_release_title.lower():
@@ -546,7 +620,7 @@ class LimaoScraper(BaseScraper):
                             pass
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title
+                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
