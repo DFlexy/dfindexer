@@ -232,8 +232,10 @@ class TrackerListProvider:
                 trackers = json.loads(cached.decode("utf-8"))
                 if not trackers:
                     return None
-                logger.debug("Trackers recuperados do cache Redis.")
-                return list(trackers)
+                trackers_list = list(trackers)
+                count = len(trackers_list)
+                logger.debug(f"[CACHE REDIS HIT] Trackers: {count} trackers recuperados")
+                return trackers_list
             except Exception as exc:  # noqa: BLE001
                 _log_redis_error("recuperar trackers do cache", exc)
                 # Se Redis falhou durante operação, retorna None (não usa memória)
