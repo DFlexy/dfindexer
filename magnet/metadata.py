@@ -144,7 +144,7 @@ def _is_circuit_breaker_open() -> bool:
                             should_log = True
                     
                     if should_log:
-                        logger.debug(f"Circuit breaker aberto no Redis - metadata desabilitado por mais {remaining}s")
+                        logger.debug(f"[CIRCUIT BREAKER] metadata desabilitado por mais {remaining}s")
                     return True
                 # Período expirou, limpa o campo
                 logger.debug("Circuit breaker expirou no Redis - reabilitando metadata")
@@ -570,51 +570,72 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
     """
     info_hash_lower = info_hash.lower()
     
-    # Verifica cache por requisição primeiro (evita buscas duplicadas na mesma requisição)
-    # Este cache é apenas para evitar múltiplas buscas do mesmo hash na mesma requisição
-    if not hasattr(_request_cache, 'metadata_cache'):
-        _request_cache.metadata_cache = {}
-    if info_hash_lower in _request_cache.metadata_cache:
-        cached_data = _request_cache.metadata_cache[info_hash_lower]
-        logger.debug(f"Cache por requisição hit para metadata: {info_hash}")
-        return cached_data
-    
-    # Verifica circuit breaker primeiro
-    if _is_circuit_breaker_open():
-        # Throttling de logs - só loga uma vez a cada 30 segundos
-        now = time.time()
-        log_key = "circuit_breaker_skip_metadata"
-        should_log = False
-        with _circuit_breaker_log_lock:
-            last_logged = _circuit_breaker_log_cache.get(log_key, 0)
-            if now - last_logged >= _CIRCUIT_BREAKER_LOG_COOLDOWN:
-                _circuit_breaker_log_cache[log_key] = now
-                should_log = True
-        
-        if should_log:
-            logger.debug(f"Circuit breaker aberto - pulando busca de metadata")
-        return None
-    
-    # Verifica se há falha recente em cache
-    if _is_failure_cached(info_hash):
-        logger.debug(f"Falha recente em cache - pulando busca de metadata para {info_hash}")
-        return None
-    
     redis = get_redis_client()
     
-    # Verifica cache Redis
+    # Se Redis está disponível, usa apenas Redis (não usa cache em memória)
     if redis:
+        # Verifica cache Redis primeiro
         try:
             from cache.metadata_cache import MetadataCache
             metadata_cache = MetadataCache()
             data = metadata_cache.get(info_hash_lower)
             if data:
-                logger.debug(f"Cache Redis hit para metadata: {info_hash}")
-                # Armazena também no cache em memória
-                _request_cache.metadata_cache[info_hash_lower] = data
+                # Log já é feito dentro de metadata_cache.get()
                 return data
         except Exception as e:
             _log_redis_error("verificar cache de metadata", e)
+        
+        # Verifica circuit breaker
+        if _is_circuit_breaker_open():
+            # Throttling de logs - só loga uma vez a cada 30 segundos
+            now = time.time()
+            log_key = "circuit_breaker_skip_metadata"
+            should_log = False
+            with _circuit_breaker_log_lock:
+                last_logged = _circuit_breaker_log_cache.get(log_key, 0)
+                if now - last_logged >= _CIRCUIT_BREAKER_LOG_COOLDOWN:
+                    _circuit_breaker_log_cache[log_key] = now
+                    should_log = True
+            
+            if should_log:
+                logger.debug(f"[CIRCUIT BREAKER] aberto - pulando busca de metadata (muitos timeouts/503s recentes)")
+            return None
+        
+        # Verifica se há falha recente em cache
+        if _is_failure_cached(info_hash):
+            logger.debug(f"[CACHE FAILURE] Falha recente - pulando busca de metadata: {info_hash[:16]}...")
+            return None
+    else:
+        # Redis não disponível - usa cache em memória como fallback
+        # Verifica cache por requisição primeiro (evita buscas duplicadas na mesma requisição)
+        if not hasattr(_request_cache, 'metadata_cache'):
+            _request_cache.metadata_cache = {}
+        if info_hash_lower in _request_cache.metadata_cache:
+            cached_data = _request_cache.metadata_cache[info_hash_lower]
+            size_info = f"size={cached_data.get('size', 'N/A')}"
+            logger.debug(f"[CACHE MEMÓRIA HIT] Metadata recuperado: {info_hash[:16]}... ({size_info})")
+            return cached_data
+        
+        # Verifica circuit breaker
+        if _is_circuit_breaker_open():
+            # Throttling de logs - só loga uma vez a cada 30 segundos
+            now = time.time()
+            log_key = "circuit_breaker_skip_metadata"
+            should_log = False
+            with _circuit_breaker_log_lock:
+                last_logged = _circuit_breaker_log_cache.get(log_key, 0)
+                if now - last_logged >= _CIRCUIT_BREAKER_LOG_COOLDOWN:
+                    _circuit_breaker_log_cache[log_key] = now
+                    should_log = True
+            
+            if should_log:
+                logger.debug(f"[CIRCUIT BREAKER] aberto - pulando busca de metadata (muitos timeouts/503s recentes)")
+            return None
+        
+        # Verifica se há falha recente em cache
+        if _is_failure_cached(info_hash):
+            logger.debug(f"[CACHE FAILURE] Falha recente - pulando busca de metadata: {info_hash[:16]}...")
+            return None
     
     # Usa lock por hash para evitar requisições simultâneas ao mesmo hash
     hash_lock = _get_hash_lock(info_hash)
@@ -626,11 +647,20 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
                 metadata_cache = MetadataCache()
                 data = metadata_cache.get(info_hash_lower)
                 if data:
-                    logger.debug(f"Cache Redis hit para metadata (após lock): {info_hash}")
-                    _request_cache.metadata_cache[info_hash_lower] = data
+                    # Log já é feito dentro de metadata_cache.get()
                     return data
             except Exception:
                 pass
+        else:
+            # Redis não disponível - verifica cache em memória novamente após lock
+            if hasattr(_request_cache, 'metadata_cache') and info_hash_lower in _request_cache.metadata_cache:
+                cached_data = _request_cache.metadata_cache[info_hash_lower]
+                size_info = f"size={cached_data.get('size', 'N/A')}"
+                logger.debug(f"[CACHE MEMÓRIA HIT] Metadata recuperado (após lock): {info_hash[:16]}... ({size_info})")
+                return cached_data
+        
+        # Busca do iTorrents (não estava em cache)
+        logger.debug(f"[ITORRENTS FETCH] Buscando metadata do iTorrents.org: {info_hash[:16]}...")
         
         # Tenta com lowercase primeiro (mais comum)
         torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=True)
@@ -642,18 +672,24 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         
         if not torrent_data:
             # Cacheia a falha (já foi cacheado dentro de _fetch_torrent_header se foi 503)
-            if not was_503:
-                if was_timeout:
-                    _cache_failure(info_hash, is_503=True)  # Trata timeout como 503
-                else:
-                    _cache_failure(info_hash, is_503=False)
+            if was_timeout:
+                logger.debug(f"[ITORRENTS FAIL] Timeout ao buscar metadata do iTorrents.org: {info_hash[:16]}...")
+                _cache_failure(info_hash, is_503=True)  # Trata timeout como 503
+            elif was_503:
+                logger.debug(f"[ITORRENTS FAIL] Erro 503 (Service Unavailable) ao buscar metadata do iTorrents.org: {info_hash[:16]}...")
+            else:
+                logger.debug(f"[ITORRENTS FAIL] Não foi possível buscar metadata do iTorrents.org: {info_hash[:16]}...")
+                _cache_failure(info_hash, is_503=False)
             return None
         
         # Extrai tamanho do bencode
         size = _parse_bencode_size(torrent_data)
         
         if not size:
+            logger.debug(f"[ITORRENTS FAIL] Não foi possível extrair tamanho do metadata: {info_hash[:16]}...")
             return None
+        
+        logger.debug(f"[ITORRENTS SUCCESS] Metadata extraído com sucesso do iTorrents.org: {info_hash[:16]}... (size: {size})")
         
         # Tenta extrair nome também (opcional)
         name = None
@@ -717,11 +753,6 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         except Exception:
             pass
         
-        # Armazena no cache em memória (evita buscas duplicadas na mesma requisição)
-        if not hasattr(_request_cache, 'metadata_cache'):
-            _request_cache.metadata_cache = {}
-        _request_cache.metadata_cache[info_hash_lower] = result
-        
         # Cacheia no Redis se disponível (24 horas)
         if redis:
             try:
@@ -730,6 +761,11 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
                 metadata_cache.set(info_hash_lower, result)
             except Exception:
                 pass
+        else:
+            # Redis não disponível - usa cache em memória como fallback
+            if not hasattr(_request_cache, 'metadata_cache'):
+                _request_cache.metadata_cache = {}
+            _request_cache.metadata_cache[info_hash_lower] = result
         
         return result
 
