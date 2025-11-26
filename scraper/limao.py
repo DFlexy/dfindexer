@@ -467,6 +467,15 @@ class LimaoScraper(BaseScraper):
                             translated_title = title_part
                             break
         
+        # Fallback: se não encontrou "Título Traduzido", tenta usar h1.entry-title
+        # sempre usa como fallback (não precisa verificar não-latinos)
+        if not translated_title:
+            title_raw = article.find('h1', class_='entry-title')
+            if not title_raw:
+                title_raw = article.find('h1')
+            if title_raw:
+                translated_title = title_raw.get_text(strip=True)
+        
         # Limpa o título traduzido se encontrou
         if translated_title:
             # Remove qualquer HTML que possa ter sobrado
@@ -494,8 +503,6 @@ class LimaoScraper(BaseScraper):
             # Extrai tamanhos
             sizes.extend(find_sizes_from_text(text))
         
-        # Extrai IMDB - limonfilmes não tem IMDB no HTML, será buscado do metadata como fallback
-        # (não faz nada aqui, deixa vazio para buscar do metadata depois)
         imdb = ''
         
         # Remove duplicados de tamanhos
@@ -649,6 +656,7 @@ class LimaoScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else title,
+                    'translated_title': translated_title if translated_title else None,
                     'details': link,
                     'year': year,
                     'imdb': imdb,
