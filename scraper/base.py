@@ -40,8 +40,8 @@ class BaseScraper(ABC):
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
         })
         self.tracker_service = get_tracker_service()
-        self._skip_metadata = False  # Flag temporário para controlar busca de metadata durante extração
-        self._is_test = False  # Flag para indicar se está em modo de teste (não usa Redis)
+        self._skip_metadata = False
+        self._is_test = False
         
         # Inicializa FlareSolverr se habilitado e configurado
         self.use_flaresolverr = use_flaresolverr and Config.FLARESOLVERR_ADDRESS is not None
@@ -380,11 +380,24 @@ class BaseScraper(ABC):
     def enrich_torrents(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
         """Preenche dados de seeds/leechers via trackers (quando possível) - delega para TorrentEnricher do core"""
         from core.enrichers.torrent_enricher import TorrentEnricher
+        from scraper import available_scraper_types
         
         if not hasattr(self, '_enricher'):
             self._enricher = TorrentEnricher()
         
-        return self._enricher.enrich(torrents, skip_metadata, skip_trackers, filter_func)
+        # Passa o display_name do scraper para incluir nos logs
+        scraper_name = None
+        if hasattr(self, 'SCRAPER_TYPE'):
+            scraper_type = getattr(self, 'SCRAPER_TYPE', '')
+            types_info = available_scraper_types()
+            normalized_type = scraper_type.lower().strip()
+            if normalized_type in types_info:
+                scraper_name = types_info[normalized_type].get('display_name', scraper_type)
+            else:
+                # Fallback: usa DISPLAY_NAME se disponível, senão SCRAPER_TYPE
+                scraper_name = getattr(self, 'DISPLAY_NAME', '') or scraper_type
+        
+        return self._enricher.enrich(torrents, skip_metadata, skip_trackers, filter_func, scraper_name=scraper_name)
     
     def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
         """
