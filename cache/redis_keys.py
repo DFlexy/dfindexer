@@ -59,3 +59,17 @@ def flaresolverr_created_key(base_url: str) -> str:
     """Chave Redis para timestamp de criação de sessão FlareSolverr"""
     return f"flaresolverr:created:{base_url}"
 
+
+def imdb_key(info_hash: str) -> str:
+    """Chave Redis para IMDB ID por info_hash"""
+    return f"imdb:{info_hash.lower()}"
+
+
+def imdb_title_key(base_title: str) -> str:
+    """Chave Redis para IMDB ID por base_title normalizado"""
+    import hashlib
+    # Normaliza o título (lowercase, remove espaços extras) e cria hash
+    normalized = base_title.lower().strip()
+    normalized = ' '.join(normalized.split())  # Remove espaços extras
+    title_hash = hashlib.md5(normalized.encode('utf-8')).hexdigest()
+    return f"imdb:title:{title_hash}"
