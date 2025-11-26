@@ -158,31 +158,22 @@ class StarckScraper(BaseScraper):
                     translated_title = span2.get_text(strip=True)
                     # Remove entidades HTML
                     translated_title = html.unescape(translated_title)
-                    # Limpa o título traduzido
                     from utils.text.text_processing import clean_translated_title
-                    translated_title_before = translated_title
                     translated_title = clean_translated_title(translated_title)
-                    # Debug temporário
-                    if self._is_test:
-                        print(f"    🔍 STARCK DEBUG: translated_title extraído: '{translated_title_before}' -> limpo: '{translated_title}'")
                     break
         
         # Fallback: se não encontrou "Título Traduzido", usa o título do post (h2.post-title)
-        # mas só se o original_title tem não-latinos (indica que precisa de tradução)
+        # sempre usa como fallback (não precisa verificar não-latinos)
         if not translated_title:
             post_title_elem = capa.select_one('h2.post-title')
             if post_title_elem:
-                # Verifica se original_title tem não-latinos
-                if original_title:
-                    has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u097f\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff]', original_title))
-                    if has_non_latin:
-                        # Remove tags HTML e pega apenas o texto
-                        translated_title = post_title_elem.get_text(strip=True)
-                        # Remove entidades HTML
-                        translated_title = html.unescape(translated_title)
-                        # Limpa o título traduzido
-                        from utils.text.text_processing import clean_translated_title
-                        translated_title = clean_translated_title(translated_title)
+                # Remove tags HTML e pega apenas o texto
+                translated_title = post_title_elem.get_text(strip=True)
+                # Remove entidades HTML
+                translated_title = html.unescape(translated_title)
+                # Limpa o título traduzido
+                from utils.text.text_processing import clean_translated_title
+                translated_title = clean_translated_title(translated_title)
         
         # Garante que não há HTML restante (remove qualquer tag que possa ter sobrado)
         if translated_title:
@@ -204,8 +195,6 @@ class StarckScraper(BaseScraper):
             if y:
                 year = y
             sizes.extend(find_sizes_from_text(text))
-            # Extrai IMDB - starckfilmes não tem IMDB no HTML, será buscado do metadata como fallback
-            # (não faz nada aqui, deixa vazio para buscar do metadata depois)
         
         # Extrai links magnet - busca TODOS os magnets em todo o post
         # Isso garante que capture magnets de todas as seções (DUAL ÁUDIO, LEGENDADO, etc.)
@@ -276,6 +265,7 @@ class StarckScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else page_title,  # Usa nome original se disponível
+                    'translated_title': translated_title if translated_title else None,
                     'details': link,
                     'year': year,
                     'imdb': imdb,
