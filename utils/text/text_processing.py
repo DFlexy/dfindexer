@@ -23,7 +23,7 @@ RELEASE_CLEAN_REGEX = re.compile(
 )
 
 
-# Remove acentos e cedilha de caracteres latinos
+# Remove acentos e cedilha de caracteres latinos e normaliza caracteres turcos
 def remove_accents(text: str) -> str:
     replacements = {
         'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
@@ -37,7 +37,14 @@ def remove_accents(text: str) -> str:
         'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
         'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
         'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C', 'Ñ': 'N'
+        'Ç': 'C', 'Ñ': 'N',
+        # Caracteres turcos
+        'İ': 'I',  # I maiúsculo com ponto → I maiúsculo normal
+        'ı': 'i',  # i minúsculo sem ponto → i minúsculo normal
+        'ş': 's', 'Ş': 'S',
+        'ğ': 'g', 'Ğ': 'G',
+        'ü': 'u', 'Ü': 'U',
+        'ö': 'o', 'Ö': 'O'
     }
     return ''.join(replacements.get(c, c) for c in text)
 
@@ -72,26 +79,36 @@ def clean_translated_title(translated_title: str) -> str:
     translated_title = re.sub(r'(?i)^\s*T[íi]tulo\s+Traduzido\s*:?\s*', '', translated_title)
     translated_title = re.sub(r'(?i)\s*T[íi]tulo\s+Traduzido\s*:?\s*', '', translated_title)
     
+    # Remove entidades HTML específicas de temporada (&ordf;, &ordm;, etc.) ANTES de remover temporada
+    translated_title = re.sub(r'&ordf;', '', translated_title, flags=re.IGNORECASE)
+    translated_title = re.sub(r'&ordm;', '', translated_title, flags=re.IGNORECASE)
+    translated_title = html.unescape(translated_title)  # Decodifica novamente após remover entidades
+    
     # Remove informações de temporada (Sxx, Temporada, etc.) - múltiplos formatos
+    # Remove padrões como "1ª Temporada", "2ª Temporada", "3ª Temporada", etc.
     translated_title = re.sub(r'(?i)\s*[0-9]+[ªº]\s*Temporada\s*', '', translated_title)
     translated_title = re.sub(r'(?i)\s*[0-9]+[aªº]\s*Temporada\s*', '', translated_title)
     translated_title = re.sub(r'(?i)\s*S\d{1,2}(?:E\d{1,2})?\s*', '', translated_title)
     translated_title = re.sub(r'(?i)\s*Temporada\s*', '', translated_title)
+    
+    # Remove "Torrent" após temporada (ex: "2ª Temporada Torrent")
+    translated_title = re.sub(r'(?i)\s*Torrent\s*', '', translated_title)
     
     # Remove anos entre parênteses (ex: (2015-2025), (2025))
     translated_title = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*', '', translated_title)
     # Remove anos soltos no final (ex: "2025")
     translated_title = re.sub(r'\s+(19|20)\d{2}\s*$', '', translated_title)
     
-    # Remove textos extras comuns
-    translated_title = re.sub(r'(?i)\s*Torrent\s*', '', translated_title)
+    # Remove textos extras específicos do Vaca Torrent
+    # Remove padrões como "2025 — Vaca Torrent – Baixe Filmes e Séries"
+    translated_title = re.sub(r'(?i)\s*—\s*Vaca\s+Torrent\s*–\s*Baixe\s+Filmes\s+e\s+S[ée]ries\s*$', '', translated_title)
     translated_title = re.sub(r'(?i)\s*—\s*[^—]+$', '', translated_title)  # Remove "— Vaca Torrent – Baixe..."
     translated_title = re.sub(r'(?i)\s*–\s*[^–]+$', '', translated_title)  # Remove "– Baixe Filmes..."
     translated_title = re.sub(r'(?i)\s*Baixe\s+Filmes\s+e\s+S[ée]ries\s*', '', translated_title)
     translated_title = re.sub(r'(?i)\s*Vaca\s+Torrent\s*', '', translated_title)
     
     # Remove caracteres especiais do final
-    translated_title = translated_title.rstrip(' .,:;-')
+    translated_title = translated_title.rstrip(' .,:;—–-')
     
     # Normaliza espaços
     translated_title = re.sub(r'\s+', ' ', translated_title).strip()
@@ -972,9 +989,9 @@ def _reorder_title_components(title: str) -> str:
     if year:
         ordered_parts.append(year)
     
-    # Ordem correta dos componentes técnicos: Qualidade → Fonte → Codec → Áudio → Outros
-    ordered_parts.extend(quality_parts)
+    # Ordem correta dos componentes técnicos: Fonte → Qualidade → Codec → Áudio → Outros
     ordered_parts.extend(source_parts)
+    ordered_parts.extend(quality_parts)
     ordered_parts.extend(codec_parts)
     ordered_parts.extend(audio_parts)
     
@@ -1145,14 +1162,34 @@ def check_query_match(query: str, title: str, original_title_html: str = '') -> 
                 matches += 1
 
          
+    # Verifica se o ano corresponde (importante para filmes)
+    year_in_query = None
+    for word in clean_query_words:
+        if word.isdigit() and len(word) == 4 and word.startswith(('19', '20')):
+            year_in_query = word
+            break
+    
+    year_in_title = False
+    if year_in_query:
+        # Verifica ano no título (aceita pontos ou espaços ao redor, já que pontos foram convertidos para espaços)
+        year_pattern = r'\b' + re.escape(year_in_query) + r'\b'
+        if re.search(year_pattern, combined_title):
+            year_in_title = True
+    
     # Lógica de correspondência:
     # - 1 palavra: exige que corresponda
     # - 2 palavras: exige que ambas correspondam
     # - 3+ palavras: exige que pelo menos 2 correspondam
+    # - Exceção: se o ano corresponde e há pelo menos 2 matches (incluindo o ano), aceita (para casos de idiomas diferentes)
     if len(clean_query_words) == 1:
         return matches == 1
     elif len(clean_query_words) == 2:
         return matches == 2
     else:
+        # Para 3+ palavras: se o ano corresponde e há pelo menos 2 matches (ano + pelo menos 1 outra palavra), aceita
+        # Isso evita aceitar qualquer título apenas por ter o mesmo ano
+        if year_in_title and matches >= 2:
+            return True
+        # Caso contrário, exige pelo menos 2 correspondências
         return matches >= 2
 
