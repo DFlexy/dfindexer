@@ -545,6 +545,10 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Tuple[
             _cache_failure(info_hash, is_503=False)
             logger.debug(f"Erro HTTP ao buscar torrent header de {info_hash_hex}: {e}")
             return None, False, False
+    except requests.exceptions.ConnectionError as e:
+        # Erro de conexão (DNS, rede, etc.) - não registra como timeout, apenas loga
+        logger.debug(f"Erro de conexão ao buscar torrent header de {info_hash_hex}: {e}")
+        return None, False, False
     except requests.RequestException as e:
         logger.debug(f"Erro ao buscar torrent header de {info_hash_hex}: {e}")
         return None, False, False
