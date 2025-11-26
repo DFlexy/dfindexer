@@ -99,7 +99,7 @@ def indexer_handler(site_name: str = None):
         
         # Log resumo (os detalhes do filtro já são logados no enricher quando filter_results=True)
         # Não loga quando filter_results=True porque o log do filtro já é feito no enricher
-        if not (filter_results and query):
+        if not filter_results:
             logger.info(f"{log_prefix} [[[[[ Retornando {len(torrents)} resultados ]]]]]")
         
         # Prepara resposta JSON
