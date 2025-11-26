@@ -445,6 +445,7 @@ class TfilmeScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else page_title,
+                    'translated_title': translated_title if translated_title else None,
                     'details': link,
                     'year': year,
                     'imdb': imdb,
