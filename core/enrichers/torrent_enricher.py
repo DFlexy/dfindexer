@@ -17,7 +17,7 @@ class TorrentEnricher:
     def __init__(self):
         self.tracker_service = get_tracker_service()
     
-    def enrich(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+    def enrich(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None, scraper_name: Optional[str] = None) -> List[Dict]:
         """Enriquece lista de torrents com metadata e trackers"""
         if not torrents:
             return torrents
@@ -31,7 +31,12 @@ class TorrentEnricher:
         
         # Aplica filtro após títulos completos
         if filter_func:
+            total_before_filter = len(torrents)
             torrents = [t for t in torrents if filter_func(t)]
+            filtered_count = total_before_filter - len(torrents)
+            approved_count = len(torrents)
+            scraper_prefix = f"[{scraper_name}] " if scraper_name else ""
+            logger.info(f"{scraper_prefix}[Filtro Aplicado] Total: {total_before_filter} | Filtrados: {filtered_count} | Aprovados: {approved_count}")
             if not torrents:
                 return torrents
         
@@ -42,6 +47,7 @@ class TorrentEnricher:
         # Aplica fallbacks
         self._apply_size_fallback(torrents, skip_metadata=skip_metadata)
         self._apply_date_fallback(torrents, skip_metadata=skip_metadata)
+        self._apply_imdb_fallback(torrents)
         
         # Busca trackers
         if not skip_trackers:
@@ -199,6 +205,161 @@ class TorrentEnricher:
             # Tentativa 2: Data do HTML (fallback final)
             if html_date:
                 torrent['date'] = html_date
+    
+    def _apply_imdb_fallback(self, torrents: List[Dict]) -> None:
+        """
+        Aplica fallback de IMDB quando não encontrado no HTML.
+        Ordem de prioridade:
+        1. HTML do Scraper (já extraído)
+        2. Cache Redis por info_hash
+        3. Cache Redis por base_title (título finalizado limpo)
+        4. Metadata do torrent
+        """
+        from cache.redis_client import get_redis_client
+        from cache.redis_keys import imdb_key, imdb_title_key
+        from utils.text.text_processing import remove_accents
+        import re
+        
+        redis = get_redis_client()
+        if not redis:
+            return
+        
+        def extract_base_title_for_imdb(title: str) -> Optional[str]:
+            """
+            Extrai título base do título finalizado para busca de IMDB.
+            O título finalizado tem formato: base_title.SxxExx.ano.qualidade.codec...
+            Remove apenas componentes técnicos variáveis (qualidade, codec, fonte, áudio)
+            mantendo base_title, temporada/episódio e ano.
+            """
+            if not title:
+                return None
+            
+            # Remove tags de áudio no final
+            title = re.sub(r'\s*\[Brazilian\]\s*', '', title, flags=re.IGNORECASE)
+            title = re.sub(r'\s*\[Eng\]\s*', '', title, flags=re.IGNORECASE)
+            title = re.sub(r'\s*\[br-dub\]\s*', '', title, flags=re.IGNORECASE)
+            
+            # Remove componentes técnicos variáveis (qualidade, codec, fonte, áudio)
+            # Mantém: base_title, SxxExx, ano
+            technical_patterns = [
+                r'\.WEB-DL\.?', r'\.WEBRip\.?', r'\.BluRay\.?', r'\.DVDRip\.?',
+                r'\.HDRip\.?', r'\.HDTV\.?', r'\.BDRip\.?', r'\.BRRip\.?',
+                r'\.1080p\.?', r'\.720p\.?', r'\.2160p\.?', r'\.4K\.?',
+                r'\.HD\.?', r'\.FHD\.?', r'\.UHD\.?', r'\.SD\.?', r'\.HDR\.?',
+                r'\.x264\.?', r'\.x265\.?', r'\.HEVC\.?', r'\.AVC\.?',
+                r'\.DUAL\.?', r'\.DUBLADO\.?', r'\.NACIONAL\.?',
+                r'\.LEGENDADO\.?', r'\.LEGENDA\.?',
+            ]
+            
+            for pattern in technical_patterns:
+                title = re.sub(pattern, '.', title, flags=re.IGNORECASE)
+            
+            # Remove pontos duplicados e normaliza
+            title = re.sub(r'\.{2,}', '.', title)
+            title = title.strip(' .')
+            
+            # Remove acentos para normalização (ANTES de converter para lowercase)
+            title = remove_accents(title)
+            
+            # Converte para lowercase
+            title = title.lower().strip()
+            
+            # Remove pontos finais e espaços extras
+            title = re.sub(r'\.+$', '', title)
+            title = re.sub(r'\.+', '.', title)  # Garante que não há pontos duplicados
+            title = re.sub(r'\s+', ' ', title).strip()
+            
+            # Remove espaços e converte para pontos (garantir formato consistente)
+            title = title.replace(' ', '.')
+            title = re.sub(r'\.{2,}', '.', title)
+            title = title.strip('.')
+            
+            return title if title and len(title) >= 3 else None
+        
+        for torrent in torrents:
+            # Se já tem IMDB, salva no cache para reutilização
+            imdb = torrent.get('imdb', '').strip()
+            info_hash = torrent.get('info_hash', '').strip().lower()
+            title = torrent.get('title', '')
+            
+            if imdb and imdb.startswith('tt') and imdb[2:].isdigit():
+                # Salva no cache por info_hash
+                if info_hash and len(info_hash) == 40:
+                    try:
+                        key = imdb_key(info_hash)
+                        redis.setex(key, 7 * 24 * 3600, imdb)
+                    except Exception:
+                        pass
+                
+                # Salva no cache por base_title
+                base_title = extract_base_title_for_imdb(title)
+                if base_title and len(base_title) >= 3:
+                    try:
+                        title_key = imdb_title_key(base_title)
+                        redis.setex(title_key, 7 * 24 * 3600, imdb)
+                    except Exception:
+                        pass
+            
+            # Se não tem IMDB, tenta encontrar
+            if not torrent.get('imdb'):
+                # Fallback 1: Cache por info_hash
+                if info_hash and len(info_hash) == 40:
+                    try:
+                        key = imdb_key(info_hash)
+                        cached_imdb = redis.get(key)
+                        if cached_imdb:
+                            cached_imdb_str = cached_imdb.decode('utf-8')
+                            if cached_imdb_str.startswith('tt') and cached_imdb_str[2:].isdigit():
+                                torrent['imdb'] = cached_imdb_str
+                                continue  # Encontrou, não precisa verificar outros fallbacks
+                    except Exception:
+                        pass
+                
+                # Fallback 2: Cache por base_title
+                base_title = extract_base_title_for_imdb(title)
+                if base_title and len(base_title) >= 3:
+                    try:
+                        title_key = imdb_title_key(base_title)
+                        cached_imdb = redis.get(title_key)
+                        if cached_imdb:
+                            cached_imdb_str = cached_imdb.decode('utf-8')
+                            if cached_imdb_str.startswith('tt') and cached_imdb_str[2:].isdigit():
+                                torrent['imdb'] = cached_imdb_str
+                                continue
+                    except Exception:
+                        pass
+                
+                # Fallback 3: Metadata do torrent
+                try:
+                    magnet_link = torrent.get('magnet_link')
+                    if magnet_link and info_hash:
+                        metadata = torrent.get('_metadata')
+                        if not metadata and Config.MAGNET_METADATA_ENABLED:
+                            from magnet.metadata import fetch_metadata_from_itorrents
+                            metadata = fetch_metadata_from_itorrents(info_hash)
+                        
+                        if metadata and metadata.get('imdb'):
+                            imdb_from_metadata = metadata.get('imdb')
+                            # Valida formato
+                            if isinstance(imdb_from_metadata, str) and imdb_from_metadata.startswith('tt') and imdb_from_metadata[2:].isdigit():
+                                torrent['imdb'] = imdb_from_metadata
+                                # Salva no cache para reutilização (por info_hash e base_title)
+                                if redis:
+                                    try:
+                                        # Salva por info_hash
+                                        if info_hash and len(info_hash) == 40:
+                                            key = imdb_key(info_hash)
+                                            redis.setex(key, 7 * 24 * 3600, imdb_from_metadata)
+                                        
+                                        # Salva por base_title
+                                        if base_title and len(base_title) >= 3:
+                                            title_key = imdb_title_key(base_title)
+                                            redis.setex(title_key, 7 * 24 * 3600, imdb_from_metadata)
+                                        
+                                    except Exception:
+                                        pass
+                except Exception:
+                    pass
     
     def _attach_peers(self, torrents: List[Dict]) -> None:
         """Anexa dados de peers (seeds/leechers) via trackers"""
