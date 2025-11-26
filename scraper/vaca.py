@@ -305,6 +305,18 @@ class VacaScraper(BaseScraper):
                             translated_title = lines[0].strip()
                             break
         
+        # Fallback: se não encontrou "Título Traduzido", tenta usar title da página
+        # mas apenas se o original_title tem não-latinos (indica que precisa de tradução)
+        if not translated_title:
+            title_tag = doc.find('title')
+            if title_tag:
+                page_title = title_tag.get_text(strip=True)
+                # Verifica se original_title tem não-latinos
+                if original_title:
+                    has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u097f\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff]', original_title))
+                    if has_non_latin:
+                        translated_title = page_title
+        
         # Limpa o título traduzido se encontrou
         if translated_title:
             # Remove qualquer HTML que possa ter sobrado
@@ -344,9 +356,6 @@ class VacaScraper(BaseScraper):
                 y = find_year_from_text(text, title)
                 if y:
                     year = y
-            
-            # Extrai IMDB - vacatorrentmov não tem IMDB no HTML, será buscado do metadata como fallback
-            # (não faz nada aqui, deixa vazio para buscar do metadata depois)
             
             # Extrai tamanhos
             sizes.extend(find_sizes_from_text(html_content))
@@ -515,6 +524,7 @@ class VacaScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else title,
+                    'translated_title': translated_title if translated_title else None,
                     'details': link,
                     'year': year,
                     'imdb': imdb,
