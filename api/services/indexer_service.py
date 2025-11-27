@@ -51,6 +51,10 @@ class IndexerService:
         
         return torrents
     
+    def get_last_filter_stats(self):
+        """Retorna as estatísticas do último filtro aplicado"""
+        return self.enricher._last_filter_stats if hasattr(self.enricher, '_last_filter_stats') else None
+    
     def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False) -> List[Dict]:
         """Obtém torrents de uma página"""
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
@@ -60,6 +64,10 @@ class IndexerService:
             max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
         
         torrents = scraper.get_page(page, max_items=max_links)
+        
+        # Atualiza estatísticas do enricher do IndexerService com as do scraper
+        if hasattr(scraper, '_enricher') and hasattr(scraper._enricher, '_last_filter_stats'):
+            self.enricher._last_filter_stats = scraper._enricher._last_filter_stats
         
         # Remove campos internos
         self.processor.remove_internal_fields(torrents)
