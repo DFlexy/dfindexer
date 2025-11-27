@@ -233,8 +233,6 @@ class TrackerListProvider:
                 if not trackers:
                     return None
                 trackers_list = list(trackers)
-                count = len(trackers_list)
-                logger.debug(f"[CACHE REDIS HIT] Trackers: {count} recuperados")
                 return trackers_list
             except Exception as exc:  # noqa: BLE001
                 _log_redis_error("recuperar trackers do cache", exc)
