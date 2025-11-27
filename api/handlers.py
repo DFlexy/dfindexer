@@ -97,10 +97,13 @@ def indexer_handler(site_name: str = None):
         else:
             torrents = _indexer_service.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test)
         
-        # Log resumo (os detalhes do filtro já são logados no enricher quando filter_results=True)
-        # Não loga quando filter_results=True porque o log do filtro já é feito no enricher
-        if not filter_results:
-            logger.info(f"{log_prefix} [[[[[ Retornando {len(torrents)} resultados ]]]]]")
+        # Log de estatísticas do filtro (sempre mostra quando disponível)
+        filter_stats = _indexer_service.get_last_filter_stats()
+        if filter_stats:
+            logger.info(f"{log_prefix} [Filtro Aplicado] Total: {filter_stats['total']} | Filtrados: {filter_stats['filtered']} | Aprovados: {filter_stats['approved']}")
+        else:
+            # Se não há estatísticas disponíveis, mostra log simples com contagem
+            logger.info(f"{log_prefix} [Filtro Aplicado] Total: {len(torrents)} | Filtrados: 0 | Aprovados: {len(torrents)}")
         
         # Prepara resposta JSON
         response_data = {
