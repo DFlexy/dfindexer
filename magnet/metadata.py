@@ -112,6 +112,11 @@ _circuit_breaker_log_cache = {}
 _circuit_breaker_log_lock = threading.Lock()
 _CIRCUIT_BREAKER_LOG_COOLDOWN = 30  # Só loga uma vez a cada 30 segundos
 
+# Cache para evitar logs duplicados de cache failure
+_cache_failure_log_cache = {}
+_cache_failure_log_lock = threading.Lock()
+_CACHE_FAILURE_LOG_COOLDOWN = 60  # Só loga uma vez a cada 60 segundos por hash
+
 def _is_circuit_breaker_open() -> bool:
     """
     Verifica se o circuit breaker está aberto (desabilitado).
@@ -607,7 +612,18 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         
         # Verifica se há falha recente em cache
         if _is_failure_cached(info_hash):
-            logger.debug(f"[CACHE FAILURE] Falha recente - pulando busca de metadata: {info_hash[:16]}...")
+            # Throttling de logs - só loga uma vez a cada 60 segundos por hash
+            now = time.time()
+            log_key = f"cache_failure_{info_hash_lower}"
+            should_log = False
+            with _cache_failure_log_lock:
+                last_logged = _cache_failure_log_cache.get(log_key, 0)
+                if now - last_logged >= _CACHE_FAILURE_LOG_COOLDOWN:
+                    _cache_failure_log_cache[log_key] = now
+                    should_log = True
+            
+            if should_log:
+                logger.debug(f"[CACHE FAILURE] Recente - pulando busca de metadata: {info_hash[:16]}...")
             return None
     else:
         # Redis não disponível - usa cache em memória como fallback
@@ -638,7 +654,18 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         
         # Verifica se há falha recente em cache
         if _is_failure_cached(info_hash):
-            logger.debug(f"[CACHE FAILURE] Falha recente - pulando busca de metadata: {info_hash[:16]}...")
+            # Throttling de logs - só loga uma vez a cada 60 segundos por hash
+            now = time.time()
+            log_key = f"cache_failure_{info_hash_lower}"
+            should_log = False
+            with _cache_failure_log_lock:
+                last_logged = _cache_failure_log_cache.get(log_key, 0)
+                if now - last_logged >= _CACHE_FAILURE_LOG_COOLDOWN:
+                    _cache_failure_log_cache[log_key] = now
+                    should_log = True
+            
+            if should_log:
+                logger.debug(f"[CACHE FAILURE] Recente - pulando busca de metadata: {info_hash[:16]}...")
             return None
     
     # Usa lock por hash para evitar requisições simultâneas ao mesmo hash
