@@ -279,7 +279,6 @@ class TfilmeScraper(BaseScraper):
                 translated_title = match.group(1).strip()
                 # Remove qualquer HTML que possa ter sobrado
                 translated_title = re.sub(r'<[^>]+>', '', translated_title)
-                import html
                 translated_title = html.unescape(translated_title)
             else:
                 # Tenta extrair do texto
@@ -313,7 +312,6 @@ class TfilmeScraper(BaseScraper):
             if translated_title:
                 # Remove qualquer HTML que possa ter sobrado
                 translated_title = re.sub(r'<[^>]+>', '', translated_title)
-                import html
                 translated_title = html.unescape(translated_title)
                 # Limpa o título traduzido
                 from utils.text.text_processing import clean_translated_title
