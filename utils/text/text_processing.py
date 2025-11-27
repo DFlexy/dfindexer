@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Lista de stop words utilizada para filtrar termos irrelevantes em buscas
 STOP_WORDS = [
-    'the', 'a', 'an', 'and', 'of', 'to', 'in', 'for', 'or', 'as',
+    'the', 'my', 'a', 'an', 'and', 'of', 'to', 'in', 'for', 'or', 'as',
     'os', 'o', 'e', 'de', 'do', 'da', 'em', 'que', 'temporada', 'season'
 ]
 
