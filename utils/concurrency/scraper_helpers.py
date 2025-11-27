@@ -17,8 +17,8 @@ T = TypeVar('T')
 DEFAULT_MAX_ITEMS_FOR_TEST: int = 0
 
 # Configurações de paralelização
-DEFAULT_MAX_WORKERS = 4  # Máximo de workers simultâneos para processamento paralelo
-DEFAULT_PAGE_TIMEOUT = 30  # Timeout em segundos por página
+DEFAULT_MAX_WORKERS = 8  # Máximo de workers simultâneos para processamento paralelo
+DEFAULT_PAGE_TIMEOUT = 45  # Timeout em segundos por página
 
 
 # Gera variações de uma query para busca, removendo stop words e usando primeira palavra
