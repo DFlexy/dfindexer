@@ -470,7 +470,7 @@ class BaseScraper(ABC):
         if len(torrents_to_fetch) > 1:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             
-            max_workers = min(6, len(torrents_to_fetch))  # Máximo de 6 workers simultâneos
+            max_workers = min(8, len(torrents_to_fetch))  # Máximo de 8 workers simultâneos
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_torrent = {
