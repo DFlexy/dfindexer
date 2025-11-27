@@ -28,20 +28,6 @@ class MetadataCache:
             data_str = self.redis.hget(key, 'data')
             if data_str:
                 data = json.loads(data_str.decode('utf-8'))
-                # Verifica quando foi criado para debug
-                created_str = self.redis.hget(key, 'created')
-                if created_str:
-                    created_time = int(created_str.decode('utf-8'))
-                    age = int(time.time()) - created_time
-                    size_info = f"size={data.get('size', 'N/A')}"
-                    name_info = f"name={data.get('name', 'N/A')[:50]}" if data.get('name') else ""
-                    info_parts = [size_info]
-                    if name_info:
-                        info_parts.append(name_info)
-                    info_str = " | ".join(info_parts)
-                    logger.debug(f"[CACHE REDIS HIT] Metadata: {info_hash[:16]}... (idade: {age}s | {info_str})")
-                else:
-                    logger.debug(f"[CACHE REDIS HIT] Metadata: {info_hash[:16]}... (sem timestamp)")
                 return data
         except Exception:
             pass
