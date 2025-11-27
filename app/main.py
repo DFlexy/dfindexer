@@ -28,5 +28,5 @@ def create_app():
 if __name__ == '__main__':
     app = create_app()
     # Configuração otimizada para Orange Pi 5B (8 núcleos)
-    serve(app, host='0.0.0.0', port=Config.PORT, threads=6)
+    serve(app, host='0.0.0.0', port=Config.PORT, threads=12)
 
