@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class TorrentEnricher:
     def __init__(self):
         self.tracker_service = get_tracker_service()
+        self._last_filter_stats = None
     
     def enrich(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None, scraper_name: Optional[str] = None) -> List[Dict]:
         """Enriquece lista de torrents com metadata e trackers"""
@@ -30,15 +31,26 @@ class TorrentEnricher:
             self._ensure_titles_complete(torrents)
         
         # Aplica filtro após títulos completos
+        total_before_filter = len(torrents)
         if filter_func:
-            total_before_filter = len(torrents)
             torrents = [t for t in torrents if filter_func(t)]
             filtered_count = total_before_filter - len(torrents)
             approved_count = len(torrents)
-            scraper_prefix = f"[{scraper_name}] " if scraper_name else ""
-            logger.info(f"{scraper_prefix}[Filtro Aplicado] Total: {total_before_filter} | Filtrados: {filtered_count} | Aprovados: {approved_count}")
-            if not torrents:
-                return torrents
+        else:
+            # Sem filtro: todos são aprovados
+            filtered_count = 0
+            approved_count = len(torrents)
+        
+        # Armazena estatísticas para acesso externo
+        self._last_filter_stats = {
+            'total': total_before_filter,
+            'filtered': filtered_count,
+            'approved': approved_count,
+            'scraper_name': scraper_name
+        }
+        
+        if not torrents:
+            return torrents
         
         # Busca metadata para size e date
         if Config.MAGNET_METADATA_ENABLED and not skip_metadata:
@@ -115,7 +127,7 @@ class TorrentEnricher:
                 return (torrent, None)
         
         if len(torrents_to_fetch) > 1:
-            max_workers = min(6, len(torrents_to_fetch))
+            max_workers = min(8, len(torrents_to_fetch))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_torrent = {
                     executor.submit(fetch_metadata_for_torrent, t): t
