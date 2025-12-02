@@ -24,7 +24,7 @@ services:
       - dfindexer-network
 
   indexer:
-    build: .
+    image: ghcr.io/dflexy/dfindexer:latest
     container_name: dfindexer
     restart: unless-stopped
     ports:
