@@ -188,15 +188,18 @@ Todos os títulos são padronizados no formato:
 
 **Ordem garantida**: `Título → Temporada/Episódio → Ano → Informações Técnicas`
 
-## 📝 Title Standardization
-All titles are standardized in the format:
+## 🎬 Tags adicionadas nos titles
+O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
+- **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO` ou `NACIONAL` no título do release ou metadata
+- **[Eng]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no título do release ou metadata
+- **[Brazilian] [Eng]**: Adicionada quando detecta palavras dos 2 tipos acima no título do release ou metadata
 
-- **Episodes**: `Title.S02E01.2025.WEB-DL.1080p`
-- **Multiple Episodes**: `Title.S02E05-06-07.2025.WEB-DL.1080p`
-- **Complete Series**: `Title.S02.2025.WEB-DL`
-- **Movies**: `Title.2025.1080p.BluRay`
+## 🎬 Tags Added to Titles
+The system automatically adds language tags to titles when audio information is detected:
+- **[Brazilian]**: Added when detects `DUAL`, `DUBLADO` or `NACIONAL` in release title or metadata
+- **[Eng]**: Added when detects `LEGENDADO`, `LEGENDA` or `LEG` in release title or metadata
+- **[Brazilian] [Eng]**: Added when detects words from both types above in release title or metadata
 
-**Guaranteed order**: `Title → Season/Episode → Year → Technical Information`
 
 ## Variáveis de Ambiente
 | Variável                                | Descrição                                                                | Padrão             |
