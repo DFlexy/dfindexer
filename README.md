@@ -124,7 +124,7 @@ docker run -d \
   -p 7006:7006 \
   --link redis:redis \
   --link flaresolverr:flaresolverr \
-  dfindexer
+  ghcr.io/dflexy/dfindexer:latest
 ```
 
 **Nota**: O FlareSolverr é opcional. Se não for iniciado, o indexer funcionará normalmente, mas sites protegidos por Cloudflare podem retornar erro 403.
