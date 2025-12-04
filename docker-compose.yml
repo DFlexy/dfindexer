@@ -5,48 +5,33 @@ services:
     image: redis:7-alpine
     container_name: dfindexer-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    network_mode: host
+    command: redis-server --appendonly yes
     volumes:
       - ./redis_data:/data
-    command: redis-server --appendonly yes
-    networks:
-      - dfindexer-network
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: dfindexer-flaresolverr
     restart: unless-stopped
-    ports:
-      - "8191:8191"
+    network_mode: host
     environment:
       - LOG_LEVEL=info
       - TZ=America/Sao_Paulo
-    networks:
-      - dfindexer-network
 
   indexer:
     image: ghcr.io/dflexy/dfindexer:latest
     container_name: dfindexer
     restart: unless-stopped
-    ports:
-      - "7006:7006"
+    network_mode: host
     environment:
-      - REDIS_HOST=redis
+      - REDIS_HOST=localhost
       - REDIS_PORT=6379
-      - REDIS_DB=0
+      - FLARESOLVERR_ADDRESS=http://localhost:8191
       - PORT=7006
       - LOG_LEVEL=1
       - LOG_FORMAT=console
-      - FLARESOLVERR_ADDRESS=http://flaresolverr:8191
       - TRACKER_SCRAPING_ENABLED=true
     depends_on:
       - redis
       - flaresolverr
-    networks:
-      - dfindexer-network
-
-networks:
-  dfindexer-network:
-    driver: bridge
-

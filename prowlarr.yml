@@ -6,7 +6,7 @@ language: pt-BR
 type: public
 encoding: UTF-8
 links:
-  - http://dfindexer:7006/
+  - http://localhost:7006/
 
 caps:
   categories:
