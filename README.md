@@ -82,7 +82,7 @@ docker-compose down -v
 O Docker Compose irá:
 - ✅ Iniciar o serviço Redis automaticamente
 - ✅ Iniciar o serviço FlareSolverr automaticamente (opcional, para resolver Cloudflare)
-- ✅ Configurar a rede entre os containers
+- ✅ Usar modo host para rede (containers compartilham rede do host)
 - ✅ Persistir dados do Redis em volume nomeado
 - ✅ Configurar restart automático
 ### Opção 2: Docker Run CLI
@@ -91,7 +91,7 @@ Se preferir executar manualmente:
 Docker Compose will:
 - ✅ Automatically start the Redis service
 - ✅ Automatically start the FlareSolverr service (optional, to resolve Cloudflare)
-- ✅ Configure the network between containers
+- ✅ Use host network mode (containers share host network)
 - ✅ Persist Redis data in a named volume
 - ✅ Configure automatic restart
 ### Option 2: Docker Run CLI
@@ -101,31 +101,34 @@ If you prefer to run manually:
 ```bash
 # Primeiro, inicie o Redis (dados salvos em ./redis_data)
 docker run -d \
-  --name=redis \
+  --name=dfindexer-redis \
   --restart=unless-stopped \
-  -p 6379:6379 \
+  --network host \
   -v $(pwd)/redis_data:/data \
   redis:7-alpine \
   redis-server --appendonly yes
 
 # Opcional: Inicie o FlareSolverr (para resolver Cloudflare)
 docker run -d \
-  --name=flaresolverr \
+  --name=dfindexer-flaresolverr \
   --restart=unless-stopped \
-  -p 8191:8191 \
+  --network host \
   -e LOG_LEVEL=info \
+  -e TZ=America/Sao_Paulo \
   ghcr.io/flaresolverr/flaresolverr:latest
 
 # Depois, inicie o indexer
 docker run -d \
-  --name=indexer \
+  --name=dfindexer \
   --restart=unless-stopped \
-  -e REDIS_HOST=redis \
+  --network host \
+  -e REDIS_HOST=localhost \
+  -e REDIS_PORT=6379 \
+  -e FLARESOLVERR_ADDRESS=http://localhost:8191 \
+  -e PORT=7006 \
   -e LOG_LEVEL=1 \
-  -e FLARESOLVERR_ADDRESS=http://flaresolverr:8191 \
-  -p 7006:7006 \
-  --link redis:redis \
-  --link flaresolverr:flaresolverr \
+  -e LOG_FORMAT=console \
+  -e TRACKER_SCRAPING_ENABLED=true \
   ghcr.io/dflexy/dfindexer:latest
 ```
 
@@ -213,7 +216,7 @@ The system automatically adds language tags to titles when audio information is 
 | `HTML_CACHE_TTL_LONG`                   | TTL do cache longo de HTML (páginas)                                     | `12h`              |
 | `FLARESOLVERR_SESSION_TTL`              | TTL das sessões FlareSolverr                                              | `4h`               |
 | `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `15`             |
-| `FLARESOLVERR_ADDRESS`                  | Endereço do servidor FlareSolverr (ex: http://flaresolverr:8191)         | `None` (opcional)  |
+| `FLARESOLVERR_ADDRESS`                  | Endereço do servidor FlareSolverr (ex: http://localhost:8191)            | `None` (opcional)  |
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                            | `console` ou `json`                                                      | `console`          |
 
@@ -229,7 +232,7 @@ The system automatically adds language tags to titles when audio information is 
 | `HTML_CACHE_TTL_LONG`                    | Long HTML cache TTL (pages)                                             | `12h`              |
 | `FLARESOLVERR_SESSION_TTL`               | FlareSolverr session TTL                                                | `4h`               |
 | `EMPTY_QUERY_MAX_LINKS`                  | Limit of individual links to process from page 1                          | `15`             |
-| `FLARESOLVERR_ADDRESS`                   | FlareSolverr server address (ex: http://flaresolverr:8191)               | `None` (optional)  |
+| `FLARESOLVERR_ADDRESS`                   | FlareSolverr server address (ex: http://localhost:8191)                  | `None` (optional)  |
 | `LOG_LEVEL`                              | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                             | `console` or `json`                                                      | `console`          |
 
