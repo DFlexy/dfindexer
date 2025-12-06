@@ -447,10 +447,42 @@ class ComandScraper(BaseScraper):
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Busca dados cruzados no Redis por info_hash (fallback principal)
+                cross_data = None
+                try:
+                    from utils.text.cross_data import get_cross_data_from_redis
+                    cross_data = get_cross_data_from_redis(info_hash)
+                except Exception:
+                    pass
+                
+                # Preenche campos faltantes com dados cruzados do Redis
+                if cross_data:
+                    if not original_title and cross_data.get('original_title_html'):
+                        original_title = cross_data['original_title_html']
+                    
+                    if not translated_title and cross_data.get('translated_title_html'):
+                        translated_title = cross_data['translated_title_html']
+                    
+                    if not imdb and cross_data.get('imdb'):
+                        imdb = cross_data['imdb']
+                
                 # Extrai raw_release_title diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                
+                # Se ainda está missing_dn, tenta buscar do cross_data
+                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
+                    raw_release_title = cross_data['release_title_magnet']
+                    missing_dn = False
+                
+                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
+                if not missing_dn and raw_release_title:
+                    try:
+                        from utils.text.text_processing import save_release_title_to_redis
+                        save_release_title_to_redis(info_hash, raw_release_title)
+                    except Exception:
+                        pass
                 
                 fallback_title = original_title if original_title else page_title
                 original_release_title = prepare_release_title(
@@ -469,6 +501,13 @@ class ComandScraper(BaseScraper):
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
                 final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
+                # Determina origem_audio_tag
+                origem_audio_tag = 'N/A'
+                if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
+                    origem_audio_tag = 'release_title_magnet'
+                elif missing_dn and info_hash:
+                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
+                
                 # Extrai tamanho do magnet se disponível
                 size = ''
                 if sizes and idx < len(sizes):
@@ -476,6 +515,21 @@ class ComandScraper(BaseScraper):
                 
                 # Processa trackers usando função utilitária
                 trackers = process_trackers(magnet_data)
+                
+                # Salva dados cruzados no Redis para reutilização por outros scrapers
+                try:
+                    from utils.text.cross_data import save_cross_data_to_redis
+                    cross_data_to_save = {
+                        'original_title_html': original_title if original_title else None,
+                        'release_title_magnet': raw_release_title if not missing_dn else None,
+                        'translated_title_html': translated_title if translated_title else None,
+                        'imdb': imdb if imdb else None,
+                        'missing_dn': missing_dn,
+                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None
+                    }
+                    save_cross_data_to_redis(info_hash, cross_data_to_save)
+                except Exception:
+                    pass
                 
                 torrent = {
                     'title': final_title,

@@ -19,22 +19,24 @@ Indexador em Python que organiza torrents brasileiros em formato padronizado, pr
 Python indexer that organizes Brazilian torrents in a standardized format, ready for consumption by tools like **Prowlarr**, **Sonarr** and **Radarr**.
 
 ## 🚀 Características Principais
-- ✅ **Múltiplos Scrapers**: Suporte para 6 sites de torrents brasileiros
+- ✅ **Múltiplos Scrapers**: Suporte para 7 sites de torrents brasileiros
 - ✅ **Padronização Inteligente**: Títulos padronizados para facilitar matching automático
 - ✅ **Metadata API**: Busca automática de tamanhos, datas e nomes via iTorrents.org
 - ✅ **Tracker Scraping**: Consulta automática de trackers UDP para seeds/leechers
 - ✅ **FlareSolverr**: Suporte opcional para resolver Cloudflare com sessões reutilizáveis
 - ✅ **Cache Redis**: Cache inteligente para reduzir carga e latência
+- ✅ **Sistema Cross-Data**: Compartilhamento de dados entre scrapers via Redis (reduz consultas desnecessárias)
 - ✅ **Circuit Breakers**: Proteção contra sobrecarga de serviços externos
 - ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
 
 ## 🚀 Main Features
-- ✅ **Multiple Scrapers**: Support for 6 Brazilian torrent sites
+- ✅ **Multiple Scrapers**: Support for 7 Brazilian torrent sites
 - ✅ **Smart Standardization**: Standardized titles to facilitate automatic matching
 - ✅ **Metadata API**: Automatic search for sizes, dates and names via iTorrents.org
 - ✅ **Tracker Scraping**: Automatic UDP tracker queries for seeds/leechers
 - ✅ **FlareSolverr**: Optional support to resolve Cloudflare with reusable sessions
 - ✅ **Redis Cache**: Smart cache to reduce load and latency
+- ✅ **Cross-Data System**: Data sharing between scrapers via Redis (reduces unnecessary queries)
 - ✅ **Circuit Breakers**: Protection against external service overload
 - ✅ **Optimizations**: Filtering before heavy enrichment for better performance
 
@@ -46,6 +48,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
 - ✅ ** ¢ømªnd◎–łå (Necessário selecionar o FlareSolverr)
 - ✅ ** błµđv–ƒ¡lmεš♡
+- ✅ ** nεrd–tørrεnτ–hd
 
 ## Supported Sites
 - ✅ ** st❂rçƙ–f¡lmΞs_v③
@@ -54,6 +57,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
 - ✅ ** ¢ømªnd◎–łå (FlareSolverr selection required)
 - ✅ ** błµđv–ƒ¡lmεš♡
+- ✅ ** nεrd–tørrεnτ–hd
 
 ## 🐳 Execução com Docker
 ### Opção 1: Docker Compose (Recomendado)
@@ -188,15 +192,19 @@ Todos os títulos são padronizados no formato:
 
 ## 🎬 Tags adicionadas nos titles
 O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
-- **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO` ou `NACIONAL` no título do release ou metadata
-- **[Eng]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no título do release ou metadata
-- **[Brazilian] [Eng]**: Adicionada quando detecta palavras dos 2 tipos acima no título do release ou metadata
+- **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO`, `NACIONAL` ou `PORTUGUES` no `release_title_magnet`, metadata ou HTML da página (via `detect_audio_from_html`)
+- **[Eng]**: Adicionada quando detecta `DUAL` (via HTML como 'dual', `release_title_magnet` ou metadata). DUAL indica português + inglês, então adiciona ambas as tags
+- **[Leg]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no `release_title_magnet`, metadata ou HTML da página (via `detect_audio_from_html`)
+- **[Brazilian] [Eng]**: Adicionada quando detecta `DUAL` (português + inglês)
+- **[Brazilian] [Leg]**: Adicionada quando detecta português E legendado (ex: DUBLADO + LEGENDADO)
 
 ## 🎬 Tags Added to Titles
 The system automatically adds language tags to titles when audio information is detected:
-- **[Brazilian]**: Added when detects `DUAL`, `DUBLADO` or `NACIONAL` in release title or metadata
-- **[Eng]**: Added when detects `LEGENDADO`, `LEGENDA` or `LEG` in release title or metadata
-- **[Brazilian] [Eng]**: Added when detects words from both types above in release title or metadata
+- **[Brazilian]**: Added when detects `DUAL`, `DUBLADO`, `NACIONAL` or `PORTUGUES` in `release_title_magnet`, metadata or page HTML (via `detect_audio_from_html`)
+- **[Eng]**: Added when detects `DUAL` (via HTML as 'dual', `release_title_magnet` or metadata). DUAL indicates Portuguese + English, so both tags are added
+- **[Leg]**: Added when detects `LEGENDADO`, `LEGENDA` or `LEG` in `release_title_magnet`, metadata or page HTML (via `detect_audio_from_html`)
+- **[Brazilian] [Eng]**: Added when detects `DUAL` (Portuguese + English)
+- **[Brazilian] [Leg]**: Added when detects Portuguese AND subtitled (e.g., DUBLADO + LEGENDADO)
 
 
 ## Variáveis de Ambiente

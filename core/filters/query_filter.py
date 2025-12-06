@@ -16,7 +16,8 @@ class QueryFilter:
             return check_query_match(
                 query,
                 torrent.get('title', ''),
-                torrent.get('original_title', '')
+                torrent.get('original_title', ''),
+                torrent.get('translated_title', '')
             )
         
         return filter_func

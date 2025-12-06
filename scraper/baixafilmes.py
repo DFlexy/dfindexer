@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class BaixafilmesScraper(BaseScraper):
     SCRAPER_TYPE = "baixafilmes"
     DEFAULT_BASE_URL = "https://www.baixafilmestorrent.com.br/"
-    DISPLAY_NAME = "Baixa Filmes"
+    DISPLAY_NAME = "Baixa"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
@@ -154,9 +154,9 @@ class BaixafilmesScraper(BaseScraper):
             # Log para info: mostra quantos links foram encontrados e qual o limite
             total_links = len(links)
             if effective_max > 0:
-                logger.info(f"[Baixa Filmes] Encontrados {total_links} links na página, limitando para {effective_max}")
+                logger.info(f"[Baixa] Encontrados {total_links} links na página, limitando para {effective_max}")
             else:
-                logger.info(f"[Baixa Filmes] Encontrados {total_links} links na página (sem limite)")
+                logger.info(f"[Baixa] Encontrados {total_links} links na página (sem limite)")
             
             # Limita links se houver limite (EMPTY_QUERY_MAX_LINKS limita quantos links processar)
             links = limit_list(links, effective_max)
@@ -589,10 +589,47 @@ class BaixafilmesScraper(BaseScraper):
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Busca dados cruzados no Redis por info_hash (fallback principal)
+                cross_data = None
+                try:
+                    from utils.text.cross_data import get_cross_data_from_redis
+                    cross_data = get_cross_data_from_redis(info_hash)
+                except Exception:
+                    pass
+                
+                # Preenche campos faltantes com dados cruzados do Redis
+                if cross_data:
+                    if not original_title and cross_data.get('original_title_html'):
+                        original_title = cross_data['original_title_html']
+                    
+                    if not translated_title and cross_data.get('translated_title_html'):
+                        translated_title = cross_data['translated_title_html']
+                    
+                    if not imdb and cross_data.get('imdb'):
+                        imdb = cross_data['imdb']
+                
                 # Extrai raw_release_title diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '') or ''
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                
+                # Se ainda está missing_dn, tenta buscar do cross_data
+                release_title_from_cross = False
+                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
+                    cross_release = cross_data.get('release_title_magnet')
+                    if cross_release and cross_release != 'N/A' and len(str(cross_release).strip()) >= 3:
+                        raw_release_title = str(cross_release)
+                        missing_dn = False
+                        release_title_from_cross = True
+                
+                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
+                # IMPORTANTE: Salva mesmo se veio do cross_data, para garantir que outros scrapers possam usar
+                if not missing_dn and raw_release_title:
+                    try:
+                        from utils.text.text_processing import save_release_title_to_redis
+                        save_release_title_to_redis(info_hash, raw_release_title)
+                    except Exception:
+                        pass
                 
                 fallback_title = title
                 # Usa raw_release_title diretamente, sem modificações prévias
@@ -634,6 +671,13 @@ class BaixafilmesScraper(BaseScraper):
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
                 final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
                 
+                # Determina origem_audio_tag
+                origem_audio_tag = 'N/A'
+                if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
+                    origem_audio_tag = 'release_title_magnet'
+                elif missing_dn and info_hash:
+                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
+                
                 # Extrai tamanho
                 size = ''
                 if sizes and idx < len(sizes):
@@ -653,6 +697,22 @@ class BaixafilmesScraper(BaseScraper):
                             trackers = [t for t in dynamic_trackers if t.lower().startswith('udp://')]
                     except Exception:
                         pass
+                
+                # Salva dados cruzados no Redis para reutilização por outros scrapers
+                # IMPORTANTE: Se recuperou release_title_magnet do cross_data, salva de volta para garantir persistência
+                try:
+                    from utils.text.cross_data import save_cross_data_to_redis
+                    cross_data_to_save = {
+                        'original_title_html': original_title if original_title else None,
+                        'release_title_magnet': raw_release_title if not missing_dn else None,
+                        'translated_title_html': translated_title if translated_title else None,
+                        'imdb': imdb if imdb else None,
+                        'missing_dn': missing_dn,
+                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None
+                    }
+                    save_cross_data_to_redis(info_hash, cross_data_to_save)
+                except Exception:
+                    pass
                 
                 torrent = {
                     'title': final_title,

@@ -14,7 +14,7 @@ from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.text_processing import (
     find_year_from_text, find_sizes_from_text, STOP_WORDS,
-    add_audio_tag_if_needed, create_standardized_title, prepare_release_title
+    detect_audio_from_html, add_audio_tag_if_needed, create_standardized_title, prepare_release_title
 )
 from app.config import Config
 
@@ -282,16 +282,39 @@ class NerdScraper(BaseScraper):
         
         # Extrai título original
         original_title = ''
-        for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
-            elem_html = str(elem)
-            elem_text = elem.get_text(' ', strip=True)
+        # Primeiro tenta buscar no HTML completo do content_div (para pegar casos onde está em tags quebradas)
+        content_html = str(content_div)
+        if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', content_html):
+            # Busca no HTML completo primeiro (mais confiável para tags quebradas)
+            # Tenta padrão com </b> após os dois pontos (caso comum)
+            html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', content_html, re.DOTALL)
+            if not html_match:
+                # Fallback: padrão sem </b>
+                html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', content_html, re.DOTALL)
             
-            if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', elem_html):
-                text_parts = elem_text.split('Título Original:')
-                if len(text_parts) > 1:
-                    original_title = text_parts[1].strip()
+            if html_match:
+                html_text = html_match.group(1)
+                html_text = re.sub(r'<[^>]+>', '', html_text)
+                html_text = html_text.strip()
+                if html_text:
+                    original_title = html_text
+        
+        # Se não encontrou no HTML completo, busca elemento por elemento
+        if not original_title:
+            for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
+                elem_html = str(elem)
+                elem_text = elem.get_text(' ', strip=True)
+                
+                if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', elem_html):
+                    text_parts = elem_text.split('Título Original:')
+                    if len(text_parts) > 1:
+                        original_title = text_parts[1].strip()
                     
-                    html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br|</span|</p|</div|$)', elem_html, re.DOTALL)
+                    # Tenta extrair do HTML do elemento (com </b> primeiro)
+                    html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', elem_html, re.DOTALL)
+                    if not html_match:
+                        html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', elem_html, re.DOTALL)
+                    
                     if html_match:
                         html_text = html_match.group(1)
                         html_text = re.sub(r'<[^>]+>', '', html_text)
@@ -299,14 +322,17 @@ class NerdScraper(BaseScraper):
                         if html_text:
                             original_title = html_text
                     
-                    original_title = html.unescape(original_title)
-                    original_title = re.sub(r'\s+', ' ', original_title).strip()
-                    for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:', 'Título Traduzido:']:
-                        if stop in original_title:
-                            original_title = original_title.split(stop)[0].strip()
-                            break
                     if original_title:
                         break
+        
+        # Processa o título original encontrado
+        if original_title:
+            original_title = html.unescape(original_title)
+            original_title = re.sub(r'\s+', ' ', original_title).strip()
+            for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:', 'Título Traduzido:']:
+                if stop in original_title:
+                    original_title = original_title.split(stop)[0].strip()
+                    break
         
         # Extrai título traduzido de "Baixar Título:" ou "Baixar Filme:"
         # Primeiro tenta buscar no elemento poster-info (mais específico)
@@ -369,6 +395,25 @@ class NerdScraper(BaseScraper):
                     if meta_match:
                         translated_title = meta_match.group(1).strip()
         
+        # Fallback adicional: busca na meta tag og:title
+        if not translated_title:
+            og_title = doc.find('meta', property='og:title')
+            if og_title:
+                og_title_content = og_title.get('content', '')
+                if og_title_content:
+                    # Extrai o título da og:title (ex: "ZENSHU (2025) Torrent Dual Áudio Download")
+                    # Remove ano, "Torrent", "Dual Áudio", "Download" e outras informações
+                    og_title_clean = og_title_content.strip()
+                    # Remove padrões comuns: (2025), Torrent, Dual Áudio, Download
+                    og_title_clean = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*', ' ', og_title_clean)
+                    og_title_clean = re.sub(r'\s+Torrent\s+.*$', '', og_title_clean, flags=re.IGNORECASE)
+                    og_title_clean = re.sub(r'\s+Dual\s+Áudio\s+Download\s*$', '', og_title_clean, flags=re.IGNORECASE)
+                    og_title_clean = re.sub(r'\s+Download\s*$', '', og_title_clean, flags=re.IGNORECASE)
+                    og_title_clean = html.unescape(og_title_clean)
+                    og_title_clean = re.sub(r'\s+', ' ', og_title_clean).strip()
+                    if og_title_clean:
+                        translated_title = og_title_clean
+        
         # Processa o título traduzido encontrado
         if translated_title:
             # Remove "Torrent" do final
@@ -411,20 +456,9 @@ class NerdScraper(BaseScraper):
             
             sizes.extend(find_sizes_from_text(html_content))
             
-            # Extrai informação de áudio (ex: "Áudio: Português", "Áudio: Português, Multi-Áudio", "Áudio: Português, Inglês")
+            # Extrai informação de áudio usando função utilitária
             if not audio_info:
-                # Verifica se tem "Português" e também "Multi-Áudio" ou "Inglês"
-                has_portugues = re.search(r'(?i)Áudio\s*:?\s*.*Português', html_content)
-                has_multi = re.search(r'(?i)Multi-?Áudio|Multi-?Audio', html_content)
-                has_ingles = re.search(r'(?i)Inglês|Ingles|English', html_content)
-                
-                if has_portugues:
-                    if has_multi or has_ingles:
-                        # Tem português E multi-áudio/inglês = DUAL
-                        audio_info = 'dual'
-                    else:
-                        # Apenas português
-                        audio_info = 'português'
+                audio_info = detect_audio_from_html(html_content)
             
             # Extrai IMDB
             if not imdb:
@@ -489,10 +523,42 @@ class NerdScraper(BaseScraper):
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
+                # Busca dados cruzados no Redis por info_hash (fallback principal)
+                cross_data = None
+                try:
+                    from utils.text.cross_data import get_cross_data_from_redis
+                    cross_data = get_cross_data_from_redis(info_hash)
+                except Exception:
+                    pass
+                
+                # Preenche campos faltantes com dados cruzados do Redis
+                if cross_data:
+                    if not original_title and cross_data.get('original_title_html'):
+                        original_title = cross_data['original_title_html']
+                    
+                    if not translated_title and cross_data.get('translated_title_html'):
+                        translated_title = cross_data['translated_title_html']
+                    
+                    if not imdb and cross_data.get('imdb'):
+                        imdb = cross_data['imdb']
+                
                 # Extrai raw_release_title diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
                 raw_release_title = magnet_data.get('display_name', '')
                 missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                
+                # Se ainda está missing_dn, tenta buscar do cross_data
+                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
+                    raw_release_title = cross_data['release_title_magnet']
+                    missing_dn = False
+                
+                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
+                if not missing_dn and raw_release_title:
+                    try:
+                        from utils.text.text_processing import save_release_title_to_redis
+                        save_release_title_to_redis(info_hash, raw_release_title)
+                    except Exception:
+                        pass
                 
                 fallback_title = original_title if original_title else (translated_title if translated_title else page_title or '')
                 original_release_title = prepare_release_title(
@@ -504,29 +570,42 @@ class NerdScraper(BaseScraper):
                     skip_metadata=self._skip_metadata
                 )
                 
-                # Se detectou informação de áudio no HTML, adiciona ao release_title para que as tags sejam adicionadas
-                if audio_info:
-                    release_lower = original_release_title.lower()
-                    if audio_info == 'dual':
-                        # Tem português E multi-áudio/inglês = adiciona DUAL
-                        if 'dual' not in release_lower:
-                            original_release_title = f"{original_release_title} DUAL"
-                    elif audio_info == 'português':
-                        # Apenas português = adiciona PORTUGUES
-                        if 'português' not in release_lower and 'portugues' not in release_lower and 'dublado' not in release_lower and 'dual' not in release_lower:
-                            original_release_title = f"{original_release_title} PORTUGUES"
-                
                 standardized_title = create_standardized_title(
                     original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
                 )
                 
-                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL/PORTUGUES, [Eng] se LEGENDADO, ou ambos se houver os dois
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
+                # Adiciona [Brazilian], [Eng] (via HTML) e/ou [Leg] conforme detectado
+                # NÃO adiciona DUAL/PORTUGUES/LEGENDADO ao release_title - apenas passa audio_info para a função de tags
+                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata, audio_info_from_html=audio_info)
+                
+                # Determina origem_audio_tag
+                origem_audio_tag = 'N/A'
+                if audio_info:
+                    origem_audio_tag = f'HTML da página (detect_audio_from_html)'
+                elif raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
+                    origem_audio_tag = 'release_title_magnet'
+                elif missing_dn and info_hash:
+                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
                 # Extrai tamanho do magnet se disponível
                 size = ''
                 if sizes and idx < len(sizes):
                     size = sizes[idx]
+                
+                # Salva dados cruzados no Redis para reutilização por outros scrapers
+                try:
+                    from utils.text.cross_data import save_cross_data_to_redis
+                    cross_data_to_save = {
+                        'original_title_html': original_title if original_title else None,
+                        'release_title_magnet': raw_release_title if not missing_dn else None,
+                        'translated_title_html': translated_title if translated_title else None,
+                        'imdb': imdb if imdb else None,
+                        'missing_dn': missing_dn,
+                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None
+                    }
+                    save_cross_data_to_redis(info_hash, cross_data_to_save)
+                except Exception:
+                    pass
                 
                 torrent = {
                     'title': final_title,

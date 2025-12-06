@@ -12,8 +12,14 @@ from utils.text.text_processing import (
     find_year_from_text,
     find_sizes_from_text,
     format_bytes,
+    detect_audio_from_html,
     add_audio_tag_if_needed,
     check_query_match
+)
+from utils.text.cross_data import (
+    get_cross_data_from_redis,
+    save_cross_data_to_redis,
+    get_field_from_cross_data
 )
 
 __all__ = [
@@ -27,7 +33,11 @@ __all__ = [
     'find_year_from_text',
     'find_sizes_from_text',
     'format_bytes',
+    'detect_audio_from_html',
     'add_audio_tag_if_needed',
     'check_query_match',
+    'get_cross_data_from_redis',
+    'save_cross_data_to_redis',
+    'get_field_from_cross_data',
 ]
 

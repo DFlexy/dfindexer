@@ -83,3 +83,14 @@ def imdb_title_key(base_title: str) -> str:
     normalized = ' '.join(normalized.split())  # Remove espaços extras
     title_hash = hashlib.md5(normalized.encode('utf-8')).hexdigest()
     return f"imdb:title:{title_hash}"
+
+
+def release_title_key(info_hash: str) -> str:
+    # Chave Redis para release_title_magnet por info_hash
+    return f"release_title:{info_hash.lower()}"
+
+
+def torrent_cross_data_key(info_hash: str) -> str:
+    # Chave Redis Hash para dados cruzados de torrent por info_hash
+    # Armazena: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag
+    return f"torrent:cross:{info_hash.lower()}"

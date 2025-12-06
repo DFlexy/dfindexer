@@ -428,6 +428,18 @@ class BaseScraper(ABC):
             if not title or len(title.strip()) < 10:
                 info_hash = torrent.get('info_hash')
                 if info_hash:
+                    # Verifica cross_data primeiro (evita consulta desnecessária ao metadata)
+                    try:
+                        from utils.text.cross_data import get_cross_data_from_redis
+                        cross_data = get_cross_data_from_redis(info_hash)
+                        if cross_data and cross_data.get('release_title_magnet'):
+                            # Se já temos release_title_magnet no cross_data, não precisa buscar metadata
+                            # O título já foi processado corretamente durante o scraping
+                            continue
+                    except Exception:
+                        pass
+                    
+                    # Só busca metadata se não encontrou no cross_data
                     try:
                         metadata = fetch_metadata_from_itorrents(info_hash)
                         if metadata and metadata.get('name'):
@@ -466,6 +478,17 @@ class BaseScraper(ABC):
                 
                 if not info_hash:
                     return (torrent, None)
+                
+                # Verifica cross_data primeiro (evita consulta desnecessária ao metadata)
+                try:
+                    from utils.text.cross_data import get_cross_data_from_redis
+                    cross_data = get_cross_data_from_redis(info_hash)
+                    if cross_data and cross_data.get('release_title_magnet'):
+                        # Se já temos release_title_magnet no cross_data, não precisa buscar metadata
+                        # Retorna None para indicar que não precisa buscar
+                        return (torrent, None)
+                except Exception:
+                    pass
                 
                 metadata = fetch_metadata_from_itorrents(info_hash)
                 return (torrent, metadata)

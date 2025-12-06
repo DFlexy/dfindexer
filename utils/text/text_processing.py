@@ -116,10 +116,77 @@ def clean_translated_title(translated_title: str) -> str:
 
 
 # Busca o nome do torrent via metadata API quando falta display_name no magnet
+def get_release_title_from_redis(info_hash: str) -> Optional[str]:
+    """
+    Busca release_title_magnet no Redis por info_hash.
+    Retorna o release_title_magnet se encontrado, None caso contrário.
+    """
+    if not info_hash or len(info_hash) != 40:
+        return None
+    
+    try:
+        from cache.redis_client import get_redis_client
+        from cache.redis_keys import release_title_key
+        
+        redis = get_redis_client()
+        if not redis:
+            return None
+        
+        key = release_title_key(info_hash)
+        cached = redis.get(key)
+        if cached:
+            release_title = cached.decode('utf-8').strip()
+            if release_title and len(release_title) >= 3:
+                logger.debug(f"[REDIS RELEASE_TITLE] Encontrado para {info_hash[:16]}...: {release_title[:50]}")
+                return release_title
+    except Exception as e:
+        logger.debug(f"[REDIS RELEASE_TITLE] Erro ao buscar: {e}")
+    
+    return None
+
+
+def save_release_title_to_redis(info_hash: str, release_title: str) -> None:
+    """
+    Salva release_title_magnet no Redis por info_hash.
+    """
+    if not info_hash or len(info_hash) != 40:
+        return
+    
+    if not release_title or len(release_title.strip()) < 3:
+        return
+    
+    try:
+        from cache.redis_client import get_redis_client
+        from cache.redis_keys import release_title_key
+        
+        redis = get_redis_client()
+        if not redis:
+            return
+        
+        key = release_title_key(info_hash)
+        # Salva por 7 dias (mesmo TTL do metadata)
+        redis.setex(key, 7 * 24 * 3600, release_title.strip())
+        logger.debug(f"[REDIS RELEASE_TITLE] Salvo para {info_hash[:16]}...: {release_title[:50]}")
+    except Exception as e:
+        logger.debug(f"[REDIS RELEASE_TITLE] Erro ao salvar: {e}")
+
+
 def get_metadata_name(info_hash: str, skip_metadata: bool = False) -> Optional[str]:
     if skip_metadata:
         return None
     
+    # Primeiro tenta buscar do cross_data (evita consulta desnecessária ao metadata)
+    try:
+        from utils.text.cross_data import get_cross_data_from_redis
+        cross_data = get_cross_data_from_redis(info_hash)
+        if cross_data and cross_data.get('release_title_magnet'):
+            release_title = cross_data.get('release_title_magnet')
+            if release_title and release_title != 'N/A' and len(str(release_title).strip()) >= 3:
+                return str(release_title).strip()
+    except Exception:
+        pass
+    
+    # Se não encontrou no cross_data, busca do metadata
     try:
         from magnet.metadata import fetch_metadata_from_itorrents
         metadata = fetch_metadata_from_itorrents(info_hash)
@@ -179,7 +246,14 @@ def prepare_release_title(
         # Volta espaços para facilitar processamento posterior
         normalized = normalized.replace('.', ' ').strip()
 
-    # FALLBACK 1: Busca do metadata quando falta dn (apenas se não for para pular)
+    # FALLBACK 1: Busca release_title_magnet no Redis por info_hash (antes de buscar metadata)
+    if (not normalized or len(normalized) < 3) and missing_dn and info_hash:
+        redis_release_title = get_release_title_from_redis(info_hash)
+        if redis_release_title:
+            normalized = redis_release_title
+            missing_dn = False
+    
+    # FALLBACK 2: Busca do metadata quando falta dn e não encontrou no Redis (apenas se não for para pular)
     if (not normalized or len(normalized) < 3) and missing_dn and info_hash and not skip_metadata:
         metadata_name = get_metadata_name(info_hash, skip_metadata=skip_metadata)
         if metadata_name:
@@ -189,7 +263,7 @@ def prepare_release_title(
         # Em testes, não busca metadata mesmo quando falta dn
         pass
     
-    # FALLBACK 2: Título da página quando metadata não disponível
+    # FALLBACK 3: Título da página quando metadata não disponível
     if not normalized or len(normalized) < 3:
         normalized = fallback_title
         missing_dn = True
@@ -1043,61 +1117,147 @@ def format_bytes(size: int) -> str:
     return f"{value:.2f} {units[idx]}"
 
 
-# Acrescenta tags de idioma [Brazilian] e/ou [Eng] quando detectadas no release ou metadata
-def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Optional[str] = None, skip_metadata: bool = False) -> str:
+# Detecta informações de áudio a partir do HTML da página
+# Retorna: 'dual', 'português', 'legendado', ou None
+def detect_audio_from_html(html_content: str) -> Optional[str]:
+    """
+    Detecta informações de áudio a partir do conteúdo HTML.
+    
+    Args:
+        html_content: Conteúdo HTML onde buscar informações de áudio
+        
+    Returns:
+        'dual': Se tem português E multi-áudio/inglês
+        'português': Se tem apenas português
+        'legendado': Se tem apenas legendado (sem português no áudio)
+        None: Se não encontrou informações de áudio
+    """
+    if not html_content:
+        return None
+    
+    # Verifica se tem "Português" no áudio/idioma
+    has_portugues = re.search(r'(?i)(?:Áudio|Idioma)\s*:?\s*.*Português', html_content)
+    has_multi = re.search(r'(?i)Multi-?Áudio|Multi-?Audio', html_content)
+    has_ingles = re.search(r'(?i)Inglês|Ingles|English', html_content)
+    
+    # Verifica se tem "Legendado" na legenda (sem português no áudio)
+    has_legenda_legendado = re.search(r'(?i)Legenda\s*:?\s*.*Legendado', html_content)
+    has_legenda_ingles = re.search(r'(?i)Legenda\s*:?\s*.*(?:Inglês|Ingles|English)', html_content)
+    
+    # Se tem português no áudio
+    if has_portugues:
+        if has_multi or has_ingles:
+            # Tem português E multi-áudio/inglês = DUAL
+            return 'dual'
+        else:
+            # Apenas português
+            return 'português'
+    
+    # Se não tem português no áudio, mas tem legendado na legenda
+    if has_legenda_legendado or (has_legenda_ingles and not has_portugues):
+        return 'legendado'
+    
+    return None
+
+
+# Acrescenta tags de idioma [Brazilian], [Eng] e/ou [Leg] quando detectadas no release, metadata ou HTML
+def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Optional[str] = None, skip_metadata: bool = False, audio_info_from_html: Optional[str] = None) -> str:
     # Remove apenas as tags que queremos usar antes de processar
-    title = title.replace('[Brazilian]', '').replace('[Eng]', '')
+    title = title.replace('[Brazilian]', '').replace('[Eng]', '').replace('[Leg]', '')
     title = re.sub(r'\s+', ' ', title).strip()
     
     # Verifica se já tem as tags corretas no título
     has_brazilian = '[Brazilian]' in title
     has_eng = '[Eng]' in title
-    
-    # Se já tem ambas as tags, retorna
-    if has_brazilian and has_eng:
-        return title
+    has_leg = '[Leg]' in title
     
     # Tenta detectar áudio no release_title_magnet primeiro
     has_brazilian_audio = False
-    has_eng_audio = False
+    has_legendado = False
+    has_dual = False
     
     if release_title_magnet:
         release_lower = release_title_magnet.lower()
-        # Detecta português (DUAL, DUBLADO, NACIONAL, PORTUGUES, PORTUGUÊS)
-        if 'dual' in release_lower or 'dublado' in release_lower or 'nacional' in release_lower or 'portugues' in release_lower or 'português' in release_lower:
+        # Detecta DUAL (português + inglês)
+        if 'dual' in release_lower:
+            has_dual = True
+            has_brazilian_audio = True  # DUAL também indica português
+        # Detecta português (DUBLADO, NACIONAL, PORTUGUES, PORTUGUÊS)
+        elif 'dublado' in release_lower or 'nacional' in release_lower or 'portugues' in release_lower or 'português' in release_lower:
             has_brazilian_audio = True
-            # DUAL significa que tem português E inglês
-            if 'dual' in release_lower:
-                has_eng_audio = True
         # Detecta legendado (LEGENDADO, LEGENDA, LEG)
         if 'legendado' in release_lower or 'legenda' in release_lower or re.search(r'\bleg\b', release_lower):
-            has_eng_audio = True
+            has_legendado = True
     
-    # Se não encontrou no release_title_magnet e temos info_hash, tenta buscar no metadata
+    # Se não encontrou no release_title_magnet e temos info_hash, tenta buscar no cross_data primeiro (evita consulta desnecessária ao metadata)
     if info_hash and not skip_metadata:
         try:
-            from magnet.metadata import fetch_metadata_from_itorrents
-            metadata = fetch_metadata_from_itorrents(info_hash)
-            if metadata and metadata.get('name'):
-                metadata_name = metadata.get('name', '').lower()
-                # Detecta português no metadata (DUAL, DUBLADO, NACIONAL, PORTUGUES, PORTUGUÊS)
-                if not has_brazilian_audio and ('dual' in metadata_name or 'dublado' in metadata_name or 'nacional' in metadata_name or 'portugues' in metadata_name or 'português' in metadata_name):
-                    has_brazilian_audio = True
-                    # DUAL significa que tem português E inglês
-                    if 'dual' in metadata_name:
-                        has_eng_audio = True
-                # Detecta legendado no metadata
-                if not has_eng_audio and ('legendado' in metadata_name or 'legenda' in metadata_name or re.search(r'\bleg\b', metadata_name)):
-                    has_eng_audio = True
+            from utils.text.cross_data import get_cross_data_from_redis
+            cross_data = get_cross_data_from_redis(info_hash)
+            if cross_data and cross_data.get('release_title_magnet'):
+                cross_release = cross_data.get('release_title_magnet')
+                if cross_release and cross_release != 'N/A':
+                    cross_release_lower = str(cross_release).lower()
+                    # Detecta DUAL no cross_data
+                    if not has_dual and 'dual' in cross_release_lower:
+                        has_dual = True
+                        has_brazilian_audio = True  # DUAL também indica português
+                    # Detecta português no cross_data (DUBLADO, NACIONAL, PORTUGUES, PORTUGUÊS)
+                    elif not has_brazilian_audio and ('dublado' in cross_release_lower or 'nacional' in cross_release_lower or 'portugues' in cross_release_lower or 'português' in cross_release_lower):
+                        has_brazilian_audio = True
+                    # Detecta legendado no cross_data
+                    if not has_legendado and ('legendado' in cross_release_lower or 'legenda' in cross_release_lower or re.search(r'\bleg\b', cross_release_lower)):
+                        has_legendado = True
         except Exception:
             pass
+        
+        # Só busca no metadata se ainda não encontrou todas as informações necessárias
+        if not has_dual and not has_brazilian_audio and not has_legendado:
+            try:
+                from magnet.metadata import fetch_metadata_from_itorrents
+                metadata = fetch_metadata_from_itorrents(info_hash)
+                if metadata and metadata.get('name'):
+                    metadata_name = metadata.get('name', '').lower()
+                    # Detecta DUAL no metadata
+                    if not has_dual and 'dual' in metadata_name:
+                        has_dual = True
+                        has_brazilian_audio = True  # DUAL também indica português
+                    # Detecta português no metadata (DUBLADO, NACIONAL, PORTUGUES, PORTUGUÊS)
+                    elif not has_brazilian_audio and ('dublado' in metadata_name or 'nacional' in metadata_name or 'portugues' in metadata_name or 'português' in metadata_name):
+                        has_brazilian_audio = True
+                    # Detecta legendado no metadata
+                    if not has_legendado and ('legendado' in metadata_name or 'legenda' in metadata_name or re.search(r'\bleg\b', metadata_name)):
+                        has_legendado = True
+            except Exception:
+                pass
+    
+    # Processa detecção via HTML (audio_info_from_html)
+    # [Eng] só é adicionada quando detectado via HTML como 'dual' ou quando detecta DUAL em qualquer fonte
+    has_eng_from_html = False
+    if audio_info_from_html == 'dual':
+        has_dual = True
+        has_brazilian_audio = True  # DUAL também indica português
+    
+    # Se detectado via HTML como 'legendado', adiciona [Leg]
+    if audio_info_from_html == 'legendado':
+        has_legendado = True
+    
+    # Se detectado via HTML como 'português', adiciona [Brazilian]
+    if audio_info_from_html == 'português':
+        has_brazilian_audio = True
+    
+    # Se detectou DUAL (via HTML, release_title ou metadata), adiciona [Eng]
+    if has_dual:
+        has_eng_from_html = True
     
     # Adiciona tags conforme detectado
     tags_to_add = []
     if has_brazilian_audio and not has_brazilian:
         tags_to_add.append('[Brazilian]')
-    if has_eng_audio and not has_eng:
+    if has_eng_from_html and not has_eng:
         tags_to_add.append('[Eng]')
+    if has_legendado and not has_leg:
+        tags_to_add.append('[Leg]')
     
     if tags_to_add:
         title = title.rstrip()
@@ -1107,7 +1267,7 @@ def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Op
 
 
 # Confere se o resultado corresponde à busca (ignorando stop words)
-def check_query_match(query: str, title: str, original_title_html: str = '') -> bool:
+def check_query_match(query: str, title: str, original_title_html: str = '', translated_title_html: str = '') -> bool:
     if not query or not query.strip():
         return True  # Query vazia, não filtra
     
@@ -1128,8 +1288,8 @@ def check_query_match(query: str, title: str, original_title_html: str = '') -> 
     if len(clean_query_words) == 0:
         return True  # Se não tem palavras válidas, retorna True (não filtra)
     
-    # Combina título + título original para busca
-    combined_title = f"{title} {original_title_html}".lower()
+    # Combina título + título original + título traduzido para busca
+    combined_title = f"{title} {original_title_html} {translated_title_html}".lower()
     # Remove pontos e normaliza espaços
     combined_title = combined_title.replace('.', ' ')
     combined_title = re.sub(r'\s+', ' ', combined_title)
