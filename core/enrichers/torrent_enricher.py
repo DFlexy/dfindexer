@@ -116,13 +116,18 @@ class TorrentEnricher:
                     return (torrent, None)
                 
                 # Verifica cross_data primeiro (evita consulta desnecessária ao metadata)
+                # Mas só pula se já tem TUDO que precisa (release_title_magnet, size, date)
                 try:
                     from utils.text.cross_data import get_cross_data_from_redis
                     cross_data = get_cross_data_from_redis(info_hash)
-                    if cross_data and cross_data.get('release_title_magnet'):
-                        # Se já temos release_title_magnet no cross_data, não precisa buscar metadata
-                        # Retorna None para indicar que não precisa buscar
-                        return (torrent, None)
+                    if cross_data:
+                        has_release_title = cross_data.get('release_title_magnet')
+                        has_size = cross_data.get('size')
+                        # Se já temos release_title_magnet E size no cross_data, pode pular metadata
+                        # (date pode vir depois, mas não é crítico)
+                        if has_release_title and has_size:
+                            # Retorna None para indicar que não precisa buscar
+                            return (torrent, None)
                 except Exception:
                     pass
                 
@@ -163,19 +168,33 @@ class TorrentEnricher:
     
     def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         # Aplica fallbacks para tamanho
+        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        
         metadata_enabled = not skip_metadata
         
         for torrent in torrents:
             html_size = torrent.get('size', '')
+            info_hash = torrent.get('info_hash', '').lower()
             magnet_link = torrent.get('magnet_link')
             if not magnet_link:
                 continue
+            
+            # Primeiro, tenta buscar do cross-data
+            if info_hash and len(info_hash) == 40:
+                cross_data = get_cross_data_from_redis(info_hash)
+                if cross_data and cross_data.get('size'):
+                    cross_size = cross_data.get('size')
+                    if cross_size and cross_size.strip() and cross_size != 'N/A':
+                        torrent['size'] = cross_size.strip()
+                        continue
             
             magnet_data = None
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
             except Exception:
                 pass
+            
+            torrent['size'] = ''
             
             # Tentativa 1: Metadata API
             if metadata_enabled:
@@ -185,6 +204,12 @@ class TorrentEnricher:
                         formatted_size = format_bytes(size_bytes)
                         if formatted_size:
                             torrent['size'] = formatted_size
+                            # Salva no cross-data
+                            if info_hash and len(info_hash) == 40:
+                                try:
+                                    save_cross_data_to_redis(info_hash, {'size': formatted_size})
+                                except Exception:
+                                    pass
                             continue
                     except Exception:
                         pass
@@ -197,6 +222,12 @@ class TorrentEnricher:
                         formatted_size = format_bytes(int(xl))
                         if formatted_size:
                             torrent['size'] = formatted_size
+                            # Salva no cross-data
+                            if info_hash and len(info_hash) == 40:
+                                try:
+                                    save_cross_data_to_redis(info_hash, {'size': formatted_size})
+                                except Exception:
+                                    pass
                             continue
                     except Exception:
                         pass
@@ -204,6 +235,12 @@ class TorrentEnricher:
             # Tentativa 3: Tamanho do HTML (fallback final)
             if html_size:
                 torrent['size'] = html_size
+                # Salva no cross-data
+                if info_hash and len(info_hash) == 40:
+                    try:
+                        save_cross_data_to_redis(info_hash, {'size': html_size})
+                    except Exception:
+                        pass
     
     def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         # Aplica fallbacks para data
@@ -385,14 +422,29 @@ class TorrentEnricher:
     def _attach_peers(self, torrents: List[Dict]) -> None:
         # Anexa dados de peers (seeds/leechers) via trackers
         from utils.parsing.magnet_utils import extract_trackers_from_magnet
+        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
         
-        # Agrupa por info_hash para usar get_peers_bulk (mais eficiente)
+        # Primeiro, tenta buscar dados de tracker do cross-data
         infohash_map = {}
         for torrent in torrents:
             info_hash = (torrent.get('info_hash') or '').lower()
             if not info_hash or len(info_hash) != 40:
                 continue
+            if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
+                continue
             
+            # Tenta buscar do cross-data primeiro
+            cross_data = get_cross_data_from_redis(info_hash)
+            if cross_data:
+                tracker_seed = cross_data.get('tracker_seed')
+                tracker_leech = cross_data.get('tracker_leech')
+                # Se ambos estão presentes (mesmo que sejam 0), usa do cross-data para evitar scrape desnecessário
+                if tracker_seed is not None and tracker_leech is not None:
+                    torrent['seed_count'] = tracker_seed
+                    torrent['leech_count'] = tracker_leech
+                    continue
+            
+            # Se não encontrou no cross-data, adiciona para fazer scrape
             # Extrai trackers do torrent primeiro
             trackers = torrent.get('trackers') or []
             
@@ -409,7 +461,7 @@ class TorrentEnricher:
         if not infohash_map:
             return
         
-        # Busca peers em lote
+        # Faz scrape dos trackers
         try:
             peers_map = self.tracker_service.get_peers_bulk(infohash_map)
             for torrent in torrents:
@@ -422,6 +474,16 @@ class TorrentEnricher:
                     leech, seed = leech_seed
                     torrent['leech_count'] = leech
                     torrent['seed_count'] = seed
+                    
+                    # Salva no cross-data sempre que obtém dados do tracker (mesmo se 0, para evitar consultas futuras)
+                    try:
+                        cross_data_to_save = {
+                            'tracker_seed': seed,
+                            'tracker_leech': leech
+                        }
+                        save_cross_data_to_redis(info_hash, cross_data_to_save)
+                    except Exception:
+                        pass
         except Exception:
             pass
 

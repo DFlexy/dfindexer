@@ -480,13 +480,18 @@ class BaseScraper(ABC):
                     return (torrent, None)
                 
                 # Verifica cross_data primeiro (evita consulta desnecessária ao metadata)
+                # Mas só pula se já tem TUDO que precisa (release_title_magnet, size, date)
                 try:
                     from utils.text.cross_data import get_cross_data_from_redis
                     cross_data = get_cross_data_from_redis(info_hash)
-                    if cross_data and cross_data.get('release_title_magnet'):
-                        # Se já temos release_title_magnet no cross_data, não precisa buscar metadata
-                        # Retorna None para indicar que não precisa buscar
-                        return (torrent, None)
+                    if cross_data:
+                        has_release_title = cross_data.get('release_title_magnet')
+                        has_size = cross_data.get('size')
+                        # Se já temos release_title_magnet E size no cross_data, pode pular metadata
+                        # (date pode vir depois, mas não é crítico)
+                        if has_release_title and has_size:
+                            # Retorna None para indicar que não precisa buscar
+                            return (torrent, None)
                 except Exception:
                     pass
                 
@@ -530,14 +535,26 @@ class BaseScraper(ABC):
 
     def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         # Aplica fallbacks para obter tamanho do torrent
+        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        
         metadata_enabled = not skip_metadata
         
         for torrent in torrents:
             html_size = torrent.get('size', '')
+            info_hash = torrent.get('info_hash', '').lower()
             
             magnet_link = torrent.get('magnet_link')
             if not magnet_link:
                 continue
+            
+            # Primeiro, tenta buscar do cross-data
+            if info_hash and len(info_hash) == 40:
+                cross_data = get_cross_data_from_redis(info_hash)
+                if cross_data and cross_data.get('size'):
+                    cross_size = cross_data.get('size')
+                    if cross_size and cross_size.strip() and cross_size != 'N/A':
+                        torrent['size'] = cross_size.strip()
+                        continue
             
             magnet_data = None
             try:
@@ -555,20 +572,32 @@ class BaseScraper(ABC):
                         formatted_size = format_bytes(size_bytes)
                         if formatted_size:
                             torrent['size'] = formatted_size
+                            # Salva no cross-data
+                            if info_hash and len(info_hash) == 40:
+                                try:
+                                    save_cross_data_to_redis(info_hash, {'size': formatted_size})
+                                except Exception:
+                                    pass
                             continue
                     except Exception:
                         pass
                 
                 try:
                     from magnet.metadata import get_torrent_size
-                    info_hash = torrent.get('info_hash')
-                    if not info_hash and magnet_data:
-                        info_hash = magnet_data.get('info_hash')
+                    # Usa info_hash já definido (em lowercase) ou tenta extrair do magnet
+                    current_info_hash = info_hash
+                    if not current_info_hash and magnet_data:
+                        current_info_hash = (magnet_data.get('info_hash') or '').lower()
                     
-                    if info_hash:
-                        metadata_size = get_torrent_size(magnet_link, info_hash)
+                    if current_info_hash and len(current_info_hash) == 40:
+                        metadata_size = get_torrent_size(magnet_link, current_info_hash)
                         if metadata_size:
                             torrent['size'] = metadata_size
+                            # Salva no cross-data
+                            try:
+                                save_cross_data_to_redis(current_info_hash, {'size': metadata_size})
+                            except Exception:
+                                pass
                             continue
                 except Exception:
                     pass
@@ -581,6 +610,12 @@ class BaseScraper(ABC):
                             formatted_size = format_bytes(int(xl_value))
                             if formatted_size:
                                 torrent['size'] = formatted_size
+                                # Salva no cross-data
+                                if info_hash and len(info_hash) == 40:
+                                    try:
+                                        save_cross_data_to_redis(info_hash, {'size': formatted_size})
+                                    except Exception:
+                                        pass
                                 continue
                         except (ValueError, TypeError):
                             pass
@@ -639,6 +674,10 @@ class BaseScraper(ABC):
     def _attach_peers(self, torrents: List[Dict]) -> None:
         if not self.tracker_service:
             return
+        
+        # Primeiro, tenta buscar dados de tracker do cross-data
+        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        
         infohash_map: Dict[str, List[str]] = {}
         for torrent in torrents:
             info_hash = (torrent.get('info_hash') or '').lower()
@@ -646,12 +685,47 @@ class BaseScraper(ABC):
                 continue
             if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
                 continue
+            
+            # Tenta buscar do cross-data primeiro
+            cross_data = get_cross_data_from_redis(info_hash)
+            if cross_data:
+                tracker_seed = cross_data.get('tracker_seed')
+                tracker_leech = cross_data.get('tracker_leech')
+                # Se ambos estão presentes (mesmo que sejam 0), usa do cross-data para evitar scrape desnecessário
+                if tracker_seed is not None and tracker_leech is not None:
+                    torrent['seed_count'] = tracker_seed
+                    torrent['leech_count'] = tracker_leech
+                    continue
+            
+            # Se não encontrou no cross-data, adiciona para fazer scrape
             trackers = torrent.get('trackers') or []
-            infohash_map.setdefault(info_hash, [])
-            infohash_map[info_hash].extend(trackers)
+            
+            # Se não tem trackers no torrent, tenta extrair do magnet_link
+            if not trackers:
+                magnet_link = torrent.get('magnet_link')
+                if magnet_link:
+                    try:
+                        from utils.parsing.magnet_utils import extract_trackers_from_magnet
+                        trackers = extract_trackers_from_magnet(magnet_link)
+                    except Exception:
+                        pass
+            
+            # Adiciona para fazer scrape (mesmo se trackers estiver vazio, o TrackerService usa lista dinâmica)
+            if info_hash:
+                infohash_map.setdefault(info_hash, [])
+                if trackers:
+                    infohash_map[info_hash].extend(trackers)
+                # Se não tem trackers, adiciona mesmo assim (TrackerService usará lista dinâmica)
+                elif info_hash not in infohash_map or not infohash_map[info_hash]:
+                    infohash_map[info_hash] = []
+        
         if not infohash_map:
             return
+        
+        # Faz scrape dos trackers
         peers_map = self.tracker_service.get_peers_bulk(infohash_map)
+        
+        # Atualiza torrents e salva no cross-data
         for torrent in torrents:
             info_hash = (torrent.get('info_hash') or '').lower()
             if not info_hash:
@@ -662,4 +736,16 @@ class BaseScraper(ABC):
             leech, seed = leech_seed
             torrent['leech_count'] = leech
             torrent['seed_count'] = seed
+            
+            # Salva no cross-data sempre que obtém dados do tracker (mesmo se 0, para evitar consultas futuras)
+            # Isso permite que outros scrapers reutilizem o resultado (0 ou não)
+            try:
+                cross_data_to_save = {
+                    'tracker_seed': seed,
+                    'tracker_leech': leech
+                }
+                save_cross_data_to_redis(info_hash, cross_data_to_save)
+            except Exception as e:
+                # Log silencioso - não queremos interromper o processamento por erro no cross-data
+                logger.debug(f"Erro ao salvar tracker no cross-data para {info_hash[:16]}...: {e}")
 

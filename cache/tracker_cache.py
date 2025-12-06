@@ -58,8 +58,9 @@ class TrackerCache:
                 self.redis.hset(key, 'peers', json.dumps(tracker_data, separators=(',', ':')))
                 self.redis.hset(key, 'last_scrape', str(int(time.time())))
                 self.redis.hset(key, 'created', str(int(time.time())))
-                # Define TTL no hash inteiro (7 dias = 604800s)
-                self.redis.expire(key, 7 * 24 * 3600)
+                # Define TTL no hash inteiro (24 horas = 86400s)
+                # Dados de tracker mudam frequentemente, então TTL menor é mais apropriado
+                self.redis.expire(key, 24 * 3600)
                 return
             except Exception:
                 # Se Redis falhou durante operação, não salva em memória

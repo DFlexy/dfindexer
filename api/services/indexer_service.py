@@ -38,7 +38,7 @@ class IndexerService:
         self.enricher = TorrentEnricher()
         self.processor = TorrentProcessor()
     
-    # Busca torrents por query
+        # Busca torrents por query
     def search(self, scraper_type: str, query: str, use_flaresolverr: bool = False, filter_results: bool = False) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
@@ -73,7 +73,7 @@ class IndexerService:
     def get_last_filter_stats(self):
         return self.enricher._last_filter_stats if hasattr(self.enricher, '_last_filter_stats') else None
     
-    # Obtém torrents de uma página
+        # Obtém torrents de uma página
     def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         

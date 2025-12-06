@@ -12,7 +12,7 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
     """
     Busca dados cruzados no Redis por info_hash.
     Retorna um dicionário com os campos disponíveis ou None se não encontrado.
-    Campos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag
+    Campos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
     """
     if not info_hash or len(info_hash) != 40:
         return None
@@ -40,6 +40,12 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
             # Converte tipos específicos
             if field_str == 'missing_dn':
                 result[field_str] = value_str.lower() == 'true'
+            elif field_str in ('tracker_seed', 'tracker_leech'):
+                # Converte para inteiro
+                try:
+                    result[field_str] = int(value_str) if value_str and value_str != 'N/A' else 0
+                except (ValueError, TypeError):
+                    result[field_str] = 0
             else:
                 result[field_str] = value_str if value_str and value_str != 'N/A' else None
         
@@ -54,7 +60,7 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
 def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
     """
     Salva dados cruzados no Redis por info_hash.
-    Campos aceitos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag
+    Campos aceitos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
     """
     if not info_hash or len(info_hash) != 40:
         return
@@ -79,17 +85,31 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
             'translated_title_html',
             'imdb',
             'missing_dn',
-            'origem_audio_tag'
+            'origem_audio_tag',
+            'tracker_seed',
+            'tracker_leech',
+            'size'
         ]
         
         # Prepara dados para salvar (apenas campos válidos e não vazios)
         to_save = {}
         for field in allowed_fields:
             value = data.get(field)
-            if value is not None and value != '' and value != 'N/A':
+            # Para campos de tracker, aceita 0 também (para evitar consultas futuras)
+            if field in ('tracker_seed', 'tracker_leech'):
+                if value is not None and value != '' and value != 'N/A':
+                    # Aceita int (incluindo 0) ou string que representa número
+                    if isinstance(value, int):
+                        to_save[field] = str(value)  # Salva mesmo se for 0
+                    elif isinstance(value, str) and value.strip().isdigit():
+                        to_save[field] = value.strip()  # Salva string numérica
+            elif value is not None and value != '' and value != 'N/A':
                 # Converte boolean para string
                 if isinstance(value, bool):
                     to_save[field] = 'true' if value else 'false'
+                # Converte inteiros para string
+                elif isinstance(value, int):
+                    to_save[field] = str(value)
                 else:
                     value_str = str(value).strip()
                     if value_str and len(value_str) >= 1:  # Aceita valores com pelo menos 1 caractere
@@ -100,8 +120,23 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         
         # Salva no hash Redis
         redis.hset(key, mapping=to_save)
-        # Define TTL de 7 dias
-        redis.expire(key, 7 * 24 * 3600)
+        
+        # Define TTL: se contém dados de tracker, usa TTL menor (24h), senão usa 7 dias
+        has_tracker_data = 'tracker_seed' in to_save or 'tracker_leech' in to_save
+        
+        # Verifica se a chave já existe e qual TTL atual
+        current_ttl = redis.ttl(key)
+        
+        if has_tracker_data:
+            # TTL de 24h para dados de tracker (mudam frequentemente)
+            # Se já existe e tem TTL maior, reduz para 24h
+            if current_ttl == -1 or current_ttl > 24 * 3600:
+                redis.expire(key, 24 * 3600)
+        else:
+            # TTL de 7 dias para outros campos (mais estáveis)
+            # Só define se a chave não existe ou está expirando em menos de 7 dias
+            if current_ttl == -1 or current_ttl < 7 * 24 * 3600:
+                redis.expire(key, 7 * 24 * 3600)
     except Exception:
         pass
 

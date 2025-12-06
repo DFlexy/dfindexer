@@ -333,7 +333,8 @@ class RedeScraper(BaseScraper):
                         'translated_title_html': translated_title if translated_title else None,
                         'imdb': imdb if imdb else None,
                         'missing_dn': missing_dn,
-                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None
+                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
+                        'size': size if size and size.strip() else None
                     }
                     save_cross_data_to_redis(info_hash, cross_data_to_save)
                 except Exception:
