@@ -27,12 +27,6 @@ services:
     image: ghcr.io/dflexy/dfindexer:latest
     container_name: dfindexer
     restart: unless-stopped
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 1.1.1.1
-    dns_search:
-      - .
     networks:
       net-dfindexer:
         ipv4_address: 172.50.0.102
