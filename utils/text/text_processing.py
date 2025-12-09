@@ -207,10 +207,28 @@ def prepare_release_title(
     info_hash: Optional[str] = None,
     skip_metadata: bool = False
 ) -> str:
+    """
+    Prepara o release_title_magnet seguindo o fluxograma correto:
+    1. Se release_title_magnet existe e tem >= 3 caracteres: normaliza e usa diretamente (missing_dn permanece False)
+    2. Se release_title_magnet está vazio/curto E missing_dn = True: busca metadata, depois fallback
+    3. Se release_title_magnet está vazio/curto E missing_dn = False: usa fallback_title
+    4. Adiciona ano apenas se fornecido e não estiver no título
+    5. Adiciona WEB-DL apenas se missing_dn = True após TODO o processamento
+    """
+    logger.debug(f"[prepare_release_title] ENTRADA: release_title_magnet='{release_title_magnet[:50]}...', fallback_title='{fallback_title[:50]}...', year='{year}', missing_dn={missing_dn}, info_hash={info_hash[:16] if info_hash else None}...")
+    
     fallback_title = (fallback_title or '').strip()
+    original_release_title = None
+    final_missing_dn = missing_dn  # Mantém o estado original de missing_dn
 
-    normalized = (release_title_magnet or '').strip()
-    if normalized:
+    # ETAPA 1: release_title_magnet está vazio ou muito curto (< 3 caracteres)?
+    release_title_magnet = (release_title_magnet or '').strip()
+    
+    if release_title_magnet and len(release_title_magnet) >= 3:
+        # SIM: release_title_magnet existe e tem >= 3 caracteres
+        logger.debug(f"[prepare_release_title] ETAPA 1: release_title_magnet válido (len={len(release_title_magnet)}) - normalizando e usando diretamente")
+        # Normalizar (unescape, unquote, remover duplicações) e usar diretamente
+        normalized = release_title_magnet
         normalized = html.unescape(normalized)
         try:
             normalized = unquote(normalized)
@@ -218,7 +236,7 @@ def prepare_release_title(
             pass
         normalized = normalized.strip()
         
-        # Remove duplicações consecutivas do release_title_magnet antes de processar
+        # Remove duplicações consecutivas do release_title_magnet
         # Ex: "S01E04.S01E04.2025..." -> "S01E04.2025..."
         # Normaliza espaços para pontos para facilitar detecção de duplicações
         temp_normalized = re.sub(r'\s+', '.', normalized.strip())
@@ -240,47 +258,104 @@ def prepare_release_title(
                 cleaned_parts.append(part)
                 prev_part = part
         
-        normalized = '.'.join(cleaned_parts).strip('.')
-        # Volta espaços para facilitar processamento posterior
-        normalized = normalized.replace('.', ' ').strip()
+        original_release_title = '.'.join(cleaned_parts).strip('.')
+        # IMPORTANTE: Como release_title_magnet existe e tem >= 3 caracteres, missing_dn = False
+        final_missing_dn = False
+        logger.debug(f"[prepare_release_title] ETAPA 1: Normalizado -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+        # Preserva pontos - create_standardized_title precisa deles para parsing
+        # → Ir direto para etapa 5 (adicionar ano se necessário)
+    else:
+        # NÃO: release_title_magnet está vazio ou muito curto
+        logger.debug(f"[prepare_release_title] ETAPA 1: release_title_magnet vazio/curto (len={len(release_title_magnet) if release_title_magnet else 0}), missing_dn={missing_dn}")
+        if missing_dn:
+            # missing_dn = True: buscar metadata, depois fallback
+            if info_hash:
+                # Busca metadata do iTorrents.org usando info_hash
+                if not skip_metadata:
+                    logger.debug(f"[prepare_release_title] ETAPA 2-3: Buscando metadata para info_hash={info_hash[:16]}...")
+                    metadata_name = get_metadata_name(info_hash, skip_metadata=skip_metadata)
+                    if metadata_name and len(metadata_name.strip()) >= 3:
+                        # Metadata encontrado: usa metadata como original_release_title
+                        # NOTA: Se metadata contém DUAL/DUBLADO/LEGENDADO, eles serão removidos do título final
+                        # em add_audio_tag_if_needed() quando as tags [Brazilian], [Eng] ou [Leg] forem adicionadas
+                        original_release_title = metadata_name.strip()
+                        final_missing_dn = False  # Encontrou metadata, não está mais missing
+                        logger.debug(f"[prepare_release_title] ETAPA 2-3: Metadata encontrado -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+                        # → Ir para etapa 5
+                    else:
+                        # Metadata não encontrado: usa fallback_title
+                        original_release_title = fallback_title
+                        final_missing_dn = True  # Continua missing
+                        logger.debug(f"[prepare_release_title] ETAPA 2-3: Metadata NÃO encontrado, usando fallback -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+                        # → Ir para etapa 5
+                else:
+                    # skip_metadata = True: pula metadata, usa fallback
+                    original_release_title = fallback_title
+                    final_missing_dn = True  # Continua missing
+                    logger.debug(f"[prepare_release_title] ETAPA 2-3: skip_metadata=True, usando fallback -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+                    # → Ir para etapa 5
+            else:
+                # Sem info_hash: usa fallback_title
+                original_release_title = fallback_title
+                final_missing_dn = True  # Continua missing
+                logger.debug(f"[prepare_release_title] ETAPA 2-3: Sem info_hash, usando fallback -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+                # → Ir para etapa 5
+        else:
+            # missing_dn = False: usa fallback_title diretamente
+            original_release_title = fallback_title
+            final_missing_dn = False  # Não está missing, apenas usando fallback
+            logger.debug(f"[prepare_release_title] ETAPA 2-3: missing_dn=False, usando fallback -> '{original_release_title[:80]}...', final_missing_dn={final_missing_dn}")
+            # → Ir para etapa 5
 
-    # FALLBACK 1: Busca release_title_magnet no Redis por info_hash (antes de buscar metadata)
-    if (not normalized or len(normalized) < 3) and missing_dn and info_hash:
-        redis_release_title = get_release_title_from_redis(info_hash)
-        if redis_release_title:
-            normalized = redis_release_title
-            missing_dn = False
-    
-    # FALLBACK 2: Busca do metadata quando falta dn e não encontrou no Redis (apenas se não for para pular)
-    if (not normalized or len(normalized) < 3) and missing_dn and info_hash and not skip_metadata:
-        metadata_name = get_metadata_name(info_hash, skip_metadata=skip_metadata)
-        if metadata_name:
-            normalized = metadata_name
-            missing_dn = False
-    elif skip_metadata and (not normalized or len(normalized) < 3) and missing_dn and info_hash:
-        # Em testes, não busca metadata mesmo quando falta dn
-        pass
-    
-    # FALLBACK 3: Título da página quando metadata não disponível
-    if not normalized or len(normalized) < 3:
-        normalized = fallback_title
-        missing_dn = True
+    # Garante que original_release_title não está vazio
+    if not original_release_title or len(original_release_title.strip()) < 3:
+        original_release_title = fallback_title
+        final_missing_dn = True
 
-    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    # Normaliza espaços múltiplos, mas preserva pontos
+    if '.' in original_release_title:
+        # Tem pontos - normaliza apenas espaços múltiplos entre palavras (não entre pontos)
+        original_release_title = re.sub(r'\s+', ' ', original_release_title)
+        # Remove espaços ao redor de pontos
+        original_release_title = re.sub(r'\s*\.\s*', '.', original_release_title)
+    else:
+        # Não tem pontos - normaliza espaços
+        original_release_title = re.sub(r'\s+', ' ', original_release_title).strip()
 
+    # ETAPA 5: O ano (year) foi fornecido e NÃO está no título?
     if year:
         year_str = str(year)
-        if year_str and year_str not in normalized:
-            normalized = f"{normalized} {year_str}".strip()
+        if year_str and year_str not in original_release_title:
+            # Adiciona ano ao final
+            if '.' in original_release_title:
+                original_release_title = f"{original_release_title}.{year_str}".strip()
+            else:
+                original_release_title = f"{original_release_title} {year_str}".strip()
+            logger.debug(f"[prepare_release_title] ETAPA 5: Ano '{year_str}' adicionado -> '{original_release_title[:80]}...'")
+        else:
+            logger.debug(f"[prepare_release_title] ETAPA 5: Ano '{year_str}' já presente ou vazio, não adicionado")
 
-    if missing_dn and normalized and 'web-dl' not in normalized.lower():
-        normalized = f"{normalized} WEB-DL"
+    # ETAPA 6: missing_dn = True após todo processamento?
+    if final_missing_dn and original_release_title and 'web-dl' not in original_release_title.lower():
+        # Adiciona WEB-DL ao final
+        if '.' in original_release_title:
+            original_release_title = f"{original_release_title}.WEB-DL".strip()
+        else:
+            original_release_title = f"{original_release_title} WEB-DL".strip()
+        logger.debug(f"[prepare_release_title] ETAPA 6: WEB-DL adicionado (final_missing_dn=True) -> '{original_release_title[:80]}...'")
+    else:
+        logger.debug(f"[prepare_release_title] ETAPA 6: WEB-DL não adicionado (final_missing_dn={final_missing_dn}, já_tem_webdl={'web-dl' in original_release_title.lower() if original_release_title else False})")
 
-    return normalized.strip()
+    result = original_release_title.strip()
+    logger.debug(f"[prepare_release_title] SAÍDA: '{result[:100]}...'")
+    return result
 
 
 # Constrói o título padronizado final (Title.SxxEyy.Year….)
 def create_standardized_title(original_title_html: str, year: str, release_title_magnet: str, translated_title_html: Optional[str] = None, raw_release_title_magnet: Optional[str] = None) -> str:
+    # Log resumido apenas na entrada
+    logger.debug(f"[create_standardized_title] ENTRADA: year='{year}', has_original={bool(original_title_html)}, has_release={bool(release_title_magnet)}, has_raw={bool(raw_release_title_magnet)}")
+    
     def finalize_title(value: str) -> str:
         value = _apply_season_temporada_tags(value, release_title_magnet, original_title_html, year)
         value = _reorder_title_components(value)
@@ -335,10 +410,25 @@ def create_standardized_title(original_title_html: str, year: str, release_title
     else:
         # Fallback2: Nome do magnet se página não tem título válido
         base_title = _extract_base_title_from_release(release_title_magnet)
-        return finalize_title(base_title)
+        result = finalize_title(base_title)
+        logger.debug(f"[create_standardized_title] SAÍDA: '{result[:100]}...'")
+        return result
     
     # Processa release_title_magnet para extrair apenas informações técnicas (SxxExx, Sx, ano, qualidade, codec, etc.)
-    clean_release = clean_title(release_title_magnet)
+    # IMPORTANTE: Se raw_release_title_magnet está disponível e tem pontos, usa ele diretamente
+    # Isso preserva a estrutura original do título do magnet/Redis
+    # Prefere raw_release_title_magnet quando disponível porque preserva a estrutura original
+    if raw_release_title_magnet and raw_release_title_magnet.strip():
+        # Usa raw_release_title_magnet se disponível (vem do magnet/Redis com estrutura preservada)
+        clean_release = clean_title(raw_release_title_magnet)
+    elif release_title_magnet and release_title_magnet.strip():
+        # Usa release_title_magnet (resultado de prepare_release_title) como fallback
+        clean_release = clean_title(release_title_magnet)
+    else:
+        # Se ambos estão vazios, retorna apenas base_title
+        result = finalize_title(base_title)
+        logger.debug(f"[create_standardized_title] SAÍDA: '{result[:100]}...'")
+        return result
     clean_release = remove_accents(clean_release)
     
     # Remove o base_title do clean_release antes de processar (evita duplicação)
@@ -363,7 +453,16 @@ def create_standardized_title(original_title_html: str, year: str, release_title
             # IMPORTANTE: Remove o base_title e qualquer ponto que o segue, mas preserva o que vem depois
             # Ex: "One.Punch.Man.S03E01" -> "S03E01"
             # Ex: "OnePunchManS03E01" -> "S03E01"
-            clean_release = re.sub(rf'^{base_pattern}(?:\.|(?=S\d)|(?=\d)|$)', '', clean_release, flags=re.IGNORECASE)
+            # Ex: "Paradise.2025.S01E01" -> "2025.S01E01" (preserva o ano)
+            # Remove base_title seguido de ponto (ou colado a SxxExx/números)
+            # Mas preserva o que vem depois do ponto
+            match = re.match(rf'^{base_pattern}(\.)', clean_release, flags=re.IGNORECASE)
+            if match:
+                # Remove base_title e o ponto que o segue
+                clean_release = clean_release[match.end():]
+            else:
+                # Tenta remover se estiver colado (sem ponto)
+                clean_release = re.sub(rf'^{base_pattern}(?=S\d|(?<!\d)\d)', '', clean_release, flags=re.IGNORECASE)
         
         # Limpa pontos duplicados que podem ter ficado
         clean_release = re.sub(r'^\.+', '', clean_release)
@@ -451,6 +550,14 @@ def create_standardized_title(original_title_html: str, year: str, release_title
                 episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
                 season_ep_str = f"S{season}E{episode_str}"
             
+            # Extrai o ano que pode estar antes do SxxExx
+            year_from_release = None
+            text_before_season = clean_release[:season_ep_multi_match.start()]
+            if text_before_season:
+                year_match = re.search(r'(19|20)\d{2}', text_before_season)
+                if year_match:
+                    year_from_release = year_match.group(0)
+            
             # Normaliza espaços para pontos no restante (após SxxExxExx...)
             original_magnet_text = clean_release[season_ep_multi_match.end():]
             original_magnet_text = re.sub(r'\s+', '.', original_magnet_text)
@@ -461,7 +568,12 @@ def create_standardized_title(original_title_html: str, year: str, release_title
             
             processed_magnet_text = _extract_technical_info(original_magnet_text)
             processed_magnet_text = _clean_remaining(processed_magnet_text)
-            result = finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
+            
+            # Monta o título: base_title + ano (se encontrado) + season_ep + informações técnicas
+            if year_from_release:
+                result = finalize_title(f"{base_title}.{year_from_release}.{season_ep_str}{processed_magnet_text}")
+            else:
+                result = finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
             
             return result
     
@@ -470,8 +582,8 @@ def create_standardized_title(original_title_html: str, year: str, release_title
     clean_release = re.sub(r'\.{2,}', '.', clean_release)
     clean_release = clean_release.strip('.')
     
-    # Separa componentes técnicos colados antes de processar
-    clean_release = _split_technical_components(clean_release)
+    # IMPORTANTE: NÃO chama _split_technical_components aqui porque quebra S01E01 em S01E.01
+    # _split_technical_components só deve ser chamada no texto APÓS S01E01, não no clean_release completo
     
     # EPISÓDIOS MÚLTIPLOS: detecta após normalizar também
     # Regex para detectar múltiplos episódios após normalização
@@ -520,13 +632,26 @@ def create_standardized_title(original_title_html: str, year: str, release_title
                 episode_str = '-'.join(str(ep).zfill(2) for ep in episodes)
                 season_ep_str = f"S{season}E{episode_str}"
             
+            # Extrai o ano que pode estar antes do SxxExx
+            year_from_release = None
+            text_before_season = clean_release[:season_ep_multi_match.start()]
+            if text_before_season:
+                year_match = re.search(r'(19|20)\d{2}', text_before_season)
+                if year_match:
+                    year_from_release = year_match.group(0)
+            
             # Extrai apenas informações técnicas do restante (após SxxExxExx...)
             original_magnet_text = clean_release[season_ep_multi_match.end():]
             # Separa componentes colados antes de extrair informações técnicas
             original_magnet_text = _split_technical_components(original_magnet_text)
             processed_magnet_text = _extract_technical_info(original_magnet_text)
             processed_magnet_text = _clean_remaining(processed_magnet_text)
-            result = finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
+            
+            # Monta o título: base_title + ano (se encontrado) + season_ep + informações técnicas
+            if year_from_release:
+                result = finalize_title(f"{base_title}.{year_from_release}.{season_ep_str}{processed_magnet_text}")
+            else:
+                result = finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
             
             return result
     
@@ -538,13 +663,26 @@ def create_standardized_title(original_title_html: str, year: str, release_title
         episode = season_ep_match.group(2).zfill(2)  # 2 dígitos
         season_ep_str = f"S{season}E{episode}"
         
+        # Extrai o ano que pode estar antes do SxxExx
+        year_from_release = None
+        text_before_season = clean_release[:season_ep_match.start()]
+        if text_before_season:
+            year_match = re.search(r'(19|20)\d{2}', text_before_season)
+            if year_match:
+                year_from_release = year_match.group(0)
+        
         # Extrai apenas informações técnicas do restante (após SxxExx)
         original_magnet_text = clean_release[season_ep_match.end():]
         # Separa componentes colados antes de extrair informações técnicas
         original_magnet_text = _split_technical_components(original_magnet_text)
         processed_magnet_text = _extract_technical_info(original_magnet_text)
         processed_magnet_text = _clean_remaining(processed_magnet_text)
-        return finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
+        
+        # Monta o título: base_title + ano (se encontrado) + season_ep + informações técnicas
+        if year_from_release:
+            return finalize_title(f"{base_title}.{year_from_release}.{season_ep_str}{processed_magnet_text}")
+        else:
+            return finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
     
     # Extrai apenas informações técnicas do release_title_magnet, removendo qualquer título
     # Padrões técnicos: Sx, anos, qualidades, codecs, etc.
@@ -594,10 +732,25 @@ def create_standardized_title(original_title_html: str, year: str, release_title
     clean_release = '.'.join(technical_parts)
     
     # SÉRIES COMPLETAS: Title.S2.2022.restodomagnet (1 dígito para temporada)
-    season_only_match = re.search(r'(?i)S(\d{1,2})(?:[^E]|$)', clean_release)
+    # IMPORTANTE: Não faz match se houver E seguido de dígitos logo depois (ex: S01E01)
+    season_only_match = re.search(r'(?i)S(\d{1,2})(?![E\d])(?:[^E]|$)', clean_release)
     if season_only_match:
-        season = season_only_match.group(1).zfill(2)
-        season_str = f"S{season}"
+        season_num_raw = season_only_match.group(1)
+        # IMPORTANTE: Valida que o número da temporada é válido (maior que 0)
+        # Evita gerar S00 incorretamente
+        try:
+            season_num = int(season_num_raw)
+            if season_num <= 0:
+                # Número inválido, não processa como temporada
+                season_only_match = None
+            else:
+                season = season_num_raw.zfill(2)
+                season_str = f"S{season}"
+        except (ValueError, TypeError):
+            # Não é um número válido, não processa como temporada
+            season_only_match = None
+    
+    if season_only_match:
         
         # Procura ano no release ou usa year do parâmetro
         year_from_release = year
@@ -709,15 +862,30 @@ def _split_technical_components(text: str) -> str:
     if not text:
         return text
     
+    # IMPORTANTE: Preserva padrões já corretos como S01E01, S01, 1080p, etc.
+    # Se o texto já contém esses padrões corretos e está bem formatado, não processa
+    if re.search(r'(?i)S\d{1,2}(?:E\d{1,2})?', text):
+        # Verifica se o texto já está bem formatado (com pontos separando componentes)
+        # Se S01E01, S01 e 1080p já estão separados por pontos, não processa
+        if (re.search(r'(?i)\.S\d{1,2}E\d{1,2}\.', text) or 
+            re.search(r'(?i)\.S\d{1,2}(?![E\d])\.', text) or 
+            re.search(r'(?i)\.\d{3,4}p\.', text)):
+            # Verifica se há componentes realmente colados que precisam ser separados
+            # Se não houver componentes colados (sem espaço entre eles), não processa
+            if not re.search(r'(?i)(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|CAMRip|CAM|TSRip|TS|TC|R5|SCR|DVDScr)(1080p|720p|2160p|480p|4K|UHD|FHD|HD|SD|HDR|x264|x265|H\.264|H\.265|AVC|HEVC)', text):
+                # Se não há componentes colados, retorna sem processar para preservar S01E01, S01 e 1080p
+                return text
+    
     # Se já tem pontos suficientes, verifica se precisa processar
     if '.' in text:
         parts = text.split('.')
-        # Se já tem mais de 2 partes separadas, provavelmente já está bem formatado
+        # Se já tem mais de 2 partes separadas, verifica se precisa processar
         if len(parts) >= 3:
-            # Verifica se alguma parte tem componentes colados
+            # Verifica se alguma parte tem componentes colados OU hífens (que precisam ser separados)
             has_colados = any(
-                re.search(r'(WEB-DL|WEBRip|1080p|720p|x264|x265|LEGENDADO|DUAL)', part, re.IGNORECASE) 
-                and len(part) > 10  # Partes muito longas provavelmente têm componentes colados
+                (re.search(r'(WEB-DL|WEBRip|1080p|720p|x264|x265|LEGENDADO|DUAL)', part, re.IGNORECASE) 
+                 and len(part) > 10)  # Partes muito longas provavelmente têm componentes colados
+                or '-' in part  # Partes com hífens precisam ser processadas (ex: x265-ELiTE)
                 for part in parts
             )
             if not has_colados:
@@ -725,28 +893,78 @@ def _split_technical_components(text: str) -> str:
     
     result = text
     
+    # IMPORTANTE: Preserva anos completos e padrões S01, S02, etc. ANTES de qualquer processamento
+    # Substitui temporariamente por marcadores para evitar que sejam quebrados
+    year_placeholders = {}
+    season_placeholders = {}
+    year_counter = 0
+    season_counter = 0
+    
+    def replace_year(match):
+        nonlocal year_counter
+        year = match.group(0)
+        placeholder = f'__YEAR_{year_counter}__'
+        year_placeholders[placeholder] = year
+        year_counter += 1
+        return placeholder
+    
+    def replace_season(match):
+        nonlocal season_counter
+        season = match.group(0)
+        placeholder = f'__SEASON_{season_counter}__'
+        season_placeholders[placeholder] = season
+        season_counter += 1
+        return placeholder
+    
+    # Preserva padrões S01, S02, etc. (temporadas completas) antes de processar
+    # IMPORTANTE: Não preserva S01E01 (isso é episódio, não temporada completa)
+    result = re.sub(r'\bS(\d{1,2})(?![E\d])\b', replace_season, result, flags=re.IGNORECASE)
+    
+    # Preserva anos completos (2021, 2023, 2024, etc.) antes de processar
+    result = re.sub(r'\b(19|20)\d{2}\b', replace_year, result)
+    
+    # Primeiro, separa codecs seguidos de hífens e release groups (ex: x265-ELiTE -> x265.-ELiTE)
+    # Isso garante que codecs sejam separados corretamente mesmo quando seguidos de hífens
+    # O hífen será substituído por ponto depois em _extract_technical_info
+    result = re.sub(r'(?<!\.)(x264|x265|H\.264|H\.265|AVC|HEVC)(?=-)', r'\1.', result, flags=re.IGNORECASE)
+    
     # Padrões técnicos conhecidos (em ordem de prioridade - mais específicos primeiro)
     # Usa lookbehind/lookahead negativo para evitar adicionar pontos onde já existem
     patterns = [
         # Fontes (devem vir antes de qualidades para evitar conflito com "WEB")
         (r'(?<!\.)(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|CAMRip|CAM|TSRip|TS|TC|R5|SCR|DVDScr)(?!\.)', r'.\1.', re.IGNORECASE),
         # Qualidades (deve vir depois de fontes para evitar conflito)
-        (r'(?<!\.)(2160p|1080p|720p|480p|4K|UHD|FHD|HD|SD|HDR)(?!\.)', r'.\1.', re.IGNORECASE),
-        # Codecs
+        # IMPORTANTE: Não adiciona pontos se já está separado por ponto (ex: .1080p. já está correto)
+        (r'(?<!\.)(?<!E)(2160p|1080p|720p|480p|4K|UHD|FHD|HD|SD|HDR)(?!\.)', r'.\1.', re.IGNORECASE),
+        # Codecs (já processados acima, mas mantém para casos sem hífen)
         (r'(?<!\.)(x264|x265|H\.264|H\.265|AVC|HEVC)(?!\.)', r'.\1.', re.IGNORECASE),
         # Áudio
         (r'(?<!\.)(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado|DTS-HD|TrueHD)(?!\.)', r'.\1.', re.IGNORECASE),
         # Formatos
         (r'(?<!\.)(MKV|MP4|AVI|MPEG|MOV)(?!\.)', r'.\1.', re.IGNORECASE),
-        # Anos (deve vir antes de números decimais para evitar conflito)
-        (r'(?<!\.)((19|20)\d{2})(?!\.)', r'.\1.', re.IGNORECASE),
-        # Áudio específico (5.1, 2.0, 7.1) - cuidado para não quebrar anos
+        # Formatos de áudio com versão: AAC2.0, AC35.1, DTS5.1, etc. (ANTES de separar números decimais genéricos)
+        (r'(?<!\.)(AAC|AC3|DTS|DDP)\d+\.\d+(?!\.)', r'.\1.', re.IGNORECASE),
+        # Áudio específico (5.1, 2.0, 7.1) - cuidado para não quebrar anos ou formatos de áudio
         (r'(?<!\.)(\d+\.\d+)(?!\.)(?!\d)', r'.\1.', re.IGNORECASE),
     ]
     
     # Aplica cada padrão para separar componentes colados
     for pattern, replacement, flags in patterns:
         result = re.sub(pattern, replacement, result, flags=flags)
+    
+    # Restaura temporadas preservadas
+    for placeholder, season in season_placeholders.items():
+        result = result.replace(placeholder, season)
+    
+    # Restaura anos completos preservados
+    for placeholder, year in year_placeholders.items():
+        result = result.replace(placeholder, year)
+    
+    # Adiciona pontos ao redor das temporadas se necessário (após restaurar)
+    result = re.sub(r'(?<!\.)(S\d{1,2})(?![E\d])(?!\.)', r'.\1.', result, flags=re.IGNORECASE)
+    
+    # Adiciona pontos ao redor dos anos se necessário (após restaurar)
+    result = re.sub(r'(?<!\.)((19|20)\d{2})(?!\.)', r'.\1.', result)
     
     # Limpa pontos duplicados e normaliza
     result = re.sub(r'\.{2,}', '.', result)
@@ -762,6 +980,18 @@ def _extract_technical_info(text: str) -> str:
     
     # Normaliza espaços para pontos
     text = re.sub(r'\s+', '.', text)
+    
+    # IMPORTANTE: Processa WEB-DL e outros padrões com hífen ANTES de substituir todos os hífens
+    # Isso garante que WEB-DL seja reconhecido corretamente
+    # Substitui hífens em padrões técnicos específicos por um marcador temporário
+    text = re.sub(r'(WEB-DL|DTS-HD)', lambda m: m.group(1).replace('-', '___HYPHEN___'), text, flags=re.IGNORECASE)
+    
+    # Substitui hífens restantes por pontos para separar grupos (ex: x265-ELiTE -> x265.ELiTE)
+    text = text.replace('-', '.')
+    
+    # Restaura os padrões com hífen originais
+    text = text.replace('___HYPHEN___', '-')
+    
     text = re.sub(r'\.{2,}', '.', text)
     text = text.strip('.')
     
@@ -791,6 +1021,9 @@ def _extract_technical_info(text: str) -> str:
         elif re.match(r'^(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|CAMRip|CAM|TSRip|TS|TC|R5|SCR|DVDScr)$', part_clean, re.IGNORECASE):
             technical_parts.append(part_clean)
         elif re.match(r'^(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado)$', part_clean, re.IGNORECASE):
+            technical_parts.append(part_clean)
+        # Formatos de áudio com versão: AAC2.0, AAC5.1, etc.
+        elif re.match(r'^(AAC|AC3|DTS|DDP)\d+\.\d+$', part_clean, re.IGNORECASE):
             technical_parts.append(part_clean)
         elif re.match(r'^(HDR|5\.1|2\.0|7\.1|DTS-HD|TrueHD)$', part_clean, re.IGNORECASE):
             technical_parts.append(part_clean)
@@ -859,12 +1092,28 @@ def _apply_season_temporada_tags(title: str, release_title_magnet: str, original
     if not season_match:
         season_match = re.search(r'temporada\s*(?:-|:)?\s*(\d+)', release_clean)
     year_str = str(year) if year else ''
+    # IMPORTANTE: Define year_in_title ANTES de usar nos blocos de validação
+    year_in_title = year_str and year_str in result
     if season_match:
         season_number_raw = season_match.group(1)
+        # IMPORTANTE: Valida que o número da temporada é válido (maior que 0)
+        # Evita gerar S00 incorretamente
+        try:
+            season_num = int(season_number_raw)
+            if season_num <= 0:
+                # Número inválido, não adiciona temporada
+                if not year_in_title and year_str:
+                    result = f"{result}.{year_str}"
+                return result
+        except (ValueError, TypeError):
+            # Não é um número válido, não adiciona temporada
+            if not year_in_title and year_str:
+                result = f"{result}.{year_str}"
+            return result
+        
         season_number = season_number_raw.zfill(2)
         has_season_info = re.search(rf'(?i)S0*{season_number_raw}(?:E\d+(?:-\d+)?|$)', result)
         has_any_season_ep = re.search(r'(?i)S\d{1,2}E\d{1,2}', result)
-        year_in_title = year_str and year_str in result
         if not has_season_info and not has_any_season_ep:
             if year_in_title:
                 result = result.replace(f".{year_str}", '')
@@ -1012,6 +1261,8 @@ def _reorder_title_components(title: str) -> str:
             continue
         elif upper_part in audio_tokens or re.match(r'^(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado)$', clean_part, re.IGNORECASE):
             # Áudio: DUAL, DUBLADO, etc. (mantém case original)
+            # NOTA: DUAL/DUBLADO/LEGENDADO serão removidos do título final em add_audio_tag_if_needed()
+            # quando as tags [Brazilian], [Eng] ou [Leg] forem adicionadas
             normalized_audio = clean_part.upper()
             if normalized_audio not in [a.upper() for a in audio_parts]:
                 audio_parts.append(clean_part)
@@ -1160,6 +1411,9 @@ def detect_audio_from_html(html_content: str) -> Optional[str]:
 
 # Acrescenta tags de idioma [Brazilian], [Eng] e/ou [Leg] quando detectadas no release, metadata ou HTML
 def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Optional[str] = None, skip_metadata: bool = False, audio_info_from_html: Optional[str] = None) -> str:
+    # Log resumido apenas na entrada
+    logger.debug(f"[add_audio_tag_if_needed] ENTRADA: has_release={bool(release_title_magnet)}, has_hash={bool(info_hash)}, audio_info_from_html='{audio_info_from_html}'")
+    
     # Remove apenas as tags que queremos usar antes de processar
     title = title.replace('[Brazilian]', '').replace('[Eng]', '').replace('[Leg]', '')
     title = re.sub(r'\s+', ' ', title).strip()
@@ -1257,6 +1511,10 @@ def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Op
     if has_legendado and not has_leg:
         tags_to_add.append('[Leg]')
     
+    # Log resumido apenas quando há tags para adicionar
+    if tags_to_add:
+        logger.debug(f"[add_audio_tag_if_needed] Tags a adicionar: {tags_to_add}")
+    
     # Remove DUAL, DUBLADO, LEGENDADO do título se as tags correspondentes foram adicionadas
     # (não precisa manter no título se a tag já indica o tipo de áudio)
     if tags_to_add:
@@ -1282,7 +1540,9 @@ def add_audio_tag_if_needed(title: str, release_title_magnet: str, info_hash: Op
         title = title.rstrip()
         title = f"{title} {' '.join(tags_to_add)}"
 
-    return title
+    result = title
+    logger.debug(f"[add_audio_tag_if_needed] SAÍDA: '{result[:100]}...'")
+    return result
 
 
 # Confere se o resultado corresponde à busca (ignorando stop words)
@@ -1307,6 +1567,16 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
     if len(clean_query_words) == 0:
         return True  # Se não tem palavras válidas, retorna True (não filtra)
     
+    # Identifica a primeira palavra de título (não numérica ou número com 3+ dígitos)
+    first_title_word = None
+    for word in clean_query_words:
+        if not word.isdigit():
+            first_title_word = word
+            break
+        elif len(word) >= 3:  # Números com 3+ dígitos (ex: 007, 2001) são considerados título
+            first_title_word = word
+            break
+    
     # Combina título + título original + título traduzido para busca
     combined_title = f"{title} {original_title_html} {translated_title_html}".lower()
     # Remove pontos e normaliza espaços
@@ -1318,6 +1588,9 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
     
     # Conta quantas palavras da query estão presentes no título
     matches = 0
+    matched_words = []  # Rastreia quais palavras fizeram match
+    first_title_word_matched = False
+    
     for query_word in clean_query_words:
         query_word_no_accent = remove_accents(query_word)
         
@@ -1325,6 +1598,9 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
         pattern = r'\b' + re.escape(query_word_no_accent) + r'\b'
         if re.search(pattern, combined_title, re.IGNORECASE):
             matches += 1
+            matched_words.append(query_word)
+            if query_word == first_title_word:
+                first_title_word_matched = True
             continue
         
         # Se não encontrou como palavra completa, tenta match parcial no início de palavras
@@ -1333,6 +1609,9 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
         partial_pattern = r'\b' + re.escape(query_word_no_accent) + r'(?=[a-zA-Z0-9])'
         if re.search(partial_pattern, combined_title, re.IGNORECASE):
             matches += 1
+            matched_words.append(query_word)
+            if query_word == first_title_word:
+                first_title_word_matched = True
             continue
 
         # Trata casos de temporada: query "1" deve encontrar "S1"/"S01"
@@ -1340,6 +1619,7 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
             season_patterns = [f"s{query_word_no_accent}", f"s{query_word_no_accent.zfill(2)}"]
             if any(sp in combined_title for sp in season_patterns):
                 matches += 1
+                matched_words.append(query_word)
 
          
     # Verifica se o ano corresponde (importante para filmes)
@@ -1356,20 +1636,34 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
         if re.search(year_pattern, combined_title):
             year_in_title = True
     
+    # REGRA CRÍTICA: Se existe uma palavra de título na query, ELA DEVE fazer match
+    # Isso evita que apenas ano+temporada passem resultados irrelevantes
+    if first_title_word and not first_title_word_matched:
+        return False
+    
     # Lógica de correspondência:
     # - 1 palavra: exige que corresponda
     # - 2 palavras: exige que ambas correspondam
-    # - 3+ palavras: exige que pelo menos 2 correspondam
-    # - Exceção: se o ano corresponde e há pelo menos 2 matches (incluindo o ano), aceita (para casos de idiomas diferentes)
+    # - 3+ palavras: exige que pelo menos 2 correspondam E a primeira palavra de título corresponda (já verificado acima)
     if len(clean_query_words) == 1:
         return matches == 1
     elif len(clean_query_words) == 2:
         return matches == 2
     else:
-        # Para 3+ palavras: se o ano corresponde e há pelo menos 2 matches (ano + pelo menos 1 outra palavra), aceita
-        # Isso evita aceitar qualquer título apenas por ter o mesmo ano
-        if year_in_title and matches >= 2:
+        # Para 3+ palavras: verifica se há match de pelo menos uma palavra de TÍTULO (não ano, não temporada)
+        has_title_match = False
+        for word in matched_words:
+            # Palavra de título = não é ano (4 dígitos 19xx/20xx) e não é temporada (1-2 dígitos)
+            if not word.isdigit():
+                has_title_match = True
+                break
+            elif len(word) >= 3:  # Números com 3+ dígitos (ex: 007, 2001) são considerados título
+                has_title_match = True
+                break
+        
+        # Se o ano corresponde e há pelo menos 2 matches E pelo menos 1 é palavra de título, aceita
+        if year_in_title and matches >= 2 and has_title_match:
             return True
-        # Caso contrário, exige pelo menos 2 correspondências
-        return matches >= 2
+        # Caso contrário, exige pelo menos 2 correspondências E pelo menos 1 palavra de título
+        return matches >= 2 and has_title_match
 

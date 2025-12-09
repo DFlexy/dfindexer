@@ -18,9 +18,12 @@ from utils.text.text_processing import (
     add_audio_tag_if_needed, create_standardized_title, prepare_release_title,
     STOP_WORDS
 )
+from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
 
+# Contexto de logging centralizado para este scraper
+_log_ctx = ScraperLogContext("Baixa", logger)
 
 # Scraper específico para Baixa Filmes
 class BaixafilmesScraper(BaseScraper):
@@ -152,11 +155,7 @@ class BaixafilmesScraper(BaseScraper):
             effective_max = get_effective_max_items(max_items)
             
             # Log para info: mostra quantos links foram encontrados e qual o limite
-            total_links = len(links)
-            if effective_max > 0:
-                logger.info(f"[Baixa] Encontrados {total_links} links na página, limitando para {effective_max}")
-            else:
-                logger.info(f"[Baixa] Encontrados {total_links} links na página (sem limite)")
+            _log_ctx.log_links_found(len(links), effective_max)
             
             # Limita links se houver limite (EMPTY_QUERY_MAX_LINKS limita quantos links processar)
             links = limit_list(links, effective_max)
@@ -488,17 +487,111 @@ class BaixafilmesScraper(BaseScraper):
         year = ''
         imdb = ''
         sizes = []
+        audio_info = None  # Para detectar áudio/idioma do HTML
         
-        for p in article.select('div.entry-meta, div.content p, div.entry-content p'):
-            text = p.get_text()
+        # Extrai informações de idioma e legenda do HTML
+        # Busca em div.entry-meta primeiro (estrutura padrão)
+        # Pode haver múltiplos entry-meta, então busca em todos
+        entry_meta_list = doc.find_all('div', class_='entry-meta')
+        logger.debug(f"[Baixafilmes] entry_meta encontrados: {len(entry_meta_list)}")
+        
+        idioma = ''
+        legenda = ''
+        
+        # Busca Idioma e Legenda em todos os entry-meta
+        for entry_meta in entry_meta_list:
+            entry_meta_html = str(entry_meta)
             
-            # Extrai ano
-            y = find_year_from_text(text, title)
-            if y:
-                year = y
+            # Extrai Idioma (só se ainda não encontrou)
+            if not idioma:
+                idioma_match = re.search(r'(?i)<b>Idioma:</b>\s*([^<]+?)(?:<br|</div|</p|$)', entry_meta_html)
+                if idioma_match:
+                    idioma = idioma_match.group(1).strip()
+                    # Remove entidades HTML
+                    idioma = html.unescape(idioma)
+                    idioma = re.sub(r'<[^>]+>', '', idioma).strip()
             
-            # Extrai tamanhos
-            sizes.extend(find_sizes_from_text(text))
+            # Extrai Legenda (só se ainda não encontrou)
+            if not legenda:
+                legenda_match = re.search(r'(?i)<b>Legenda:</b>\s*([^<]+?)(?:<br|</div|</p|$)', entry_meta_html)
+                if legenda_match:
+                    legenda = legenda_match.group(1).strip()
+                    # Remove entidades HTML
+                    legenda = html.unescape(legenda)
+                    legenda = re.sub(r'<[^>]+>', '', legenda).strip()
+            
+            # Se já encontrou ambos, pode parar
+            if idioma and legenda:
+                break
+        
+        # Determina audio_info baseado em Idioma e Legenda (após processar todos os entry-meta)
+        if idioma or legenda:
+            # Lógica simplificada conforme solicitado:
+            # - Se Idioma tem português → marca com [Brazilian] (via 'português')
+            # - Se Legenda tem português → marca com [Leg] (via 'legendado')
+            # - Se Idioma ou Legenda tem Inglês → marca com [Leg] (via 'legendado')
+            # O sistema de tags é definido pelo utils (add_audio_tag_if_needed)
+            idioma_lower = idioma.lower() if idioma else ''
+            legenda_lower = legenda.lower() if legenda else ''
+            
+            logger.debug(f"[Baixafilmes] Extraído do HTML - Idioma: '{idioma}', Legenda: '{legenda}'")
+            
+            # Verifica se tem português no idioma (áudio)
+            has_portugues_audio = 'português' in idioma_lower or 'portugues' in idioma_lower
+            # Verifica se tem português na legenda
+            has_portugues_legenda = 'português' in legenda_lower or 'portugues' in legenda_lower
+            # Verifica se tem Inglês no idioma ou legenda
+            has_ingles = 'inglês' in idioma_lower or 'ingles' in idioma_lower or 'english' in idioma_lower or 'inglês' in legenda_lower or 'ingles' in legenda_lower or 'english' in legenda_lower
+            
+            # Lógica simplificada:
+            # Prioridade: Idioma com português primeiro (gera [Brazilian])
+            # Depois: Legenda com português ou Inglês em qualquer campo (gera [Leg])
+            # IMPORTANTE: Processa mesmo se idioma estiver vazio (pode ter apenas legenda)
+            if has_portugues_audio:
+                # Idioma tem português → gera [Brazilian]
+                audio_info = 'português'
+                logger.debug(f"[Baixafilmes] Detectado PORTUGUÊS: Idioma tem português → [Brazilian]")
+            elif has_portugues_legenda or has_ingles:
+                # Legenda tem português OU tem Inglês (em Idioma ou Legenda) → gera [Leg]
+                audio_info = 'legendado'
+                if has_portugues_legenda:
+                    logger.debug(f"[Baixafilmes] Detectado LEGENDADO: Legenda tem português → [Leg]")
+                elif has_ingles:
+                    logger.debug(f"[Baixafilmes] Detectado LEGENDADO: Idioma ou Legenda tem Inglês → [Leg]")
+        
+        # Se não encontrou em entry-meta, busca em outros lugares
+        if not audio_info:
+            for p in article.select('div.content p, div.entry-content p'):
+                text = p.get_text()
+                html_content = str(p)
+                
+                # Extrai ano
+                y = find_year_from_text(text, title)
+                if y:
+                    year = y
+                
+                # Extrai tamanhos
+                sizes.extend(find_sizes_from_text(html_content))
+                
+                # Tenta detectar áudio usando função utilitária (fallback)
+                if not audio_info:
+                    from utils.text.text_processing import detect_audio_from_html
+                    audio_info = detect_audio_from_html(html_content)
+                    if audio_info:
+                        break
+        else:
+            # Se já encontrou audio_info, ainda precisa extrair ano e tamanhos
+            for p in article.select('div.entry-meta, div.content p, div.entry-content p'):
+                text = p.get_text()
+                html_content = str(p)
+                
+                # Extrai ano
+                y = find_year_from_text(text, title)
+                if y:
+                    year = y
+                
+                # Extrai tamanhos
+                sizes.extend(find_sizes_from_text(html_content))
         
         imdb = ''
         
@@ -669,11 +762,22 @@ class BaixafilmesScraper(BaseScraper):
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata)
+                # Passa audio_info extraído do HTML (Idioma/Legenda)
+                logger.debug(f"[Baixafilmes] Chamando add_audio_tag_if_needed com audio_info_from_html='{audio_info}'")
+                final_title = add_audio_tag_if_needed(
+                    standardized_title, 
+                    original_release_title, 
+                    info_hash=info_hash, 
+                    skip_metadata=self._skip_metadata,
+                    audio_info_from_html=audio_info
+                )
+                logger.debug(f"[Baixafilmes] Título após add_audio_tag_if_needed: '{final_title[:100]}...'")
                 
                 # Determina origem_audio_tag
                 origem_audio_tag = 'N/A'
-                if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
+                if audio_info:
+                    origem_audio_tag = 'HTML da página (Idioma/Legenda)'
+                elif raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
                     origem_audio_tag = 'release_title_magnet'
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
@@ -735,11 +839,7 @@ class BaixafilmesScraper(BaseScraper):
                 torrents.append(torrent)
             
             except Exception as e:
-                error_type = type(e).__name__
-                error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
-                link_str = str(magnet_link) if magnet_link else 'N/A'
-                link_preview = link_str[:50] if link_str != 'N/A' else 'N/A'
-                logger.error(f"Magnet error: {error_type} - {error_msg} (link: {link_preview}...)")
+                _log_ctx.error_magnet(magnet_link, e)
                 continue
         
         return torrents

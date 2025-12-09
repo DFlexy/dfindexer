@@ -15,18 +15,60 @@ class MagnetParser:
         if parsed.scheme != 'magnet':
             raise ValueError(f"Esquema inválido: {parsed.scheme}")
         
-        query = parse_qs(parsed.query)
-        xt = query.get('xt', [])
-        if not xt:
-            raise ValueError("Parâmetro xt não encontrado")
+        # IMPORTANTE: Extrai info_hash diretamente da query string original ANTES de parse_qs
+        # Isso evita problemas com parse_qs decodificando caracteres inválidos (ex: %94)
+        # O %94 não é um caractere válido em hex, então pode ser um erro no magnet link
+        # Mas vamos tentar extrair corretamente mesmo assim
+        match = re.search(r'xt=urn:btih:([^&]+)', parsed.query, re.IGNORECASE)
+        if match:
+            # Extrai o hash da query string original
+            info_hash_raw = match.group(1)
+            # Tenta corrigir hash malformado: trata %XX como dois caracteres hex se válido
+            # Se o hash tem %94 ou outros códigos, tenta decodificar %XX como dois caracteres hex
+            if '%' in info_hash_raw:
+                # Substitui %XX por XX (dois caracteres hex) se XX for válido em hex
+                # Ex: ed657c100%9487fcf -> ed657c1009487fcf (substitui %94 por 94)
+                def replace_percent(match):
+                    hex_chars = match.group(1)
+                    # Verifica se ambos os caracteres são hex válidos
+                    if all(c in '0123456789abcdefABCDEF' for c in hex_chars):
+                        return hex_chars  # Substitui %XX por XX
+                    return ''  # Remove se não for válido
+                
+                info_hash_cleaned = re.sub(r'%([0-9A-Fa-f]{2})', replace_percent, info_hash_raw)
+                # Se após limpeza o tamanho está correto, usa ele
+                if len(info_hash_cleaned) in [32, 40]:
+                    info_hash_encoded = info_hash_cleaned
+                else:
+                    # Tenta decodificar normalmente
+                    info_hash_decoded = unquote(info_hash_raw)
+                    if len(info_hash_decoded) in [32, 40]:
+                        info_hash_encoded = info_hash_decoded
+                    elif len(info_hash_raw) in [32, 40]:
+                        # O valor original tem tamanho correto, usa ele
+                        info_hash_encoded = info_hash_raw
+                    else:
+                        # Usa o limpo mesmo que não tenha tamanho correto (será tratado no _decode_infohash)
+                        info_hash_encoded = info_hash_cleaned
+            else:
+                # Sem %, usa diretamente
+                info_hash_encoded = info_hash_raw
+        else:
+            # Fallback: usa parse_qs (pode ter problemas com caracteres inválidos)
+            query = parse_qs(parsed.query)
+            xt = query.get('xt', [])
+            if not xt:
+                raise ValueError("Parâmetro xt não encontrado")
+            xt_value = xt[0]
+            if not xt_value.startswith('urn:btih:'):
+                raise ValueError("Formato de xt inválido")
+            info_hash_encoded = unquote(xt_value[9:])
         
-        xt_value = xt[0]
-        if not xt_value.startswith('urn:btih:'):
-            raise ValueError("Formato de xt inválido")
-        
-        info_hash_encoded = xt_value[9:]
-        
+        # Processa o info_hash extraído
         info_hash_bytes = MagnetParser._decode_infohash(info_hash_encoded)
+        
+        # Agora usa parse_qs para extrair outros parâmetros (dn, tr, etc.)
+        query = parse_qs(parsed.query)
         info_hash_hex = info_hash_bytes.hex()
         
         display_name = ''
@@ -42,25 +84,49 @@ class MagnetParser:
             if key not in ['xt', 'dn', 'tr']:
                 params[key] = unquote(values[0]) if values else ''
         
-        return {
+        result = {
             'info_hash': info_hash_hex,
             'display_name': display_name,
             'trackers': trackers,
             'params': params
         }
+        return result
     
     @staticmethod
     def _decode_infohash(encoded: str) -> bytes:
-        if len(encoded) == 40:
+        # Remove caracteres não-ASCII ou inválidos que podem ter sido introduzidos por URL decoding incorreto
+        # Mantém apenas caracteres hexadecimais válidos (0-9, a-f, A-F) ou base32 válidos
+        encoded_clean = ''.join(c for c in encoded if c.isalnum() or c in '+-=')
+        
+        if len(encoded_clean) == 40:
             try:
-                return bytes.fromhex(encoded)
+                # Verifica se todos os caracteres são hexadecimais válidos
+                if all(c in '0123456789abcdefABCDEF' for c in encoded_clean):
+                    return bytes.fromhex(encoded_clean)
+                else:
+                    raise ValueError("InfoHash hex contém caracteres inválidos")
             except ValueError:
                 raise ValueError("InfoHash hex inválido")
-        elif len(encoded) == 32:
+        elif len(encoded_clean) == 32:
             try:
-                return base64.b32decode(encoded.upper())
+                return base64.b32decode(encoded_clean.upper())
             except Exception:
                 raise ValueError("InfoHash base32 inválido")
         else:
-            raise ValueError(f"Tamanho de info_hash inválido: {len(encoded)}")
+            # Se o tamanho está incorreto após limpeza, tenta usar o original
+            # Pode ser que o problema seja com caracteres especiais que foram removidos
+            if len(encoded) != len(encoded_clean):
+                # Tenta usar o encoded original se a limpeza removeu caracteres
+                if len(encoded) == 40:
+                    try:
+                        if all(c in '0123456789abcdefABCDEF' for c in encoded):
+                            return bytes.fromhex(encoded)
+                    except ValueError:
+                        pass
+                elif len(encoded) == 32:
+                    try:
+                        return base64.b32decode(encoded.upper())
+                    except Exception:
+                        pass
+            raise ValueError(f"Tamanho de info_hash inválido: {len(encoded_clean)} (original: {len(encoded)})")
 

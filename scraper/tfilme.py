@@ -17,8 +17,12 @@ from utils.text.text_processing import (
     add_audio_tag_if_needed, create_standardized_title, prepare_release_title
 )
 from app.config import Config
+from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
+
+# Contexto de logging centralizado para este scraper
+_log_ctx = ScraperLogContext("TFilme", logger)
 
 
 # Scraper específico para Torrent dos Filmes
@@ -132,7 +136,7 @@ class TfilmeScraper(BaseScraper):
                 filmes_links = limit_list(filmes_links, half_limit)
                 series_links = limit_list(series_links, half_limit)
                 
-                logger.info(f"[TFilme] Limite configurado: {effective_max} - Coletando {len(filmes_links)} filmes e {len(series_links)} séries")
+                _log_ctx.info(f"Limite configurado: {effective_max} - Coletando {len(filmes_links)} filmes e {len(series_links)} séries")
                 links = filmes_links + series_links
             else:
                 # Sem limite, combina todos os links
@@ -503,11 +507,7 @@ class TfilmeScraper(BaseScraper):
                 torrents.append(torrent)
             
             except Exception as e:
-                error_type = type(e).__name__
-                error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
-                link_str = str(magnet_link) if magnet_link else 'N/A'
-                link_preview = link_str[:50] if link_str != 'N/A' else 'N/A'
-                logger.error(f"Magnet error: {error_type} - {error_msg} (link: {link_preview}...)")
+                _log_ctx.error_magnet(magnet_link, e)
                 continue
         
         return torrents

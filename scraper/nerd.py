@@ -17,8 +17,12 @@ from utils.text.text_processing import (
     detect_audio_from_html, add_audio_tag_if_needed, create_standardized_title, prepare_release_title
 )
 from app.config import Config
+from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
+
+# Contexto de logging centralizado para este scraper
+_log_ctx = ScraperLogContext("Nerd", logger)
 
 
 # Scraper específico para Nerd Torrent HD
@@ -143,7 +147,7 @@ class NerdScraper(BaseScraper):
                 series_links = limit_list(series_links, third_limit)
                 animes_links = limit_list(animes_links, third_limit)
                 
-                logger.info(f"[Nerd] Limite configurado: {effective_max} - Coletando {len(filmes_links)} filmes, {len(series_links)} séries e {len(animes_links)} animes")
+                _log_ctx.info(f"Limite configurado: {effective_max} - Coletando {len(filmes_links)} filmes, {len(series_links)} séries e {len(animes_links)} animes")
                 links = filmes_links + series_links + animes_links
             else:
                 # Sem limite, combina todos os links
@@ -285,11 +289,10 @@ class NerdScraper(BaseScraper):
         content_html = str(content_div)
         if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', content_html):
             # Busca no HTML completo primeiro (mais confiável para tags quebradas)
-            # Tenta padrão com </b> após os dois pontos (caso comum)
-            html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', content_html, re.DOTALL)
-            if not html_match:
-                # Fallback: padrão sem </b>
-                html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', content_html, re.DOTALL)
+            # Tenta padrão com </b> ou </strong>, com : dentro ou fora
+            # Ex: <strong>Título Original</strong>: Valor
+            # Ex: <b>Título Original:</b> Valor
+            html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(?:</b>|</strong>)?\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|</b>|$)', content_html, re.DOTALL)
             
             if html_match:
                 html_text = html_match.group(1)
@@ -309,10 +312,8 @@ class NerdScraper(BaseScraper):
                     if len(text_parts) > 1:
                         original_title = text_parts[1].strip()
                     
-                    # Tenta extrair do HTML do elemento (com </b> primeiro)
-                    html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', elem_html, re.DOTALL)
-                    if not html_match:
-                        html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|$)', elem_html, re.DOTALL)
+                    # Tenta extrair do HTML do elemento
+                    html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(?:</b>|</strong>)?\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|</b>|$)', elem_html, re.DOTALL)
                     
                     if html_match:
                         html_text = html_match.group(1)
@@ -627,11 +628,7 @@ class NerdScraper(BaseScraper):
                 torrents.append(torrent)
             
             except Exception as e:
-                error_type = type(e).__name__
-                error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
-                link_str = str(magnet_link) if magnet_link else 'N/A'
-                link_preview = link_str[:50] if link_str != 'N/A' else 'N/A'
-                logger.error(f"Magnet error: {error_type} - {error_msg} (link: {link_preview}...)")
+                _log_ctx.error_magnet(magnet_link, e)
                 continue
         
         return torrents

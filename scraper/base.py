@@ -238,9 +238,14 @@ class BaseScraper(ABC):
         headers = {'Referer': referer if referer else self.base_url}
         
         try:
-            response = self.session.get(url, headers=headers, timeout=30)
+            import time as time_module
+            start_time = time_module.time()
+            response = self.session.get(url, headers=headers, timeout=Config.HTTP_REQUEST_TIMEOUT)
+            elapsed_time = time_module.time() - start_time
             response.raise_for_status()
             html_content = response.content
+            
+            logger.debug(f"[BaseScraper] HTTP GET: {url[:60]}... | Status: {response.status_code} | Tempo: {elapsed_time:.2f}s | Tamanho: {len(html_content)} bytes | Origem: {'Cache' if elapsed_time < 0.5 else 'Site'}")
             
             if self.redis and not self._is_test:
                 try:

@@ -17,6 +17,7 @@ from utils.text.text_processing import (
     find_year_from_text, find_sizes_from_text, STOP_WORDS,
     add_audio_tag_if_needed, prepare_release_title
 )
+from utils.logging import format_error, format_link_preview
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://www.starck-filmes.site/"
+    DEFAULT_BASE_URL = "https://www.starckfilmes-v6.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -324,11 +325,7 @@ class StarckScraper(BaseScraper):
                 torrents.append(torrent)
             
             except Exception as e:
-                error_type = type(e).__name__
-                error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
-                link_str = str(magnet_link) if magnet_link else 'N/A'
-                link_preview = link_str[:50] if link_str != 'N/A' else 'N/A'
-                logger.error(f"Magnet error: {error_type} - {error_msg} (link: {link_preview}...)")
+                logger.error(f"Magnet error: {format_error(e)} (link: {format_link_preview(magnet_link)})")
                 continue
         
         return torrents

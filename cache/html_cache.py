@@ -29,14 +29,19 @@ class HTMLCache:
                 cache_key = html_long_key(url)
                 cached = self.redis.get(cache_key)
                 if cached:
+                    logger.debug(f"[HTMLCache] HIT (long): {url[:60]}... (TTL: {Config.HTML_CACHE_TTL_LONG}s)")
                     return cached
                 
                 # Tenta cache de curta duração
                 short_cache_key = html_short_key(url)
                 cached = self.redis.get(short_cache_key)
                 if cached:
+                    logger.debug(f"[HTMLCache] HIT (short): {url[:60]}... (TTL: {Config.HTML_CACHE_TTL_SHORT}s)")
                     return cached
-            except Exception:
+                
+                logger.debug(f"[HTMLCache] MISS: {url[:60]}...")
+            except Exception as e:
+                logger.debug(f"[HTMLCache] Erro ao buscar cache Redis: {type(e).__name__}")
                 # Se Redis falhou durante operação, não usa memória
                 return None
         
@@ -49,9 +54,11 @@ class HTMLCache:
             if cache_entry:
                 cached_content, expire_at = cache_entry
                 if time.time() < expire_at:
+                    logger.debug(f"[HTMLCache] HIT (memória): {url[:60]}...")
                     return cached_content
                 else:
                     # Expirou, remove
+                    logger.debug(f"[HTMLCache] EXPIRADO (memória): {url[:60]}...")
                     del _request_cache.html_cache[url]
         
         return None
@@ -79,8 +86,10 @@ class HTMLCache:
                     Config.HTML_CACHE_TTL_LONG,
                     html_content
                 )
+                logger.debug(f"[HTMLCache] SET: {url[:60]}... (short: {Config.HTML_CACHE_TTL_SHORT}s, long: {Config.HTML_CACHE_TTL_LONG}s, size: {len(html_content)} bytes)")
                 return
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[HTMLCache] Erro ao salvar cache Redis: {type(e).__name__}")
                 # Se Redis falhou durante operação, não salva em memória
                 return
         

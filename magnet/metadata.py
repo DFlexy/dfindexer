@@ -514,7 +514,9 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         metadata_cache = MetadataCache()
         data = metadata_cache.get(info_hash_lower)
         if data:
+            logger.debug(f"[Metadata] HIT (cache): {info_hash_lower[:16]}... (name: '{data.get('name', 'N/A')[:50]}...', size: {data.get('size', 0)})")
             return data
+        logger.debug(f"[Metadata] MISS (cache): {info_hash_lower[:16]}...")
     except Exception as e:
         _log_redis_error("verificar cache de metadata", e)
     
@@ -561,20 +563,26 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         
         # Busca do iTorrents (não estava em cache)
         # Tenta com lowercase primeiro (mais comum)
+        logger.debug(f"[Metadata] Buscando metadata do iTorrents.org (lowercase): {info_hash_lower[:16]}...")
         torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=True)
         
         # Se falhou mas não foi timeout nem 503, tenta com uppercase (menos comum)
         # Se foi timeout ou 503, não tenta novamente para evitar esperas longas
         if not torrent_data and not was_timeout and not was_503:
+            logger.debug(f"[Metadata] Tentando novamente com uppercase: {info_hash[:16]}...")
             torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=False)
         
         if not torrent_data:
             # Timeouts não devem cachear falha - podem ser temporários (rede lenta, servidor ocupado)
             # Apenas cacheia se foi erro HTTP específico (já foi cacheado dentro de _fetch_torrent_header)
             if was_503:
+                logger.debug(f"[Metadata] Falha 503 ao buscar metadata: {info_hash_lower[:16]}...")
                 # Erro 503 já foi cacheado dentro de _fetch_torrent_header
                 pass
-            elif not was_timeout:
+            elif was_timeout:
+                logger.debug(f"[Metadata] Timeout ao buscar metadata: {info_hash_lower[:16]}...")
+            else:
+                logger.debug(f"[Metadata] Falha ao buscar metadata: {info_hash_lower[:16]}...")
                 # Outras falhas (404, 500, etc.) já foram cacheadas dentro de _fetch_torrent_header
                 # Timeouts não cacheiam para permitir retry rápido
                 pass
@@ -584,7 +592,10 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
         size = _parse_bencode_size(torrent_data)
         
         if not size:
+            logger.debug(f"[Metadata] Não foi possível extrair tamanho do bencode: {info_hash_lower[:16]}...")
             return None
+        
+        logger.debug(f"[Metadata] Tamanho extraído: {size} bytes para {info_hash_lower[:16]}...")
         
         # Tenta extrair nome também (opcional)
         name = None
@@ -597,6 +608,7 @@ def fetch_metadata_from_itorrents(info_hash: str) -> Optional[Dict[str, any]]:
                 if start_pos + name_len <= len(torrent_data):
                     name_bytes = torrent_data[start_pos:start_pos + name_len]
                     name = name_bytes.decode('utf-8', errors='ignore')
+                    logger.debug(f"[Metadata] Nome extraído: '{name[:80]}...' para {info_hash_lower[:16]}...")
         except Exception:
             pass
         

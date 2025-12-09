@@ -47,7 +47,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** bª¡xª–ƒ¡lmεš–tørrεnτ
 - ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
 - ✅ ** ¢ømªnd◎–łå (Necessário selecionar o FlareSolverr)
-- ✅ ** błµđv–ƒ¡lmεš♡
+- ✅ ** błµđv–ƒ¡lmεš♡ (Necessário selecionar o FlareSolverr)
 - ✅ ** nεrd–tørrεnτ–hd
 
 ## Supported Sites
@@ -56,7 +56,7 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ ** bª¡xª–ƒ¡lmεš–tørrεnτ
 - ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
 - ✅ ** ¢ømªnd◎–łå (FlareSolverr selection required)
-- ✅ ** błµđv–ƒ¡lmεš♡
+- ✅ ** błµđv–ƒ¡lmεš♡ (FlareSolverr selection required)
 - ✅ ** nεrd–tørrεnτ–hd
 
 ## 🐳 Execução com Docker

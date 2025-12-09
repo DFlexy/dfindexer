@@ -57,3 +57,6 @@ class Config:
     METADATA_MAX_CONCURRENT: int = int(os.getenv('METADATA_MAX_CONCURRENT', '64'))  # Limite global de requisições de metadata simultâneas (aumentado de 32 para 64)
     FLARESOLVERR_MAX_SESSIONS: int = int(os.getenv('FLARESOLVERR_MAX_SESSIONS', '15'))  # Limite de sessões FlareSolverr simultâneas
     
+    # Timeouts
+    HTTP_REQUEST_TIMEOUT: int = int(os.getenv('HTTP_REQUEST_TIMEOUT', '30'))  # Timeout padrão em segundos para requisições HTTP de páginas
+    
