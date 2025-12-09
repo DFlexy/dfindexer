@@ -16,7 +16,6 @@ COPY app/ ./app/
 COPY api/ ./api/
 COPY cache/ ./cache/
 COPY core/ ./core/
-COPY exceptions/ ./exceptions/
 COPY magnet/ ./magnet/
 COPY models/ ./models/
 COPY scraper/ ./scraper/
