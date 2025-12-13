@@ -16,7 +16,6 @@
 Indexador em Python que organiza torrents brasileiros em formato padronizado, pronto para consumo por ferramentas como **Prowlarr**, **Sonarr** e **Radarr**.
 
 ## 🚀 Características
-
 - ✅ **Múltiplos Scrapers**: Suporte para 7 sites de torrents brasileiros
 - ✅ **Padronização Inteligente**: Títulos padronizados para facilitar matching automático
 - ✅ **Metadata API**: Busca automática de tamanhos, datas e nomes via iTorrents.org
@@ -31,21 +30,21 @@ Indexador em Python que organiza torrents brasileiros em formato padronizado, pr
 - ✅ **Semáforo de Metadata**: 128 requisições simultâneas de metadata para alta concorrência
 - ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
 
-## 📝 Padronização de Títulos
+### 📝 Padronização de Títulos
 Todos os títulos são padronizados no formato:
 - **Episódios**: `Title.S02E01.2025.WEB-DL.1080p`
 - **Episódios Múltiplos**: `Title.S02E05-06-07.2025.WEB-DL.1080p`
 - **Séries Completas**: `Title.S02.2025.WEB-DL`
 - **Filmes**: `Title.2025.1080p.BluRay`
 
-## 🎬 Tags de Idioma
+### 🎬 Tags de Idioma
 O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
 - **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO`, `NACIONAL` ou `PORTUGUES` no `release_title_magnet`, metadata ou HTML da página
 - **[Eng]**: Adicionada quando detecta `DUAL` (via HTML como 'dual', `release_title_magnet` ou metadata). DUAL indica português + inglês, então adiciona ambas as tags
 - **[Jap]**: Adicionada quando detecta `JAPONÊS`, `JAPONES`, `JAPANESE` ou `JAP` no `release_title_magnet`, metadata ou HTML da página
 - **[Leg]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no `release_title_magnet`, metadata ou HTML da página
 
-## 🌐 Sites Suportados
+### 🌐 Sites Suportados
 - ✅ ** st❂rçƙ
 - ✅ ** rεdƎ★★
 - ✅ ** bª¡xª–ƒ¡lmεš
@@ -113,7 +112,7 @@ docker run -d \
   --link flaresolverr:flaresolverr \
   ghcr.io/dflexy/dfindexer:latest
 ```
-## ⚙️ Docker - Variáveis de Ambiente
+### ⚙️ Docker - Variáveis de Ambiente
 | Variável                                | Descrição                                                                | Padrão             |
 |-----------------------------------------|--------------------------------------------------------------------------|--------------------|
 | `PORT`                                  | Porta da API                                                             | `7006`             |
@@ -193,8 +192,15 @@ O comportamento varia conforme o tipo de requisição:
 - **10:30** - Busca com query → Usa cache antigo → ❌ Não vê novos links
 - **16:01** - Busca com query → Cache expirou → Busca fresco → ✅ Vê novos links
 
-## 🔍 API Endpoints
+## 🔍 API
 
+### 🔍 API WEB
+http://localhost:7006/api
+** Atenção - Selecionar todos pode demorar ou travar devido a demora de requisições.
+** Principamente com os sites que usam Cloudflare
+<img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
+
+### 🔍 API Endpoints
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/` | Informações básicas da API |
