@@ -15,7 +15,7 @@ caps:
 
   modes:
     search: [q]
-    tv-search: [q, season]
+    tv-search: [q, season, ep]
     movie-search: [q]
 
 settings:
@@ -48,7 +48,7 @@ search:
   inputs:
     filter_results: "true"
     use_flaresolverr: "{{ .Config.use_flaresolverr }}"
-    q: "{{ .Keywords }}"
+    q: "{{ if .Query.Ep }}{{ .Keywords }} S{{ printf \"%02d\" .Query.Season }}E{{ printf \"%02d\" .Query.Ep }}{{ else }}{{ .Keywords }}{{ end }}"
   keywordsfilters:
     - name: tolower
     - name: re_replace
