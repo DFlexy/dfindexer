@@ -1,7 +1,7 @@
 """Copyright (c) 2025 DFlexy"""
 """https://github.com/DFlexy"""
 
-from flask import Flask, render_template
+from flask import Flask, render_template, make_response
 from api.handlers import index_handler, indexer_handler
 
 
@@ -14,5 +14,11 @@ def register_routes(app: Flask):
 
 def search_page_handler():
     """Handler para a página de busca web"""
-    return render_template('search.html')
+    response = make_response(render_template('search.html'))
+    # Headers para evitar cache do navegador
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 

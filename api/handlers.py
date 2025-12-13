@@ -121,9 +121,8 @@ def indexer_handler(site_name: str = None):
                         'count': 0
                     }), 404
             display_label = types_info[normalized_type].get('display_name', site_name)
-
-        log_prefix = f"[{display_label}]"
-        logger.info(f"{log_prefix} Query: '{query}' | Page: {page} | Filter: {filter_results} | FlareSolverr: {use_flaresolverr}")
+            log_prefix = f"[{display_label}]"
+            logger.info(f"{log_prefix} Query: '{query}' | Page: {page} | Filter: {filter_results} | FlareSolverr: {use_flaresolverr}")
         
         is_prowlarr_test = not query
         

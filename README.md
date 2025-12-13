@@ -3,11 +3,9 @@
 
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
-**This project is 100% independent and open-source.**  
-💜 Your support keeps development active and makes the project continue evolving.
 
 ** Projeto baseado no projeto em GO do colega https://github.com/felipemarinho97/torrent-indexer
-** Projeto todo criado em python do zero
+** Observação o projeto foi todo criado em python do zero
 
 <a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
   <img src="https://img.shields.io/badge/💸%20APOIAR%20ESTE%20PROJETO-00C851?style=for-the-badge" width="500" />
@@ -16,9 +14,8 @@
 
 # DF Indexer - Python Torrent Indexer
 Indexador em Python que organiza torrents brasileiros em formato padronizado, pronto para consumo por ferramentas como **Prowlarr**, **Sonarr** e **Radarr**.
-Python indexer that organizes Brazilian torrents in a standardized format, ready for consumption by tools like **Prowlarr**, **Sonarr** and **Radarr**.
 
-## 🚀 Características Principais
+## 🚀 Características
 - ✅ **Múltiplos Scrapers**: Suporte para 7 sites de torrents brasileiros
 - ✅ **Padronização Inteligente**: Títulos padronizados para facilitar matching automático
 - ✅ **Metadata API**: Busca automática de tamanhos, datas e nomes via iTorrents.org
@@ -33,47 +30,34 @@ Python indexer that organizes Brazilian torrents in a standardized format, ready
 - ✅ **Semáforo de Metadata**: 128 requisições simultâneas de metadata para alta concorrência
 - ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
 
-## 🚀 Main Features
-- ✅ **Multiple Scrapers**: Support for 7 Brazilian torrent sites
-- ✅ **Smart Standardization**: Standardized titles to facilitate automatic matching
-- ✅ **Metadata API**: Automatic search for sizes, dates and names via iTorrents.org
-- ✅ **Tracker Scraping**: Automatic UDP tracker queries for seeds/leechers
-- ✅ **FlareSolverr**: Optional support to resolve Cloudflare with reusable sessions
-- ✅ **Multi-Layer Cache**: Redis Cache + Local HTTP cache in memory (30s) for maximum performance
-- ✅ **Cross-Data System**: Data sharing between scrapers via Redis (reduces unnecessary queries)
-- ✅ **Circuit Breakers**: Protection against external service overload
-- ✅ **100% Parallelization**: 100% parallel link processing for maximum speed
-- ✅ **Connection Pooling**: Optimized HTTP connection pool (50 pools, 100 maxsize) to reduce latency
-- ✅ **Optimized Rate Limiting**: Optimized metadata rate limiter (6-7 req/s) for 5-10x faster
-- ✅ **Metadata Semaphore**: 128 concurrent metadata requests for high concurrency
-- ✅ **Optimizations**: Filtering before heavy enrichment for better performance
+### 📝 Padronização de Títulos
+Todos os títulos são padronizados no formato:
+- **Episódios**: `Title.S02E01.2025.WEB-DL.1080p`
+- **Episódios Múltiplos**: `Title.S02E05-06-07.2025.WEB-DL.1080p`
+- **Séries Completas**: `Title.S02.2025.WEB-DL`
+- **Filmes**: `Title.2025.1080p.BluRay`
 
+### 🎬 Tags de Idioma
+O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
+- **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO`, `NACIONAL` ou `PORTUGUES` no `release_title_magnet`, metadata ou HTML da página
+- **[Eng]**: Adicionada quando detecta `DUAL` (via HTML como 'dual', `release_title_magnet` ou metadata). DUAL indica português + inglês, então adiciona ambas as tags
+- **[Jap]**: Adicionada quando detecta `JAPONÊS`, `JAPONES`, `JAPANESE` ou `JAP` no `release_title_magnet`, metadata ou HTML da página
+- **[Leg]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no `release_title_magnet`, metadata ou HTML da página
 
-## Sites Suportados
-- ✅ ** st❂rçƙ–f¡lmΞs_v③
-- ✅ ** rεdƎ–tørrΞn†★★
-- ✅ ** bª¡xª–ƒ¡lmεš–tørrεnτ
-- ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
+### 🌐 Sites Suportados
+- ✅ ** st❂rçƙ
+- ✅ ** rεdƎ★★
+- ✅ ** bª¡xª–ƒ¡lmεš
+- ✅ ** t–đøs–ƒ¡lmεš♡
 - ✅ ** ¢ømªnd◎–łå (Necessário selecionar o FlareSolverr)
-- ✅ ** błµđv–ƒ¡lmεš♡ (Necessário selecionar o FlareSolverr)
-- ✅ ** nεrd–tørrεnτ–hd
+- ✅ ** błµđv (Necessário selecionar o FlareSolverr)
+- ✅ ** nεrd
 
-## Supported Sites
-- ✅ ** st❂rçƙ–f¡lmΞs_v③
-- ✅ ** rεdƎ–tørrΞn†★★
-- ✅ ** bª¡xª–ƒ¡lmεš–tørrεnτ
-- ✅ ** tørrεnτ–đøs–ƒ¡lmεš♡
-- ✅ ** ¢ømªnd◎–łå (FlareSolverr selection required)
-- ✅ ** błµđv–ƒ¡lmεš♡ (FlareSolverr selection required)
-- ✅ ** nεrd–tørrεnτ–hd
 
-## 🐳 Execução com Docker
-### Opção 1: Docker Compose (Recomendado)
+## 🐳 Docker
+
+### Docker  - Opção 1: Docker Compose (Recomendado - Se encontra nos arquivos acima)
 A forma mais simples de executar o projeto é usando Docker Compose, que já configura o Redis automaticamente:
-
-## 🐳 Running with Docker
-### Opção 1: Docker Compose (Recommended)
-The simplest way to run the project is using Docker Compose, which automatically configures Redis:
 
 ```bash
 # Construir e iniciar os serviços
@@ -95,18 +79,8 @@ O Docker Compose irá:
 - ✅ Configurar a rede entre os containers
 - ✅ Persistir dados do Redis em volume nomeado
 - ✅ Configurar restart automático
-### Opção 2: Docker Run CLI
-Se preferir executar manualmente:
 
-Docker Compose will:
-- ✅ Automatically start the Redis service
-- ✅ Automatically start the FlareSolverr service (optional, to resolve Cloudflare)
-- ✅ Configure the network between containers
-- ✅ Persist Redis data in a named volume
-- ✅ Configure automatic restart
-### Option 2: Docker Run CLI
-If you prefer to run manually:
-
+### Docker - Opção 2: Docker Run CLI (Avançado - Se preferir executar manualmente) 
 
 ```bash
 # Primeiro, inicie o Redis (dados salvos em ./redis_data)
@@ -138,88 +112,7 @@ docker run -d \
   --link flaresolverr:flaresolverr \
   ghcr.io/dflexy/dfindexer:latest
 ```
-
-**Nota**: O FlareSolverr é opcional. Se não for iniciado, o indexer funcionará normalmente, mas sites protegidos por Cloudflare podem retornar erro 403.
-**Note**: FlareSolverr is optional. If not started, the indexer will work normally, but Cloudflare-protected sites may return a 403 error.
-
-## 🔌 Integração com Prowlarr
-1. Primeiro, baixe o arquivo de configuração prowlarr.yml neste repositorio
-2. Crie um diretório chamado Custom dentro do diretório de configuração do Prowlarr, na pasta Definitions.
- .Se ele ainda não existir, você pode criá-lo no seguinte local:
- .<Prowlarr_Config_Directory>/Definitions/Custom/
-3. Coloque o arquivo prowlarr.yml que você baixou dentro do diretório Custom criado no passo anterior.
-4. Reinicie o Prowlarr para aplicar as alterações.
-5 . Adicionar o Torrentio como Indexador Personalizado
- . Depois que o Prowlarr reiniciar, você pode adicionar o Torrentio como um indexador customizado seguindo estes passos:
- . Vá até a página Indexers no Prowlarr.
- . Clique no botão "+" para adicionar um novo indexador.
- . Digite "DF Indexer" na busca e selecione DF Indexer na lista.
- . Edite as opções padrão, se necessário, e não esqueça de adicionar
- . Salve as alterações
-
-### Funcionalidades Configuradas
-- ✅ Suporte a Filmes e Séries
-- ✅ Detecção automática de categoria
-- ✅ Filtragem inteligente ativada
-- ✅ Conversão automática de queries (`S01` → `temporada 1`)
-- ✅ Suporte opcional ao FlareSolverr (seletor no Prowlarr)
-- ✅ Testes inteligentes: fazem requisições HTTP reais para verificar se o site está UP, mas pulam enriquecimento pesado e não usam Redis
-
-## 🔌 Integration with Prowlarr
-1. First, download the prowlarr.yml configuration file from this repository
-2. Create a directory called Custom inside the Prowlarr configuration directory, in the Definitions folder.
- .If it doesn't exist yet, you can create it in the following location:
- .<Prowlarr_Config_Directory>/Definitions/Custom/
-3. Place the prowlarr.yml file you downloaded inside the Custom directory created in the previous step.
-4. Restart Prowlarr to apply the changes.
-5 . Add Torrentio as Custom Indexer
- . After Prowlarr restarts, you can add Torrentio as a custom indexer by following these steps:
- . Go to the Indexers page in Prowlarr.
- . Click the "+" button to add a new indexer.
- . Type "DF Indexer" in the search and select DF Indexer from the list.
- . Edit the default options if necessary, and don't forget to add
- . Save the changes
-
-### Configured Features
-- ✅ Movies and Series support
-- ✅ Automatic category detection
-- ✅ Smart filtering enabled
-- ✅ Automatic query conversion (`S01` → `temporada 1`)
-- ✅ Optional FlareSolverr support (selector in Prowlarr)
-- ✅ Smart tests: make real HTTP requests to verify if the site is UP, but skip heavy enrichment and don't use Redis
-
-## 📝 Padronização de Títulos
-Todos os títulos são padronizados no formato:
-- **Episódios**: `Title.S02E01.2025.WEB-DL.1080p`
-- **Episódios Múltiplos**: `Title.S02E05-06-07.2025.WEB-DL.1080p`
-- **Séries Completas**: `Title.S02.2025.WEB-DL`
-- **Filmes**: `Title.2025.1080p.BluRay`
-
-## 📝 Title Standardization
-All titles are standardized in the following format:
-- **Episodes**: `Title.S02E01.2025.WEB-DL.1080p`
-- **Multiple Episodes**: `Title.S02E05-06-07.2025.WEB-DL.1080p`
-- **Complete Seasons**: `Title.S02.2025.WEB-DL`
-- **Movies**: `Title.2025.1080p.BluRay`
-
-**Ordem garantida**: `Título → Temporada/Episódio → Ano → Informações Técnicas`
-
-## 🎬 Tags adicionadas nos titles
-O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
-- **[Brazilian]**: Adicionada quando detecta `DUAL`, `DUBLADO`, `NACIONAL` ou `PORTUGUES` no `release_title_magnet`, metadata ou HTML da página
-- **[Eng]**: Adicionada quando detecta `DUAL` (via HTML como 'dual', `release_title_magnet` ou metadata). DUAL indica português + inglês, então adiciona ambas as tags
-- **[Jap]**: Adicionada quando detecta `JAPONÊS`, `JAPONES`, `JAPANESE` ou `JAP` no `release_title_magnet`, metadata ou HTML da página
-- **[Leg]**: Adicionada quando detecta `LEGENDADO`, `LEGENDA` ou `LEG` no `release_title_magnet`, metadata ou HTML da página
-
-## 🎬 Tags Added to Titles
-The system automatically adds language tags to titles when audio information is detected:
-- **[Brazilian]**: Added when detects `DUAL`, `DUBLADO`, `NACIONAL` or `PORTUGUES` in `release_title_magnet`, metadata or page HTML
-- **[Eng]**: Added when detects `DUAL` (via HTML as 'dual', `release_title_magnet` or metadata). DUAL indicates Portuguese + English, so both tags are added
-- **[Jap]**: Added when detects `JAPONÊS`, `JAPONES`, `JAPANESE` or `JAP` in `release_title_magnet`, metadata or page HTML
-- **[Leg]**: Added when detects `LEGENDADO`, `LEGENDA` or `LEG` in `release_title_magnet`, metadata or page HTML
-
-
-## Variáveis de Ambiente
+### ⚙️ Docker - Variáveis de Ambiente
 | Variável                                | Descrição                                                                | Padrão             |
 |-----------------------------------------|--------------------------------------------------------------------------|--------------------|
 | `PORT`                                  | Porta da API                                                             | `7006`             |
@@ -235,65 +128,80 @@ The system automatically adds language tags to titles when audio information is 
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                            | `console` ou `json`                                                      | `console`          |
 
-## Environment Variables
-| Variable                                 | Description                                                              | Default            |
-|------------------------------------------|--------------------------------------------------------------------------|--------------------|
-| `PORT`                                   | API port                                                                 | `7006`             |
-| `METRICS_PORT`                           | Metrics server port (reserved, not yet used)                             | `8081`             |
-| `REDIS_HOST`                             | Redis host (optional)                                                    | `localhost`        |
-| `REDIS_PORT`                             | Redis port                                                               | `6379`             |
-| `REDIS_DB`                               | Redis logical database                                                   | `0`                |
-| `HTML_CACHE_TTL_SHORT`                   | Short HTML cache TTL (pages)                                            | `10m`              |
-| `HTML_CACHE_TTL_LONG`                    | Long HTML cache TTL (pages)                                             | `12h`              |
-| `FLARESOLVERR_SESSION_TTL`               | FlareSolverr session TTL                                                | `4h`               |
-| `EMPTY_QUERY_MAX_LINKS`                  | Limit of individual links to process from page 1                          | `15`             |
-| `FLARESOLVERR_ADDRESS`                   | FlareSolverr server address (ex: http://flaresolverr:8191)               | `None` (optional)  |
-| `LOG_LEVEL`                              | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
-| `LOG_FORMAT`                             | `console` or `json`                                                      | `console`          |
 
-### Comportamento do Cache de HTML
+## 🔌 Prowlarr
+
+### Prowlarr  - Configuração Inicial
+
+1. Baixe o arquivo de configuração `prowlarr.yml` neste repositório
+2. Crie um diretório chamado `Custom` dentro do diretório de configuração do Prowlarr, na pasta `Definitions`
+   - Se ele ainda não existir, você pode criá-lo no seguinte local:
+   - `<Prowlarr_Config_Directory>/Definitions/Custom/`
+3. Coloque o arquivo `prowlarr.yml` que você baixou dentro do diretório `Custom` criado no passo anterior
+4. Reinicie o Prowlarr para aplicar as alterações
+5. Extra(Tutorial servar https://wiki.servarr.com/prowlarr/indexers#adding-a-custom-yml-definition)
+
+### Prowlarr - Adicionar o Indexador
+1. Vá até a página **Indexers** no Prowlarr
+2. Clique no botão **"+"** para adicionar um novo indexador
+3. Digite **"DF Indexer"** na busca e selecione **DF Indexer** na lista
+4. Edite as opções padrão, se necessário, e não esqueça de adicionar
+5. Salve as alterações
+
+### Prowlarr - Adicionar Vários Sites
+Para adicionar vários sites, deve ser feita a clonagem do primeiro indexer no Prowlarr:
+<img width="489" height="274" alt="image" src="https://github.com/user-attachments/assets/ea24dfee-fe1e-45a7-a55f-0bb4aab66c36" />
+
+1. No indexer clonado, selecione outro site
+2. Com isso você consegue criar vários indexadores e usar todos
+
+### Prowlarr - Selecionar FlareSolverr para Cloudflare
+Para poder selecionar o FlareSolverr:
+
+1. Edite o indexador no Prowlarr
+2. Selecione o campo **[Usar FlareSolverr]**
+3. No momento, somente 2 sites precisam ser selecionados:
+   - **¢ømªnd◎–łå**
+   - **błµđv–ƒ¡lmεš♡**
+   
+<img width="652" height="824" alt="image" src="https://github.com/user-attachments/assets/000c4e51-df2e-4b47-86d6-0010f026ef61" />
+
+## 💾 Cache
+
+### Cache - HTML
 O sistema usa cache em **três camadas** para HTML das páginas:
+
 1. **Cache Local (Memória)**: 30 segundos - Primeira camada, mais rápida
 2. **Cache Redis (Curto)**: 10 minutos - Para páginas pequenas (< 500KB)
 3. **Cache Redis (Longo)**: 12 horas - Para páginas grandes (>= 500KB)
 
+### Cache - Comportamento
 O comportamento varia conforme o tipo de requisição:
+** Busca sem query = Consulta automatica do radarr e sonarr a cada 15 minutos
+** Busca com query = Consulta manual
 
-| Situação                 | Query            | `_is_test`| HTML usa cache?              | Vê novos links?                | Observações                               |
-|--------------------------|------------------|-----------|------------------------------|--------------------------------|-------------------------------------------|
-| **Busca sem query**      | Vazia            | `True`    | ❌ Não (sempre busca fresco) | ✅ Sim                           | HTML nunca é salvo no Redis durante buscas sem query|
-| **Busca com query**      | Com query        | `False`   | ✅ Sim (conforme TTL)        | ⚠️ Pode demorar (conforme TTL)| Novos links aparecem quando cache expira  |
+| Situação                 | Query            | `_is_test`| HTML usa cache?              | Vê novos links?                | Observações                                         |
+|--------------------------|------------------|-----------|------------------------------|--------------------------------|-----------------------------------------------------|
+| **Busca sem query**      | Vazia            | `True`    | ❌ Não (sempre busca fresco) | ✅ Sim                        | HTML nunca é salvo no Redis durante buscas sem query|
+| **Busca com query**      | Com query        | `False`   | ✅ Sim (conforme TTL)        | ⚠️ Pode demorar (conforme TTL)| Novos links aparecem quando cache expira            |
 
+### Cache - Exemplo Prático
 **Exemplo prático** (com `HTML_CACHE_TTL_LONG=6h`):
 - **10:00** - Busca com query → Salva cache (válido até 16:00)
 - **10:15** - Site adiciona novos links
 - **10:30** - Busca com query → Usa cache antigo → ❌ Não vê novos links
 - **16:01** - Busca com query → Cache expirou → Busca fresco → ✅ Vê novos links
 
-**Importante**: Durante buscas sem query (`_is_test=True`), o HTML sempre é buscado fresco, garantindo que novos links apareçam imediatamente. O cache de HTML afeta apenas buscas com query.
+## 🔍 API
 
-### HTML Cache Behavior
-The system uses **three-layer caching** for page HTML:
-1. **Local Cache (Memory)**: 30 seconds - First layer, fastest
-2. **Redis Cache (Short)**: 10 minutes - For small pages (< 500KB)
-3. **Redis Cache (Long)**: 12 hours - For large pages (>= 500KB)
+### 🔍 API WEB
+http://localhost:7006/api
 
-Behavior varies according to request type:
+** Atenção - Selecionar todos pode demorar ou travar devido a demora de requisições.
+** Principamente com os sites que usam Cloudflare
+<img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
 
-| Situation                 | Query            | `_is_test`| HTML uses cache?             | Sees new links?                | Notes                                     |
-|--------------------------|------------------|-----------|------------------------------|--------------------------------|-------------------------------------------|
-| **Search without query** | Empty            | `True`    | ❌ No (always fetches fresh) | ✅ Yes                           | HTML is never saved to Redis during searches without query |
-| **Search with query**    | With query       | `False`   | ✅ Yes (according to TTL)    | ⚠️ May be delayed (per TTL)    | New links appear when cache expires        |
-
-**Practical example** (with `HTML_CACHE_TTL_LONG=6h`):
-- **10:00** - Search with query → Saves cache (valid until 16:00)
-- **10:15** - Site adds new links
-- **10:30** - Search with query → Uses old cache → ❌ Doesn't see new links
-- **16:01** - Search with query → Cache expired → Fetches fresh → ✅ Sees new links
-
-**Important**: During searches without query (`_is_test=True`), HTML is always fetched fresh, ensuring new links appear immediately. HTML cache only affects searches with query.
-
-## 🔍 API Endpoints
+### 🔍 API Endpoints
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/` | Informações básicas da API |
@@ -304,18 +212,8 @@ Behavior varies according to request type:
 | GET | `/indexer?q=foo&use_flaresolverr=true` | Busca com FlareSolverr |
 | GET | `/indexers/<tipo>?q=foo` | Usa scraper específico |
 
-## 🔍 API Endpoints
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/` | Basic API information |
-| GET | `/indexer` | Uses default scraper |
-| GET | `/indexer?q=foo` | Search in default source |
-| GET | `/indexer?page=2` | Pagination |
-| GET | `/indexer?q=foo&filter_results=true` | Search with filter |
-| GET | `/indexer?q=foo&use_flaresolverr=true` | Search with FlareSolverr |
-| GET | `/indexers/<type>?q=foo` | Uses specific scraper |
-
 ### Formato de Resposta
+
 ```json
 {
   "results": [
@@ -338,15 +236,10 @@ Behavior varies according to request type:
 
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
+
 ## 🤝 Contribuindo
 Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull requests.
----
-**Nota**: Este é um projeto de indexação de torrents. Use com responsabilidade e respeite os direitos autorais.
 
-## 📄 License
-This project is maintained by **DFlexy**.
-## 🤝 Contributing
-Contributions are welcome! Feel free to open issues or pull requests.
----
-**Note**: This is a torrent indexing project. Use responsibly and respect copyrights.
-
+## ⚠️ Notas
+** Este é um projeto de indexação de torrents. 
+** Use com responsabilidade e respeite os direitos autorais.

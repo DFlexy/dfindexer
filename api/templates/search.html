@@ -13,26 +13,30 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #0a0a0a;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 15px;
+            color: #ffffff;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
         .header {
             text-align: center;
-            color: #ffffff;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            padding: 10px;
         }
 
         .header h1 {
             font-size: 1.8em;
             margin-bottom: 5px;
-            color: #ffffff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             font-weight: 700;
         }
 
@@ -42,123 +46,186 @@
         }
 
         .search-box {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
+            background: rgba(26, 26, 26, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .search-form {
             display: flex;
+            flex-direction: column;
             gap: 15px;
-            flex-wrap: wrap;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: end;
         }
 
         .form-group {
-            flex: 1;
-            min-width: 200px;
-            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
 
         .form-group label {
-            display: block;
-            margin-bottom: 4px;
             color: #e0e0e0;
             font-weight: 600;
             font-size: 0.85em;
+            letter-spacing: 0.3px;
         }
 
-        .form-group input,
-        .form-group select {
+        .input-wrapper {
+            position: relative;
+        }
+
+        .form-group input {
             width: 100%;
-            padding: 6px 8px;
-            background: #0f0f0f;
-            border: 1px solid #2a2a2a;
-            border-radius: 4px;
-            font-size: 0.9em;
+            padding: 10px 40px 10px 14px;
+            background: rgba(15, 15, 15, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            font-size: 0.95em;
             color: #ffffff;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input[type="text"] {
-            padding-right: 30px;
-        }
-        
-        .clear-button {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            margin-top: 0;
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            font-size: 1.2em;
-            line-height: 1;
-            padding: 0;
-            width: 18px;
-            height: 18px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.2s;
-            z-index: 1;
-            box-sizing: border-box;
-            font-weight: 300;
-        }
-        
-        .clear-button:hover {
-            color: #ffffff;
-        }
-        
-        .clear-button:active {
-            color: #4a9eff;
+            transition: all 0.3s ease;
         }
 
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus {
             outline: none;
-            border-color: #4a9eff;
+            border-color: #667eea;
+            background: rgba(15, 15, 15, 0.9);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
 
         .form-group input::placeholder {
             color: #666;
         }
 
+        .clear-button {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1.3em;
+            width: 24px;
+            height: 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            border-radius: 50%;
+        }
+
+        .clear-button:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
         .btn-search {
-            padding: 6px 20px;
-            background: #4a9eff;
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             font-size: 0.9em;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            align-self: flex-end;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 3px 12px rgba(102, 126, 234, 0.4);
+            white-space: nowrap;
         }
 
         .btn-search:hover {
-            background: #3a8eef;
-        }
-
-        .btn-search:active {
-            background: #2a7edf;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.6);
         }
 
         .btn-search:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            background: #2a2a2a;
+            transform: none;
+        }
+
+        .sites-section label {
+            color: #e0e0e0;
+            font-weight: 600;
+            font-size: 0.85em;
+            letter-spacing: 0.3px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .scrapers-container {
+            background: rgba(15, 15, 15, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .scrapers-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .select-all-wrapper {
+            width: 100%;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .checkbox-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 14px;
+            background: rgba(30, 30, 30, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .checkbox-wrapper:hover {
+            background: rgba(40, 40, 40, 0.9);
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            cursor: pointer;
+            accent-color: #667eea;
+            margin: 0;
+        }
+
+        .checkbox-wrapper label {
+            cursor: pointer;
+            color: #e0e0e0;
+            font-size: 0.88em;
+            font-weight: 500;
+            margin: 0;
+            white-space: nowrap;
         }
 
         .loading {
             text-align: center;
-            padding: 40px;
-            color: white;
-            font-size: 1.2em;
+            padding: 50px 20px;
             display: none;
         }
 
@@ -167,13 +234,13 @@
         }
 
         .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top: 4px solid white;
+            border: 4px solid rgba(102, 126, 234, 0.1);
+            border-top: 4px solid #667eea;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 15px;
         }
 
         @keyframes spin {
@@ -181,12 +248,19 @@
             100% { transform: rotate(360deg); }
         }
 
+        .loading p {
+            color: #b0b0b0;
+            font-size: 1em;
+        }
+
         .results {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 10px;
+            background: rgba(26, 26, 26, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             padding: 20px;
             display: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .results.active {
@@ -197,260 +271,166 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 18px;
             padding-bottom: 12px;
-            border-bottom: 1px solid #2a2a2a;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
         }
 
         .results-header h2 {
-            color: #ffffff;
             font-size: 1.3em;
-            font-weight: 600;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .results-count {
             color: #888;
             font-size: 0.9em;
+            font-weight: 500;
         }
 
         .result-item {
-            background: #0f0f0f;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border-left: 3px solid #4a9eff;
-            transition: border-color 0.2s, background 0.2s;
+            background: rgba(15, 15, 15, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid #667eea;
+            transition: all 0.3s ease;
         }
 
         .result-item:hover {
-            border-color: #4a9eff;
-            background: #151515;
+            background: rgba(20, 20, 20, 0.9);
+            border-left-color: #764ba2;
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
         }
 
-        .result-table {
-            width: 100%;
-            border-collapse: collapse;
+        .result-content {
+            display: grid;
+            grid-template-columns: 70% 30%;
+            gap: 8px 20px;
         }
 
-        .result-table tr {
-            border-bottom: 1px solid #2a2a2a;
+        .result-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
         }
 
-        .result-table tr:last-child {
-            border-bottom: none;
+        .result-label {
+            color: #888;
+            font-size: 0.78em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
-        .result-table td {
-            padding: 4px 0;
-            vertical-align: middle;
+        .result-value {
+            color: #e0e0e0;
+            font-size: 0.88em;
             word-break: break-word;
         }
-        
-        .result-table tr:last-child td {
-            vertical-align: middle;
-        }
 
-        .result-table td:first-child {
-            width: 50%;
-            padding-right: 10px;
-            color: #e0e0e0;
-            font-size: 0.85em;
-            white-space: normal;
-            overflow-wrap: break-word;
-        }
-
-        .result-table td:last-child {
-		    text-align: right;
-			width: 50%;
-            padding-left: 10px;
-            color: #e0e0e0;
-            font-size: 0.85em;
-            vertical-align: middle;
-        }
-        
-        .result-table tr:last-child td:first-child {
-            width: 75%;
-        }
-        
-        .result-table tr:last-child td:last-child {
-            width: 25%;
-        }
-		
-		.result-table tr:last-child td {
-            vertical-align: top;
-        }
-
-        .result-table tr:last-child td:last-child {
-            padding-bottom: 0 !important;
-        }
-        
         .result-title {
-            font-size: 0.9em;
+            font-size: 0.95em;
             font-weight: 600;
             color: #ffffff;
-            word-break: break-word;
             line-height: 1.3;
         }
 
         .result-link {
-            font-size: 0.75em;
-            color: #4a9eff;
+            color: #667eea;
             text-decoration: none;
-            word-break: break-all;
-            display: inline-block;
-            max-width: 100%;
+            font-size: 0.85em;
+            transition: color 0.2s;
         }
 
         .result-link:hover {
+            color: #764ba2;
             text-decoration: underline;
-            color: #5aaeff;
         }
 
-        .detail-label {
-            font-size: 0.75em;
-            color: #888;
-            margin-right: 4px;
-        }
-
-        .detail-value {
-            font-size: 0.8em;
-            color: #e0e0e0;
-            font-weight: 500;
-        }
-        
-        .detail-value.magnet-name {
-            font-size: 0.85em;
-            font-weight: 600;
-            white-space: normal;
-            word-break: break-word;
+        .badge {
             display: inline-block;
-            max-width: 100%;
-            vertical-align: middle;
+            padding: 3px 9px;
+            border-radius: 5px;
+            font-size: 0.78em;
+            font-weight: 600;
+            margin-right: 5px;
+            white-space: nowrap;
         }
 
-        .detail-value.audio {
-            color: #4a9eff;
+        .badge.audio {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            border: 1px solid rgba(102, 126, 234, 0.4);
         }
 
-        .detail-value.seeds {
+        .badge.info {
+            background: rgba(76, 175, 80, 0.2);
             color: #4caf50;
+            border: 1px solid rgba(76, 175, 80, 0.4);
         }
 
-        .detail-value.leech {
-            color: #f44336;
-        }
-
-        .detail-value.size {
-            color: #00bcd4;
-        }
-
-        .detail-value.hash {
+        .hash-value {
             font-family: 'Courier New', monospace;
-            font-size: 0.7em;
+            font-size: 0.75em;
             color: #888;
             word-break: break-all;
         }
 
         .magnet-button {
             display: inline-block;
-            padding: 5px 10px;
-            background-color: #4caf50;
+            padding: 4px 14px;
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 0.75em;
             font-weight: 600;
-            transition: background-color 0.2s, transform 0.2s;
-            margin-left: 8px;
+			line-height: 1;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
+            white-space: nowrap;
         }
 
         .magnet-button:hover {
-            background-color: #45a049;
-            transform: translateY(-1px);
-        }
-
-        .magnet-button:active {
-            transform: translateY(0);
-        }
-
-        .scrapers-container {
-            background: #0f0f0f;
-            border: 1px solid #2a2a2a;
-            border-radius: 4px;
-            padding: 8px 12px;
-        }
-
-        .scrapers-grid {
-            display: flex;
-            flex-wrap: nowrap;
-            gap: 8px;
-            align-items: center;
-            overflow-x: auto;
-        }
-        
-        #scrapersList {
-            display: flex;
-            flex-wrap: nowrap;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .checkbox-wrapper {
-            display: inline-flex;
-            align-items: center;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .checkbox-wrapper input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            margin: 0 4px 0 0;
-            cursor: pointer;
-            accent-color: #4a9eff;
-            flex-shrink: 0;
-        }
-
-        .checkbox-wrapper label {
-            cursor: pointer;
-            color: #e0e0e0;
-            font-size: 0.85em;
-            user-select: none;
-            margin: 0;
-            white-space: nowrap;
-        }
-
-        .checkbox-wrapper:hover label {
-            color: #4a9eff;
-        }
-
-        .select-all-wrapper {
-            padding-right: 8px;
-            margin-right: 8px;
-            border-right: 1px solid #2a2a2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.5);
         }
 
         .no-results {
             text-align: center;
-            padding: 40px 20px;
-            color: #888;
+            padding: 50px 20px;
         }
 
         .no-results h3 {
-            font-size: 1.2em;
-            margin-bottom: 10px;
+            font-size: 1.4em;
+            margin-bottom: 12px;
             color: #e0e0e0;
         }
 
+        .no-results p {
+            color: #888;
+            font-size: 0.95em;
+        }
+
         .error {
-            background: #2a1a1a;
-            border: 1px solid #4a2a2a;
-            border-radius: 8px;
-            padding: 15px;
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            border-radius: 10px;
+            padding: 16px;
             margin-bottom: 20px;
             color: #ff6b6b;
             display: none;
+            font-weight: 500;
         }
 
         .error.active {
@@ -463,42 +443,120 @@
             padding: 20px;
             color: #888;
             font-size: 0.85em;
-            border-top: 1px solid #2a2a2a;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .footer-content {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 20px;
+            gap: 15px;
             flex-wrap: wrap;
         }
 
         .footer-stat {
-            color: #4a9eff;
-            font-weight: 600;
+            color: #667eea;
+            font-weight: 700;
+        }
+
+        @media (max-width: 1024px) {
+            .header h1 {
+                font-size: 1.6em;
+            }
+            .result-label {
+                min-width: 100px;
+            }
         }
 
         @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .header {
+                margin-bottom: 15px;
+            }
             .header h1 {
-                font-size: 2em;
+                font-size: 1.5em;
             }
-
-            .search-form {
-                flex-direction: column;
+            .header p {
+                font-size: 0.85em;
             }
-
+            .search-box {
+                padding: 15px;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
             .btn-search {
                 width: 100%;
+                padding: 12px;
             }
-
-            .result-details {
+            .form-group input {
+                font-size: 16px;
+                padding: 12px 40px 12px 14px;
+            }
+            .result-content {
                 grid-template-columns: 1fr;
+                gap: 8px;
             }
-
-            .footer-content {
+            .result-line {
                 flex-direction: column;
-                gap: 10px;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            .result-label {
+                font-size: 0.75em;
+            }
+            .result-value {
+                font-size: 0.85em;
+                width: 100%;
+            }
+            .result-title {
+                font-size: 0.92em;
+            }
+            .badge {
+                font-size: 0.75em;
+                padding: 3px 8px;
+                margin: 2px 4px 2px 0;
+            }
+            .hash-value {
+                font-size: 0.7em;
+            }
+            .magnet-button {
+                width: 100%;
+                text-align: center;
+                padding: 10px;
+                font-size: 0.85em;
+            }
+            .results-header {
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            .results-header h2 {
+                font-size: 1.2em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+            .header h1 {
+                font-size: 1.3em;
+            }
+            .search-box {
+                padding: 12px;
+            }
+            .results {
+                padding: 15px;
+            }
+            .result-item {
+                padding: 12px;
+            }
+            .checkbox-wrapper {
+                padding: 8px 12px;
             }
         }
     </style>
@@ -507,34 +565,38 @@
     <div class="container">
         <div class="header">
             <h1>🔍 DF Indexer</h1>
-            <p>Busca de Torrents Brasileiros</p>
+            <p>Busca Inteligente de Torrents Brasileiros</p>
         </div>
 
         <div class="search-box">
             <form id="searchForm" class="search-form">
-                <div class="form-group">
-                    <label for="query">Buscar:</label>
-                    <input type="text" id="query" name="query" placeholder="Digite o nome do filme ou série..." required>
-                    <button type="button" class="clear-button" id="clearButton" style="display: none;" title="Limpar busca">×</button>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="query">O que você procura?</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="query" name="query" placeholder="Digite o nome do filme ou série..." required>
+                            <button type="button" class="clear-button" id="clearButton" title="Limpar">×</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-search" id="searchBtn">Buscar</button>
                 </div>
-                <div class="form-group" style="flex: 1 1 100%;">
-                    <label>Sites:</label>
+
+                <div class="sites-section">
+                    <label>Selecione os sites de busca:</label>
                     <div class="scrapers-container">
                         <div class="scrapers-grid">
                             <div class="checkbox-wrapper select-all-wrapper">
                                 <input type="checkbox" id="selectAll">
-                                <label for="selectAll">Todos</label>
+                                <label for="selectAll">Selecionar Todos</label>
                             </div>
                             <div id="scrapersList" style="display: contents;"></div>
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn-search" id="searchBtn">Buscar</button>
             </form>
         </div>
 
         <div class="error" id="errorBox"></div>
-
         <div class="loading" id="loading">
             <div class="spinner"></div>
             <p>Buscando torrents...</p>
@@ -558,7 +620,6 @@
     </div>
 
     <script>
-        // Carrega lista de sites disponíveis
         async function loadSites() {
             try {
                 const response = await fetch('/');
@@ -567,49 +628,29 @@
                 const selectAllCheckbox = document.getElementById('selectAll');
                 
                 if (data.available_types && Array.isArray(data.available_types)) {
-                    // Limpa lista anterior
                     scrapersList.innerHTML = '';
-                    
-                    // Cria checkbox para cada scraper
                     data.available_types.forEach(site => {
                         const wrapper = document.createElement('div');
                         wrapper.className = 'checkbox-wrapper';
-                        
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
                         checkbox.id = `site_${site}`;
                         checkbox.value = site;
                         checkbox.name = 'scraper';
-                        // Starck como padrão
-                        if (site.toLowerCase() === 'starck') {
-                            checkbox.checked = true;
-                        }
-                        
+                        if (site.toLowerCase() === 'starck') checkbox.checked = true;
                         const label = document.createElement('label');
                         label.htmlFor = `site_${site}`;
                         label.textContent = site.charAt(0).toUpperCase() + site.slice(1);
-                        
                         wrapper.appendChild(checkbox);
                         wrapper.appendChild(label);
                         scrapersList.appendChild(wrapper);
                     });
-                    
-                    // Atualiza estado do "Todos" baseado nas seleções
                     updateSelectAllState();
-                    
-                    // Event listener para "Todos"
                     selectAllCheckbox.addEventListener('change', (e) => {
-                        const checkboxes = document.querySelectorAll('input[name="scraper"]');
-                        checkboxes.forEach(cb => {
-                            cb.checked = e.target.checked;
-                        });
+                        document.querySelectorAll('input[name="scraper"]').forEach(cb => cb.checked = e.target.checked);
                     });
-                    
-                    // Event listener para cada checkbox individual
                     scrapersList.addEventListener('change', (e) => {
-                        if (e.target.name === 'scraper') {
-                            updateSelectAllState();
-                        }
+                        if (e.target.name === 'scraper') updateSelectAllState();
                     });
                 }
             } catch (error) {
@@ -617,12 +658,10 @@
             }
         }
         
-        // Atualiza estado do checkbox "Todos"
         function updateSelectAllState() {
             const checkboxes = document.querySelectorAll('input[name="scraper"]');
             const selectAllCheckbox = document.getElementById('selectAll');
             const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
-            
             if (checkedCount === 0) {
                 selectAllCheckbox.checked = false;
                 selectAllCheckbox.indeterminate = false;
@@ -635,169 +674,97 @@
             }
         }
         
-        // Obtém scrapers selecionados
         function getSelectedScrapers() {
-            const checkboxes = document.querySelectorAll('input[name="scraper"]:checked');
-            return Array.from(checkboxes).map(cb => cb.value);
+            return Array.from(document.querySelectorAll('input[name="scraper"]:checked')).map(cb => cb.value);
         }
 
-        // Extrai tags de áudio e legenda do título
         function extractAudioTags(title) {
-            const idiomas = [];
-            const legendas = [];
-            
+            const idiomas = [], legendas = [];
             if (title.includes('[Brazilian]')) idiomas.push('Português');
             if (title.includes('[Eng]')) idiomas.push('Inglês');
             if (title.includes('[Leg]')) legendas.push('Português');
-            
-            // Mantém o título completo com as tags (título finalizado)
-            const finalTitle = title.trim();
-            
-            return { finalTitle, idiomas, legendas };
+            return { finalTitle: title.trim(), idiomas, legendas };
         }
 
-        // Formata tamanho
         function formatSize(size) {
-            if (!size || size === 'N/A') return 'N/A';
-            return size;
+            return size && size !== 'N/A' ? size : 'N/A';
         }
 
-        // Formata número
         function formatNumber(num) {
-            if (num === null || num === undefined || num === 'N/A') return 'N/A';
-            return num.toString();
+            return (num === null || num === undefined || num === 'N/A') ? 'N/A' : num.toString();
         }
 
-        // Formata URL para exibir apenas domínio + "..."
         function formatUrl(url) {
             if (!url || url === '#') return 'N/A';
             try {
-                const urlObj = new URL(url);
-                return `${urlObj.origin}/...`;
+                return `${new URL(url).origin}/...`;
             } catch (e) {
-                // Se não conseguir fazer parse, tenta extrair domínio manualmente
                 const match = url.match(/^https?:\/\/([^\/]+)/);
-                if (match) {
-                    return `${match[0]}/...`;
-                }
-                return url.length > 50 ? url.substring(0, 50) + '...' : url;
+                return match ? `${match[0]}/...` : (url.length > 50 ? url.substring(0, 50) + '...' : url);
             }
         }
 
-        // Função para truncar texto longo
-        function truncateText(text, maxLength = 80) {
-            if (!text || text === 'N/A') return text;
-            if (text.length <= maxLength) return text;
-            return text.substring(0, maxLength) + '...';
-        }
-
-        // Renderiza TODOS os resultados filtrados (sem limite)
         function renderResults(torrents) {
             const resultsList = document.getElementById('resultsList');
             const resultsCount = document.getElementById('resultsCount');
-            
-            // Exibe contagem total de resultados filtrados
             resultsCount.textContent = `${torrents.length} resultado(s) encontrado(s)`;
-            
             if (torrents.length === 0) {
-                resultsList.innerHTML = `
-                    <div class="no-results">
-                        <h3>Nenhum resultado encontrado</h3>
-                        <p>Tente buscar com outros termos ou verifique a ortografia.</p>
-                    </div>
-                `;
+                resultsList.innerHTML = '<div class="no-results"><h3>Nenhum resultado encontrado</h3><p>Tente buscar com outros termos ou verifique a ortografia.</p></div>';
                 return;
             }
-
-            // Renderiza TODOS os resultados sem limite ou paginação
             resultsList.innerHTML = torrents.map(torrent => {
                 const { finalTitle, idiomas, legendas } = extractAudioTags(torrent.title || '');
-                const idiomasStr = idiomas.length > 0 ? idiomas.join(' | ') : 'N/A';
-                const legendaStr = legendas.length > 0 ? legendas.join(' | ') : 'N/A';
-                
+                const idiomasStr = idiomas.length > 0 ? idiomas.join(', ') : 'N/A';
+                const legendaStr = legendas.length > 0 ? legendas.join(', ') : 'N/A';
                 const detailsUrl = torrent.details || '#';
                 const magnetLink = torrent.magnet || torrent.magnet_link || '#';
                 const formattedUrl = formatUrl(detailsUrl);
-                
                 const seeds = formatNumber(torrent.tracker_seed !== undefined ? torrent.tracker_seed : (torrent.seed_count !== undefined ? torrent.seed_count : 0));
                 const leech = formatNumber(torrent.tracker_leech !== undefined ? torrent.tracker_leech : (torrent.leech_count !== undefined ? torrent.leech_count : 0));
                 const size = formatSize(torrent.size);
                 const hash = torrent.info_hash || 'N/A';
                 const releaseTitleMagnet = torrent.release_title_magnet || 'N/A';
-                
-                return `
-                    <div class="result-item">
-                        <table class="result-table">
-                            <tr>
-                                <td><span class="detail-label">Title:</span> <span class="detail-value title">${finalTitle}</span></td>
-                                <td>
-                                    ${detailsUrl !== '#' ? `<a href="${detailsUrl}" target="_blank" class="result-link" title="${detailsUrl}">${formattedUrl}</a>` : 'N/A'}
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><span class="detail-label">Áudio:</span> <span class="detail-value audio">${idiomasStr}</span></td>
-                                <td><span class="detail-label">Hash:</span> <span class="detail-value hash">${hash}</span></td>
-                            </tr>
-                            <tr>
-                                <td><span class="detail-label">Legenda:</span> <span class="detail-value audio">${legendaStr}</span></td>
-                                <td><span class="detail-label">Seeds:</span> <span class="detail-value seeds">${seeds}</span> | <span class="detail-label">Leech:</span> <span class="detail-value leech">${leech}</span> | <span class="detail-label">Size:</span> <span class="detail-value size">${size}</span></td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <span class="detail-label">Nome Magnet:</span>
-                                    <span class="detail-value magnet-name" title="${releaseTitleMagnet}">${releaseTitleMagnet}</span>
-                                </td>
-                                <td>
-                                    ${magnetLink !== '#' ? `<a href="${magnetLink}" class="magnet-button">Download Magnet</a>` : ''}
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                `;
+                return `<div class="result-item"><div class="result-content">
+                    <div class="result-line"><span class="result-label">TÍTULO PROCESSADO:</span><span class="result-value result-title">${finalTitle}</span></div>
+                    <div class="result-line"><span class="result-label">LINK:</span><span class="result-value">${detailsUrl !== '#' ? `<a href="${detailsUrl}" target="_blank" class="result-link" title="${detailsUrl}">${formattedUrl}</a>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">ÁUDIO:</span><span class="result-value">${idiomasStr !== 'N/A' ? `<span class="badge audio">${idiomasStr}</span>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">LEGENDA:</span><span class="result-value">${legendaStr !== 'N/A' ? `<span class="badge audio">${legendaStr}</span>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">INFO:</span><span class="result-value"><span class="badge info">S: ${seeds}</span><span class="badge info">L: ${leech}</span><span class="badge info">${size}</span></span></div>
+                    <div class="result-line"><span class="result-label">HASH:</span><span class="result-value hash-value">${hash}</span></div>
+                    <div class="result-line"><span class="result-label">NOME MAGNET:</span><span class="result-value">${releaseTitleMagnet}</span></div>
+                    <div class="result-line"><span class="result-label">DOWNLOAD:</span><span class="result-value">${magnetLink !== '#' ? `<a href="${magnetLink}" class="magnet-button">Magnet</a>` : 'N/A'}</span></div>
+                </div></div>`;
             }).join('');
         }
 
-        // Mostra erro
         function showError(message) {
             const errorBox = document.getElementById('errorBox');
             errorBox.textContent = message;
             errorBox.classList.add('active');
-            setTimeout(() => {
-                errorBox.classList.remove('active');
-            }, 5000);
+            setTimeout(() => errorBox.classList.remove('active'), 5000);
         }
 
-        // Busca torrents
         async function searchTorrents(query, selectedScrapers) {
             const loading = document.getElementById('loading');
             const results = document.getElementById('results');
             const searchBtn = document.getElementById('searchBtn');
-            
             loading.classList.add('active');
             results.classList.remove('active');
             searchBtn.disabled = true;
-            
             try {
                 let allResults = [];
-                
-                // Se nenhum scraper selecionado ou todos selecionados, busca em todos
-                if (selectedScrapers.length === 0 || selectedScrapers.length === document.querySelectorAll('.scraper-checkbox[name="scraper"]').length) {
-                    const url = `/indexer?q=${encodeURIComponent(query)}&filter_results=true`;
-                    const response = await fetch(url);
+                if (selectedScrapers.length === 0 || selectedScrapers.length === document.querySelectorAll('input[name="scraper"]').length) {
+                    const response = await fetch(`/indexer?q=${encodeURIComponent(query)}&filter_results=true`);
                     const data = await response.json();
-                    
                     if (data.error) {
                         showError(data.error);
                         return;
                     }
-                    
                     allResults = data.results || [];
                 } else {
-                    // Busca em cada scraper selecionado
                     const promises = selectedScrapers.map(async (site) => {
                         try {
-                            const url = `/indexers/${site}?q=${encodeURIComponent(query)}&filter_results=true`;
-                            const response = await fetch(url);
+                            const response = await fetch(`/indexers/${site}?q=${encodeURIComponent(query)}&filter_results=true`);
                             const data = await response.json();
                             return data.results || [];
                         } catch (error) {
@@ -805,31 +772,19 @@
                             return [];
                         }
                     });
-                    
                     const resultsArray = await Promise.all(promises);
                     allResults = resultsArray.flat();
-                    
-                    // Remove duplicados baseado em info_hash
                     const seenHashes = new Set();
                     allResults = allResults.filter(torrent => {
                         const hash = (torrent.info_hash || '').toLowerCase();
                         if (hash && hash.length === 40) {
-                            if (seenHashes.has(hash)) {
-                                return false;
-                            }
+                            if (seenHashes.has(hash)) return false;
                             seenHashes.add(hash);
                         }
                         return true;
                     });
-                    
-                    // Ordena por data (mais recente primeiro)
-                    allResults.sort((a, b) => {
-                        const dateA = new Date(a.date || 0);
-                        const dateB = new Date(b.date || 0);
-                        return dateB - dateA;
-                    });
+                    allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
                 }
-                
                 renderResults(allResults);
                 results.classList.add('active');
             } catch (error) {
@@ -841,24 +796,14 @@
             }
         }
 
-        // Event listeners
         const queryInput = document.getElementById('query');
         const clearButton = document.getElementById('clearButton');
         
-        // Mostra/oculta botão de limpar baseado no conteúdo do input
         function toggleClearButton() {
-            if (queryInput.value.trim().length > 0) {
-                clearButton.style.display = 'flex';
-            } else {
-                clearButton.style.display = 'none';
-            }
+            clearButton.style.display = queryInput.value.trim().length > 0 ? 'flex' : 'none';
         }
         
-        // Event listener para mostrar/ocultar botão de limpar
         queryInput.addEventListener('input', toggleClearButton);
-        queryInput.addEventListener('keyup', toggleClearButton);
-        
-        // Event listener para limpar o campo
         clearButton.addEventListener('click', () => {
             queryInput.value = '';
             queryInput.focus();
@@ -868,33 +813,24 @@
         document.getElementById('searchForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const query = queryInput.value.trim();
-            const selectedScrapers = getSelectedScrapers();
-            
             if (!query) {
                 showError('Por favor, digite um termo de busca.');
                 return;
             }
-            
-            searchTorrents(query, selectedScrapers);
+            searchTorrents(query, getSelectedScrapers());
         });
 
-        // Carrega contagem de torrents indexados
         async function loadIndexedCount() {
             try {
                 const response = await fetch('/');
                 const data = await response.json();
-                const indexedCount = data.indexed_torrents || 0;
-                
-                // Formata número com separador de milhares
-                const formattedCount = indexedCount.toLocaleString('pt-BR');
-                document.getElementById('indexedCount').textContent = formattedCount;
+                document.getElementById('indexedCount').textContent = (data.indexed_torrents || 0).toLocaleString('pt-BR');
             } catch (error) {
                 console.error('Erro ao carregar contagem:', error);
                 document.getElementById('indexedCount').textContent = 'N/A';
             }
         }
 
-        // Carrega sites ao carregar a página
         loadSites();
         loadIndexedCount();
     </script>

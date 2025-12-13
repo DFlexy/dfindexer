@@ -133,10 +133,10 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
             if current_ttl == -1 or current_ttl > 24 * 3600:
                 redis.expire(key, 24 * 3600)
         else:
-            # TTL de 7 dias para outros campos (mais estáveis)
-            # Só define se a chave não existe ou está expirando em menos de 7 dias
-            if current_ttl == -1 or current_ttl < 7 * 24 * 3600:
-                redis.expire(key, 7 * 24 * 3600)
+            # TTL de 30 dias para outros campos (mais estáveis)
+            # Só define se a chave não existe ou está expirando em menos de 30 dias
+            if current_ttl == -1 or current_ttl < 30 * 24 * 3600:
+                redis.expire(key, 30 * 24 * 3600)
     except Exception:
         pass
 
