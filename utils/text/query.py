@@ -48,6 +48,71 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
     # Remove acentos para comparação
     combined_title = remove_accents(combined_title)
     
+    # VALIDAÇÃO DE EPISÓDIO: Se a query contém SxxExx, valida se o título contém o mesmo episódio
+    # Extrai padrão SxxExx da query original (antes de normalizar)
+    query_episode_match = re.search(r'(?i)s(\d{1,2})e(\d{1,2})', query)
+    if query_episode_match:
+        query_season = query_episode_match.group(1).zfill(2)
+        query_episode_num = int(query_episode_match.group(2))
+        
+        # Busca padrão SxxExx no título (aceita pontos, espaços, hífens)
+        # Suporta formatos: S02E05, S02E05-06, S02E05E06E07, S02E05-E07
+        title_season_ep_pattern = rf'(?i)s{query_season}e(\d{{1,2}})(?:[\.\-\sE]|$)'
+        title_season_ep_match = re.search(title_season_ep_pattern, title)
+        
+        if not title_season_ep_match:
+            # Não encontrou o padrão SxxExx no título, rejeita
+            return False
+        
+        # Extrai todos os episódios do título
+        # Busca padrão completo: S02E05, S02E05-06, S02E05E06E07, S02E05-E07
+        # Busca o padrão SxxE seguido de números (suporta pontos, hífens, espaços, E)
+        episode_pattern = rf'(?i)s{query_season}e(\d{{1,2}})(?:[\.\-\sE]+(\d{{1,2}}))*'
+        episode_match = re.search(episode_pattern, title)
+        episodes_in_title = []
+        
+        if episode_match:
+            # Primeiro episódio
+            first_ep = int(episode_match.group(1))
+            episodes_in_title = [first_ep]
+            
+            # Extrai todos os números de episódio do match completo
+            # Busca todos os números após o primeiro episódio (suporta hífen, ponto, E, espaço)
+            match_text = episode_match.group(0)
+            # Remove o primeiro episódio do texto para buscar apenas os subsequentes
+            first_ep_str = episode_match.group(1)
+            remaining_text = match_text[len(f's{query_season}e{first_ep_str}'):]
+            episode_numbers = re.findall(r'(\d{1,2})', remaining_text)
+            
+            for ep_str in episode_numbers:
+                try:
+                    ep_num = int(ep_str)
+                    # Adiciona apenas se for maior que o último (evita duplicatas)
+                    if ep_num > episodes_in_title[-1]:
+                        episodes_in_title.append(ep_num)
+                except (ValueError, TypeError):
+                    break
+        else:
+            # Não encontrou padrão válido, rejeita
+            return False
+        
+        # Valida se o episódio da query corresponde aos episódios do título
+        if len(episodes_in_title) == 1:
+            # Episódio único: deve corresponder exatamente
+            if episodes_in_title[0] != query_episode_num:
+                return False
+        else:
+            # Múltiplos episódios: verifica se o episódio da query está na lista ou no intervalo
+            if query_episode_num not in episodes_in_title:
+                # Verifica se está em um intervalo (ex: S02E05-E07, query é E06)
+                if len(episodes_in_title) >= 2:
+                    start_ep = episodes_in_title[0]
+                    end_ep = episodes_in_title[-1]
+                    if not (start_ep <= query_episode_num <= end_ep):
+                        return False
+                else:
+                    return False
+    
     # Conta quantas palavras da query estão presentes no título
     matches = 0
     matched_words = []  # Rastreia quais palavras fizeram match
