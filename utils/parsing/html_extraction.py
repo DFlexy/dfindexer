@@ -4,43 +4,43 @@
 import re
 import html
 import logging
-from datetime import datetime
 from typing import List, Optional
 from bs4 import BeautifulSoup, Tag
 from urllib.parse import unquote
 import requests
 
-from utils.parsing.date_parser import parse_date_from_string
-
 logger = logging.getLogger(__name__)
 
 
-# Extrai data de publicação de uma página HTML - tenta múltiplas fontes: URL, meta tag article:published_time, ou usa data atual
-def extract_date_from_page(doc: BeautifulSoup, url: str) -> datetime:
-    # Tenta extrair da URL primeiro
-    date = parse_date_from_string(url)
-    if date:
-        return date
-    
-    # Tenta extrair da meta tag article:published_time
-    date_meta = doc.find('meta', {'property': 'article:published_time'})
-    if date_meta:
-        date_content = date_meta.get('content', '')
-        if date_content:
-            try:
-                date_content = date_content.replace('Z', '+00:00')
-                date = datetime.fromisoformat(date_content)
-                if date:
-                    return date
-            except (ValueError, AttributeError):
-                pass
-    
-    # Fallback: usa data atual
-    return datetime.now()
-
-
 # Extrai ID do IMDB de uma página HTML - retorna ID do IMDB (ex: 'tt1234567') ou string vazia se não encontrar
-def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = None) -> str:
+def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = None, priority_div_id: Optional[str] = None) -> str:
+    """
+    Extrai IMDB ID do HTML.
+    
+    Args:
+        doc: BeautifulSoup da página
+        selectors: Lista de seletores CSS opcionais (usa 'a' por padrão)
+        priority_div_id: ID de div com prioridade para busca (opcional)
+    
+    Returns:
+        IMDB ID (ex: 'tt1234567') ou string vazia
+    """
+    # Busca prioritária em div específica
+    if priority_div_id:
+        priority_div = doc.find('div', id=priority_div_id)
+        if priority_div:
+            for a in priority_div.select('a'):
+                href = a.get('href', '')
+                if 'imdb.com' in href:
+                    # Tenta padrão /pt/title/tt
+                    match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                    if match:
+                        return match.group(1)
+                    # Tenta padrão /title/tt
+                    match = re.search(r'imdb\.com/title/(tt\d+)', href)
+                    if match:
+                        return match.group(1)
+    
     if selectors is None:
         selectors = ['a']
     
@@ -48,6 +48,11 @@ def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = 
         for link_elem in doc.select(selector):
             href = link_elem.get('href', '')
             if 'imdb.com' in href:
+                # Tenta padrão /pt/title/tt
+                imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+                if imdb_match:
+                    return imdb_match.group(1)
+                # Tenta padrão /title/tt
                 imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
                 if imdb_match:
                     return imdb_match.group(1)
@@ -163,6 +168,81 @@ def extract_original_title_from_text(text: str, patterns: List[str]) -> str:
                     extracted = extracted[:200]
                 if extracted:
                     return extracted
+    
+    return ''
+
+
+# Extrai título original do HTML usando padrões configuráveis
+def extract_original_title_from_page(doc: BeautifulSoup, patterns: Optional[List[str]] = None) -> str:
+    """
+    Extrai título original do HTML usando padrões configuráveis.
+    
+    Args:
+        doc: BeautifulSoup da página
+        patterns: Lista de padrões regex opcionais (usa padrões default se None)
+    
+    Returns:
+        Título original extraído ou string vazia
+    """
+    if patterns is None:
+        patterns = [
+            r'Título Original:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|$))',
+            r'Nome Original:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|$))',
+        ]
+    
+    # Busca em todos os parágrafos
+    for p in doc.select('p'):
+        text = p.get_text()
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                title = match.group(1).strip()
+                title = title.rstrip(' .,:;-')
+                if title:
+                    return title
+    
+    return ''
+
+
+# Extrai título traduzido do HTML usando padrões configuráveis
+def extract_translated_title_from_page(doc: BeautifulSoup, patterns: Optional[List[str]] = None) -> str:
+    """
+    Extrai título traduzido do HTML usando padrões configuráveis.
+    
+    Args:
+        doc: BeautifulSoup da página
+        patterns: Lista de padrões regex opcionais (usa padrões default se None)
+    
+    Returns:
+        Título traduzido extraído ou string vazia
+    """
+    if patterns is None:
+        patterns = [
+            r'Título Traduzido:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|Título Original|$))',
+            r'Titulo Traduzido:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|Título Original|$))',
+        ]
+    
+    # Busca em todos os parágrafos
+    for p in doc.select('p'):
+        # Remove tags HTML internas
+        for tag in p.find_all(['strong', 'em', 'b', 'i']):
+            tag.unwrap()
+        
+        text = p.get_text()
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                title = match.group(1).strip()
+                title = html.unescape(title)
+                title = re.sub(r'<[^>]+>', '', title)  # Remove HTML residual
+                title = title.rstrip(' .,:;-')
+                
+                # Limpeza adicional
+                from utils.text.cleaning import clean_translated_title
+                title = clean_translated_title(title)
+                
+                if title:
+                    return title
     
     return ''
 

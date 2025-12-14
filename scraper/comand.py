@@ -13,7 +13,7 @@ from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.constants import STOP_WORDS
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.text.audio import add_audio_tag_if_needed
+from utils.parsing.audio_extraction import add_audio_tag_if_needed
 from utils.text.title_builder import create_standardized_title, prepare_release_title
 from utils.logging import format_error, format_link_preview
 
@@ -146,8 +146,10 @@ class ComandScraper(BaseScraper):
         if not doc:
             return []
         
-        # Extrai data de div.entry-date[itemprop="datePublished"]
+        # Extrai data: primeiro tenta método específico (português), depois URL + HTML padrão
         date = None
+        
+        # Tentativa 1: Extrai data de div.entry-date[itemprop="datePublished"] (método específico do site)
         date_elem = doc.find('div', {'class': 'entry-date', 'itemprop': 'datePublished'})
         if date_elem:
             # Busca o link <a> dentro do div que contém a data em português
@@ -160,9 +162,10 @@ class ComandScraper(BaseScraper):
                 except (ValueError, AttributeError):
                     pass
         
-        # Fallback: Se não encontrou, usa data atual
+        # Tentativa 2: Se não encontrou, usa método padrão (URL + meta tags + elementos HTML)
         if not date:
-            date = datetime.now()
+            from utils.parsing.date_extraction import extract_date_from_page
+            date = extract_date_from_page(doc, absolute_link, self.SCRAPER_TYPE)
         
         torrents = []
         article = doc.find('article')
@@ -776,7 +779,7 @@ class ComandScraper(BaseScraper):
                     'imdb': imdb,
                     'audio': [],
                     'magnet_link': magnet_link,
-                    'date': date.isoformat(),
+                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
                     'info_hash': info_hash,
                     'trackers': trackers,
                     'size': size,

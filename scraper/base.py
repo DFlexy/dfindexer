@@ -373,8 +373,6 @@ class BaseScraper(ABC):
             response.raise_for_status()
             html_content = response.content
             
-            logger.debug(f"[BaseScraper] HTTP GET: {url[:60]}... | Status: {response.status_code} | Tempo: {elapsed_time:.2f}s | Tamanho: {len(html_content)} bytes | Origem: {'Cache' if elapsed_time < 0.5 else 'Site'}")
-            
             # Salva no cache local primeiro (mais rápido)
             if not self._is_test:
                 try:
@@ -822,46 +820,65 @@ class BaseScraper(ABC):
                 torrent['size'] = html_size
 
     def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
-        # Aplica fallback para obter data de criação do torrent
+        # Aplica fallback para obter data: 1) Metadata API, 2) Campo "Lançamento", 3) Data atual
         from datetime import datetime
         
-        metadata_enabled = not skip_metadata
-        
-        if not metadata_enabled:
-            return
-        
         for torrent in torrents:
-            magnet_link = torrent.get('magnet_link')
-            if not magnet_link:
-                continue
+            # Só aplica fallback se date estiver vazio
+            current_date = torrent.get('date', '')
+            if current_date:
+                continue  # Já tem data, não precisa de fallback
             
-            # Obtém info_hash
-            info_hash = torrent.get('info_hash')
-            if not info_hash:
+            # Tentativa 1: Metadata API (se habilitado)
+            if not skip_metadata:
+                magnet_link = torrent.get('magnet_link')
+                if magnet_link:
+                    # Obtém info_hash
+                    info_hash = torrent.get('info_hash')
+                    if not info_hash:
+                        try:
+                            magnet_data = MagnetParser.parse(magnet_link)
+                            info_hash = magnet_data.get('info_hash')
+                        except Exception:
+                            pass
+                    
+                    if info_hash:
+                        try:
+                            metadata = torrent.get('_metadata')
+                            if not metadata:
+                                from magnet.metadata import fetch_metadata_from_itorrents
+                                metadata = fetch_metadata_from_itorrents(info_hash)
+                            
+                            if metadata and metadata.get('creation_date'):
+                                creation_timestamp = metadata['creation_date']
+                                try:
+                                    creation_date = datetime.fromtimestamp(creation_timestamp)
+                                    # Formato ISO 8601 com Z (Prowlarr espera: YYYY-MM-DDTHH:MM:SSZ)
+                                    torrent['date'] = creation_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                                    continue  # Encontrou no metadata, não precisa de fallback final
+                                except (ValueError, OSError):
+                                    pass
+                        except Exception:
+                            pass
+            
+            # Tentativa 2: Campo "Lançamento" (extrai ano e usa 31/12/YYYY)
+            # Tenta buscar o documento HTML novamente usando details (URL)
+            details_url = torrent.get('details', '')
+            if details_url:
                 try:
-                    magnet_data = MagnetParser.parse(magnet_link)
-                    info_hash = magnet_data.get('info_hash')
+                    doc = self.get_document(details_url, self.base_url)
+                    if doc:
+                        from utils.parsing.date_extraction import extract_release_year_date_from_page
+                        release_year_date = extract_release_year_date_from_page(doc, self.SCRAPER_TYPE)
+                        if release_year_date:
+                            # Formato ISO 8601 com Z (Prowlarr espera: YYYY-MM-DDTHH:MM:SSZ)
+                            torrent['date'] = release_year_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                            continue  # Encontrou no campo "Lançamento", não precisa de fallback final
                 except Exception:
-                    continue
+                    pass  # Se falhar, continua para fallback final
             
-            if not info_hash:
-                continue
-            
-            try:
-                metadata = torrent.get('_metadata')
-                if not metadata:
-                    from magnet.metadata import fetch_metadata_from_itorrents
-                    metadata = fetch_metadata_from_itorrents(info_hash)
-                
-                if metadata and metadata.get('creation_date'):
-                    creation_timestamp = metadata['creation_date']
-                    try:
-                        creation_date = datetime.fromtimestamp(creation_timestamp)
-                        torrent['date'] = creation_date.isoformat()
-                    except (ValueError, OSError):
-                        pass
-            except Exception:
-                pass
+            # Tentativa 3: Fallback final - Data atual (formato ISO 8601 com Z)
+            torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
     def _attach_peers(self, torrents: List[Dict]) -> None:
         if not self.tracker_service:

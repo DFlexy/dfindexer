@@ -96,6 +96,17 @@ def indexer_handler(site_name: str = None):
         filter_results = request.args.get('filter_results', 'false').lower() == 'true'
         use_flaresolverr = request.args.get('use_flaresolverr', 'false').lower() == 'true'
         
+        # Limita quantidade de resultados processados/enriquecidos (útil para scripts de debug)
+        max_results = None
+        max_results_raw = request.args.get('max_results', None)
+        if max_results_raw:
+            try:
+                max_results = int(str(max_results_raw).strip())
+                if max_results <= 0:
+                    max_results = None
+            except (ValueError, TypeError):
+                max_results = None
+        
         types_info = available_scraper_types()
         available_types = list(types_info.keys())
         
@@ -131,18 +142,18 @@ def indexer_handler(site_name: str = None):
             if USE_ASYNC:
                 if query:
                     torrents, filter_stats = run_async(
-                        _indexer_service_async.search(normalized_type, query, use_flaresolverr, filter_results)
+                        _indexer_service_async.search(normalized_type, query, use_flaresolverr, filter_results, max_results=max_results)
                     )
                 else:
                     torrents, filter_stats = run_async(
-                        _indexer_service_async.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test)
+                        _indexer_service_async.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
                     )
             else:
                 # Fallback para versão síncrona
                 if query:
-                    torrents, filter_stats = _indexer_service.search(normalized_type, query, use_flaresolverr, filter_results)
+                    torrents, filter_stats = _indexer_service.search(normalized_type, query, use_flaresolverr, filter_results, max_results=max_results)
                 else:
-                    torrents, filter_stats = _indexer_service.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test)
+                    torrents, filter_stats = _indexer_service.get_page(normalized_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
             
             if filter_stats:
                 logger.info(f"{log_prefix} [Filtro Aplicado] Total: {filter_stats['total']} | Filtrados: {filter_stats['filtered']} | Aprovados: {filter_stats['approved']}")
@@ -166,17 +177,17 @@ def indexer_handler(site_name: str = None):
                     if USE_ASYNC:
                         if query:
                             scraper_torrents, scraper_stats = run_async(
-                                _indexer_service_async.search(scraper_type, query, use_flaresolverr, filter_results)
+                                _indexer_service_async.search(scraper_type, query, use_flaresolverr, filter_results, max_results=max_results)
                             )
                         else:
                             scraper_torrents, scraper_stats = run_async(
-                                _indexer_service_async.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test)
+                                _indexer_service_async.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
                             )
                     else:
                         if query:
-                            scraper_torrents, scraper_stats = _indexer_service.search(scraper_type, query, use_flaresolverr, filter_results)
+                            scraper_torrents, scraper_stats = _indexer_service.search(scraper_type, query, use_flaresolverr, filter_results, max_results=max_results)
                         else:
-                            scraper_torrents, scraper_stats = _indexer_service.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test)
+                            scraper_torrents, scraper_stats = _indexer_service.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
                     
                     if scraper_torrents:
                         all_torrents.extend(scraper_torrents)

@@ -23,7 +23,7 @@ RUN apt-get purge -y gcc g++ libxml2-dev libxslt1-dev \
 # Cria usuário não-root para segurança
 RUN useradd -m -u 1000 appuser
 
-# Copia código da aplicação
+# Copia código da aplicação (ordem otimizada para melhor cache)
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser api/ ./api/
 COPY --chown=appuser:appuser cache/ ./cache/
@@ -39,6 +39,10 @@ USER appuser
 
 # Expõe porta
 EXPOSE 7006
+
+# Healthcheck opcional (descomente se necessário)
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#   CMD python -c "import requests; requests.get('http://localhost:7006/health', timeout=5)" || exit 1
 
 # Comando padrão
 CMD ["python", "-m", "app.main"]

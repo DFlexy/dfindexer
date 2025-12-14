@@ -15,7 +15,7 @@ caps:
 
   modes:
     search: [q]
-    tv-search: [q, season]
+    tv-search: [q, season, ep]
     movie-search: [q]
 
 settings:
@@ -60,6 +60,7 @@ search:
     selector: $.results
     count:
       selector: $.count
+      optional: true
 
   fields:
     download:

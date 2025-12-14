@@ -6,7 +6,7 @@ import re
 import logging
 import base64
 from datetime import datetime
-from utils.parsing.date_parser import parse_date_from_string
+from utils.parsing.date_extraction import parse_date_from_string
 from typing import List, Dict, Optional, Callable
 from urllib.parse import quote, unquote, urlparse, parse_qs, urljoin
 from bs4 import BeautifulSoup
@@ -15,7 +15,7 @@ from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.constants import STOP_WORDS
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.text.audio import add_audio_tag_if_needed
+from utils.parsing.audio_extraction import add_audio_tag_if_needed
 from utils.text.title_builder import create_standardized_title, prepare_release_title
 from utils.logging import ScraperLogContext
 
@@ -195,12 +195,9 @@ class BaixafilmesScraper(BaseScraper):
         if not doc:
             return []
         
-        # Extrai data da URL do link
-        date = parse_date_from_string(link)
-        
-        # Fallback: Se não encontrou, usa data atual
-        if not date:
-            date = datetime.now()
+        # Extrai data da página (tenta URL, meta tags, etc.)
+        from utils.parsing.date_extraction import extract_date_from_page
+        date = extract_date_from_page(doc, absolute_link, self.SCRAPER_TYPE)
         
         torrents = []
         article = doc.find('article')
@@ -603,7 +600,7 @@ class BaixafilmesScraper(BaseScraper):
                 
                 # Tenta detectar áudio usando função utilitária (fallback)
                 if not audio_info:
-                    from utils.text.audio import detect_audio_from_html
+                    from utils.parsing.audio_extraction import detect_audio_from_html
                     audio_info = detect_audio_from_html(html_content)
                     if audio_info:
                         break
@@ -855,7 +852,7 @@ class BaixafilmesScraper(BaseScraper):
                     'imdb': imdb,
                     'audio': [],
                     'magnet_link': magnet_link,
-                    'date': date.isoformat(),
+                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
                     'info_hash': info_hash,
                     'trackers': trackers,
                     'size': size,

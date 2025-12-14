@@ -43,7 +43,8 @@ class IndexerServiceAsync:
         scraper_type: str,
         query: str,
         use_flaresolverr: bool = False,
-        filter_results: bool = False
+        filter_results: bool = False,
+        max_results: Optional[int] = None
     ) -> tuple[List[Dict], Optional[Dict]]:
         """
         Busca torrents por query (async).
@@ -60,6 +61,10 @@ class IndexerServiceAsync:
         
         # Busca com filtro se filter_results=True, caso contrário sem filtro
         torrents = scraper.search(query, filter_func=filter_func)
+        
+        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
+        if max_results and max_results > 0:
+            torrents = torrents[:max_results]
         
         # Enriquece torrents (async) com filtro se necessário
         enriched_torrents = await self._enrich_torrents_async(
@@ -104,7 +109,8 @@ class IndexerServiceAsync:
         scraper_type: str,
         page: str = '1',
         use_flaresolverr: bool = False,
-        is_test: bool = False
+        is_test: bool = False,
+        max_results: Optional[int] = None
     ) -> tuple[List[Dict], Optional[Dict]]:
         """Obtém torrents de uma página (async)."""
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
@@ -115,6 +121,10 @@ class IndexerServiceAsync:
         
         # Busca torrents (ainda síncrono)
         torrents = scraper.get_page(page, max_items=max_links)
+        
+        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
+        if max_results and max_results > 0:
+            torrents = torrents[:max_results]
         
         # Enriquece torrents (async)
         enriched_torrents = await self._enrich_torrents_async(

@@ -555,15 +555,15 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             return None
         
         # Verifica se já está sendo buscado por outra thread (evita logs duplicados)
-        is_fetching = False
+        # Usa verificação atômica: verifica e adiciona em uma única operação
+        will_fetch = False
         with _hash_fetching_lock:
-            if info_hash_lower in _hash_fetching:
-                is_fetching = True
-            else:
+            if info_hash_lower not in _hash_fetching:
                 _hash_fetching.add(info_hash_lower)
+                will_fetch = True  # Esta thread será a responsável pela busca
         
         # Se já está sendo buscado, espera um pouco e verifica cache novamente
-        if is_fetching:
+        if not will_fetch:
             import time
             # Espera até 2 segundos verificando cache periodicamente
             for _ in range(20):
@@ -583,8 +583,8 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
                 _hash_fetching.discard(info_hash_lower)
             return None
         
-        # Busca do iTorrents (não estava em cache)
-        # Log apenas quando realmente vai buscar (não está em cache após lock e não está sendo buscado)
+        # Busca do iTorrents (não estava em cache e esta thread será a responsável)
+        # Log apenas quando realmente vai buscar (não está em cache e não está sendo buscado)
         # Monta identificação para o log
         log_parts = []
         if scraper_name:
@@ -595,7 +595,6 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         # Sempre inclui o hash completo para identificação
         log_parts.append(f"(hash: {info_hash_lower})")
         log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash_lower}"
-        logger.debug(f"[Metadata] Buscando metadata: {log_id}")
         
         try:
             # Tenta com lowercase primeiro (mais comum)
@@ -611,6 +610,7 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
                 # Apenas cacheia se foi erro HTTP específico (já foi cacheado dentro de _fetch_torrent_header)
                 # Logs de erro removidos para reduzir verbosidade
                 # Remove do conjunto de hashes sendo buscados mesmo em caso de falha
+                logger.debug(f"[Metadata] Buscando metadata: {log_id} → Não encontrado")
                 with _hash_fetching_lock:
                     _hash_fetching.discard(info_hash_lower)
                 return None
@@ -624,6 +624,9 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         size = _parse_bencode_size(torrent_data)
         
         if not size:
+            logger.debug(f"[Metadata] Buscando metadata: {log_id} → Não encontrado (sem size)")
+            with _hash_fetching_lock:
+                _hash_fetching.discard(info_hash_lower)
             return None
         
         # Tenta extrair nome também (opcional)
@@ -690,12 +693,20 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             pass
         
         # Cacheia resultado (Redis primeiro, memória apenas se Redis não disponível)
+        saved_to_redis = False
         try:
             from cache.metadata_cache import MetadataCache
             metadata_cache = MetadataCache()
             metadata_cache.set(info_hash_lower, result)
+            saved_to_redis = True
         except Exception:
             pass
+        
+        # Log com resultado da busca e salvamento
+        if saved_to_redis:
+            logger.debug(f"[Metadata] Buscando metadata: {log_id} → Salvo no Redis")
+        else:
+            logger.debug(f"[Metadata] Buscando metadata: {log_id} → Encontrado (não salvo no Redis)")
         
         # Remove do conjunto de hashes sendo buscados após salvar no cache com sucesso
         with _hash_fetching_lock:

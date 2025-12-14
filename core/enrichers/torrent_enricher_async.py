@@ -298,26 +298,34 @@ class TorrentEnricherAsync:
                         pass
     
     def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
-        """Aplica fallbacks para data (síncrono - usa dados já obtidos)."""
-        metadata_enabled = not skip_metadata
+        """Aplica fallbacks para data: 1) Metadata API, 2) Data atual"""
+        from datetime import datetime
         
         for torrent in torrents:
-            html_date = torrent.get('date', '')
+            # Só aplica fallback se date estiver vazio
+            current_date = torrent.get('date', '')
+            if current_date:
+                continue  # Já tem data, não precisa de fallback
             
-            # Tentativa 1: Metadata API
-            if metadata_enabled:
+            # Tentativa 1: Metadata API (se habilitado)
+            if not skip_metadata:
                 if torrent.get('_metadata') and 'created_time' in torrent['_metadata']:
                     try:
                         created_time = torrent['_metadata']['created_time']
                         if created_time:
-                            torrent['date'] = created_time
-                            continue
+                            # Se created_time já é string ISO, usa diretamente
+                            if isinstance(created_time, str):
+                                torrent['date'] = created_time
+                            else:
+                                # Se é timestamp, converte
+                                creation_date = datetime.fromtimestamp(created_time)
+                                torrent['date'] = creation_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                            continue  # Encontrou no metadata, não precisa de fallback final
                     except Exception:
                         pass
             
-            # Tentativa 2: Data do HTML (fallback final)
-            if html_date:
-                torrent['date'] = html_date
+            # Tentativa 2: Fallback final - Data atual (formato ISO 8601 com Z)
+            torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     
     def _apply_imdb_fallback(self, torrents: List[Dict]) -> None:
         """Aplica fallback de IMDB (síncrono - usa dados já obtidos)."""

@@ -39,7 +39,7 @@ class IndexerService:
         self.processor = TorrentProcessor()
     
         # Busca torrents por query
-    def search(self, scraper_type: str, query: str, use_flaresolverr: bool = False, filter_results: bool = False) -> tuple[List[Dict], Optional[Dict]]:
+    def search(self, scraper_type: str, query: str, use_flaresolverr: bool = False, filter_results: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
         # Cria filtro se necessário
@@ -49,6 +49,10 @@ class IndexerService:
         
         # Busca com filtro se filter_results=True, caso contrário sem filtro
         torrents = scraper.search(query, filter_func=filter_func)
+        
+        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
+        if max_results and max_results > 0:
+            torrents = torrents[:max_results]
         
         # Calcula estatísticas do filtro
         filter_stats = None
@@ -86,7 +90,7 @@ class IndexerService:
         return self.enricher._last_filter_stats if hasattr(self.enricher, '_last_filter_stats') else None
     
         # Obtém torrents de uma página
-    def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False) -> tuple[List[Dict], Optional[Dict]]:
+    def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
         max_links = None
@@ -94,6 +98,10 @@ class IndexerService:
             max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
         
         torrents = scraper.get_page(page, max_items=max_links)
+        
+        # Limita ANTES do processamento para economizar processamento de metadata/trackers
+        if max_results and max_results > 0:
+            torrents = torrents[:max_results]
         
         # Obtém estatísticas imediatamente após o enriquecimento (evita race condition)
         filter_stats = None

@@ -45,10 +45,18 @@ class TorrentProcessor:
     
     @staticmethod
     def remove_internal_fields(torrents: List[Dict]) -> None:
-        # Remove campos internos dos torrents
+        # Remove apenas campos internos dos torrents
+        # Garante que campo 'date' sempre tenha valor (fallback final se necessário)
+        from datetime import datetime
+        
         for torrent in torrents:
             torrent.pop('_metadata', None)
             torrent.pop('_metadata_fetched', None)
+            
+            # Garantia final: se date estiver vazio/None, preenche com data atual
+            date_value = torrent.get('date')
+            if not date_value or (isinstance(date_value, str) and date_value.strip() == ''):
+                torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     
     @staticmethod
     def sort_by_date(torrents: List[Dict], reverse: bool = True) -> None:

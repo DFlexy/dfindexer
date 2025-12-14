@@ -83,11 +83,15 @@ O Docker Compose irá:
 ### Docker - Opção 2: Docker Run CLI (Avançado - Se preferir executar manualmente) 
 
 ```bash
-# Primeiro, inicie o Redis (dados salvos em ./redis_data)
+# Primeiro, crie a rede customizada (opcional, mas recomendado)
+docker network create --subnet=172.50.0.0/24 --gateway=172.50.0.1 net-dfindexer
+
+# Inicie o Redis (dados salvos em ./redis_data)
 docker run -d \
   --name=redis \
   --restart=unless-stopped \
-  -p 6379:6379 \
+  --network=net-dfindexer \
+  --ip=172.50.0.100 \
   -v $(pwd)/redis_data:/data \
   redis:7-alpine \
   redis-server --appendonly yes
@@ -96,20 +100,25 @@ docker run -d \
 docker run -d \
   --name=flaresolverr \
   --restart=unless-stopped \
-  -p 8191:8191 \
+  --network=net-dfindexer \
+  --ip=172.50.0.101 \
   -e LOG_LEVEL=info \
+  -e TZ=America/Sao_Paulo \
   ghcr.io/flaresolverr/flaresolverr:latest
 
 # Depois, inicie o indexer
 docker run -d \
-  --name=indexer \
+  --name=dfindexer \
   --restart=unless-stopped \
+  --network=net-dfindexer \
+  --ip=172.50.0.102 \
   -e REDIS_HOST=redis \
-  -e LOG_LEVEL=1 \
+  -e REDIS_PORT=6379 \
   -e FLARESOLVERR_ADDRESS=http://flaresolverr:8191 \
+  -e PORT=7006 \
+  -e LOG_LEVEL=1 \
+  -e LOG_FORMAT=console \
   -p 7006:7006 \
-  --link redis:redis \
-  --link flaresolverr:flaresolverr \
   ghcr.io/dflexy/dfindexer:latest
 ```
 ### ⚙️ Docker - Variáveis de Ambiente
