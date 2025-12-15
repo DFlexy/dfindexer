@@ -628,7 +628,7 @@ class BaseScraper(ABC):
             Lista de URLs de páginas de torrents encontradas
         """
         from urllib.parse import urljoin, quote
-        from utils.text.stop_words import STOP_WORDS
+        from utils.text.constants import STOP_WORDS
         
         links = []
         variations = [query]
