@@ -22,13 +22,13 @@ from utils.logging import ScraperLogContext
 logger = logging.getLogger(__name__)
 
 # Contexto de logging centralizado para este scraper
-_log_ctx = ScraperLogContext("Baixa", logger)
+_log_ctx = ScraperLogContext("Limon", logger)
 
-# Scraper específico para Baixa Filmes
-class BaixafilmesScraper(BaseScraper):
-    SCRAPER_TYPE = "baixafilmes"
-    DEFAULT_BASE_URL = "https://www.baixafilmestorrent.com.br/"
-    DISPLAY_NAME = "Baixa"
+# Scraper específico para Limon Torrents
+class LimonScraper(BaseScraper):
+    SCRAPER_TYPE = "limon"
+    DEFAULT_BASE_URL = "https://www.limontorrents.org/"
+    DISPLAY_NAME = "Limon"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
@@ -38,15 +38,20 @@ class BaixafilmesScraper(BaseScraper):
     # Extrai links dos resultados de busca
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         links = []
+        # Estrutura do limontorrents.org: .post > .inner > .title > a
         for item in doc.select('.post'):
+            # Tenta primeiro .title > a
             link_elem = item.select_one('div.title > a')
+            if not link_elem:
+                # Fallback: tenta .thumb > a
+                link_elem = item.select_one('div.thumb > a')
             if link_elem:
                 href = link_elem.get('href')
                 if href:
                     links.append(href)
         return links
     
-    # Busca com variações da query (com lógica específica para títulos japoneses)
+    # Busca com variações da query
     def _search_variations(self, query: str) -> List[str]:
         links = []
         variations = [query]
@@ -63,7 +68,7 @@ class BaixafilmesScraper(BaseScraper):
             if first_word not in STOP_WORDS:
                 variations.append(query_words[0])
         
-        # Primeiras 2-3 palavras (útil para títulos longos em japonês)
+        # Primeiras 2-3 palavras (útil para títulos longos)
         if len(query_words) > 3:
             first_words = ' '.join(query_words[:3])
             variations.append(first_words)
@@ -80,19 +85,18 @@ class BaixafilmesScraper(BaseScraper):
             # Busca links nos resultados
             for item in doc.select('.post'):
                 link_elem = item.select_one('div.title > a')
+                if not link_elem:
+                    link_elem = item.select_one('div.thumb > a')
                 if link_elem:
                     href = link_elem.get('href')
                     if href:
                         links.append(href)
-            
-            # Se encontrou resultados, pode parar (ou continuar para coletar mais)
-            # Por enquanto continua para coletar todos os resultados possíveis
         
         return list(set(links))  # Remove duplicados
     
     # Busca torrents
     def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
-        # Normaliza query para FlareSolverr (substitui dois pontos por espaço)
+        # Normaliza query para FlareSolverr
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
         # Usa busca com variações para melhorar resultados
@@ -108,43 +112,106 @@ class BaixafilmesScraper(BaseScraper):
         
         return self.enrich_torrents(all_torrents, filter_func=filter_func)
     
-    # Extrai links da página inicial (lógica especial para filtrar "Novidades de Hoje")
+    # Extrai links da página inicial - busca apenas "Tendências de Hoje"
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        # Filtra apenas a seção "Novidades de Hoje"
-        # Encontra o h2 com "Novidades de Hoje"
-        novidades_h2 = None
-        for h2 in doc.find_all('h2'):
-            if 'Novidades de Hoje' in h2.get_text():
-                novidades_h2 = h2
+        
+        # Encontra a seção "Tendências de Hoje"
+        # Estrutura: h2.titulo > strong com "Tendências de Hoje"
+        tendencias_h2 = None
+        for h2 in doc.find_all('h2', class_='titulo'):
+            h2_text = h2.get_text()
+            if 'Tendências de Hoje' in h2_text:
+                tendencias_h2 = h2
                 break
         
-        if novidades_h2:
-            # Encontra o post_list pai que contém a seção
-            post_list = novidades_h2.find_parent('div', class_='post_list')
-            if post_list:
-                # Extrai apenas os links dentro desse post_list
-                for item in post_list.select('.post'):
-                    link_elem = item.select_one('div.title > a')
+        if tendencias_h2:
+            # Encontra o container main_title que contém o h2
+            main_title_container = tendencias_h2.find_parent('div', class_='main_title')
+            
+            # Busca posts que vêm depois do main_title, parando quando encontrar outro main_title
+            # Os posts estão como irmãos do main_title, não dentro dele
+            if main_title_container:
+                current = main_title_container.find_next_sibling()
+                while current:
+                    # Para se encontrar outro main_title (início de outra seção)
+                    if current.name == 'div' and 'main_title' in current.get('class', []):
+                        break
+                    
+                    # Para se encontrar outro h2.titulo (início de outra seção)
+                    if current.name == 'h2' and 'titulo' in current.get('class', []):
+                        break
+                    
+                    # Para se encontrar paginação
+                    if current.name == 'nav' and 'pagination' in current.get('class', []):
+                        break
+                    
+                    # Se é um post direto, extrai o link
+                    if current.name == 'div' and 'post' in current.get('class', []):
+                        link_elem = current.select_one('div.title > a')
+                        if not link_elem:
+                            link_elem = current.select_one('div.thumb > a')
+                        if link_elem:
+                            href = link_elem.get('href')
+                            if href:
+                                absolute_url = urljoin(self.base_url, href)
+                                links.append(absolute_url)
+                    
+                    # Também busca posts dentro de containers filhos (caso estejam aninhados)
+                    for post in current.select('div.post'):
+                        link_elem = post.select_one('div.title > a')
+                        if not link_elem:
+                            link_elem = post.select_one('div.thumb > a')
+                        if link_elem:
+                            href = link_elem.get('href')
+                            if href:
+                                absolute_url = urljoin(self.base_url, href)
+                                if absolute_url not in links:  # Evita duplicados
+                                    links.append(absolute_url)
+                    
+                    current = current.find_next_sibling()
+            
+            # Se não encontrou posts após o main_title, tenta buscar todos os posts após o h2
+            # mas limitando a posts que não pertencem a outra seção
+            if not links:
+                for post in tendencias_h2.find_all_next('div', class_='post'):
+                    # Para se encontrar outro main_title antes deste post
+                    prev_main_title = post.find_previous('div', class_='main_title')
+                    if prev_main_title and prev_main_title != main_title_container:
+                        break
+                    
+                    # Para se encontrar outro h2.titulo antes deste post
+                    prev_h2 = post.find_previous('h2', class_='titulo')
+                    if prev_h2 and prev_h2 != tendencias_h2:
+                        break
+                    
+                    link_elem = post.select_one('div.title > a')
+                    if not link_elem:
+                        link_elem = post.select_one('div.thumb > a')
                     if link_elem:
                         href = link_elem.get('href')
                         if href:
-                            links.append(href)
+                            absolute_url = urljoin(self.base_url, href)
+                            if absolute_url not in links:  # Evita duplicados
+                                links.append(absolute_url)
         else:
             # Fallback: se não encontrar a seção, usa comportamento padrão
+            _log_ctx.info("Seção 'Tendências de Hoje' não encontrada - usando fallback genérico")
             for item in doc.select('.post'):
                 link_elem = item.select_one('div.title > a')
+                if not link_elem:
+                    link_elem = item.select_one('div.thumb > a')
                 if link_elem:
                     href = link_elem.get('href')
                     if href:
-                        links.append(href)
+                        absolute_url = urljoin(self.base_url, href)
+                        links.append(absolute_url)
         
         return links
     
     # Obtém torrents de uma página específica
     def get_page(self, page: str = '1', max_items: Optional[int] = None) -> List[Dict]:
         return self._default_get_page(page, max_items)
-    
     
     # Extrai torrents de uma página
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
@@ -177,11 +244,10 @@ class BaixafilmesScraper(BaseScraper):
                     parent_html = str(b_tag.parent)
                     
                     # Regex específico: captura tudo após </b> até <br>
-                    # Tenta múltiplos padrões para garantir que capture
                     patterns = [
-                        r'(?i)</b>\s*([^<]+?)\s*<br\s*/?>',  # Padrão mais específico com <br> explícito
-                        r'(?i)</b>\s*([^<]+?)(?:<br|</div|</p|$)',  # Padrão alternativo
-                        r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*([^<]+?)\s*<br',  # Padrão completo incluindo label
+                        r'(?i)</b>\s*([^<]+?)\s*<br\s*/?>',
+                        r'(?i)</b>\s*([^<]+?)(?:<br|</div|</p|$)',
+                        r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*([^<]+?)\s*<br',
                     ]
                     
                     next_text = ''
@@ -192,11 +258,8 @@ class BaixafilmesScraper(BaseScraper):
                             break
                     
                     if next_text:
-                        # Remove tags HTML se houver
                         next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                        # Remove entidades HTML comuns
                         next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-').replace('&iacute;', 'í')
-                        # Normaliza espaços mas mantém o título completo
                         next_text = ' '.join(next_text.split())
                         
                         if next_text:
@@ -207,24 +270,19 @@ class BaixafilmesScraper(BaseScraper):
                     if not original_title:
                         next_sibling = b_tag.next_sibling
                         if next_sibling:
-                            # Se for NavigableString, pega direto
                             if hasattr(next_sibling, 'strip'):
                                 next_text = str(next_sibling).strip()
                             else:
                                 next_text = next_sibling.get_text(strip=True) if hasattr(next_sibling, 'get_text') else ''
                             
                             if next_text:
-                                # Remove tags HTML se houver
                                 next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                                # Remove entidades HTML
                                 next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
-                                # Para no primeiro <br> ou quebra de linha se houver
                                 if '<br' in next_text or '\n' in next_text:
                                     parts = re.split(r'<br\s*/?>|\n', next_text)
                                     if parts:
                                         next_text = parts[0].strip()
                                 
-                                # Normaliza espaços mas mantém o título completo
                                 next_text = ' '.join(next_text.split())
                                 if next_text:
                                     original_title = next_text
@@ -237,12 +295,10 @@ class BaixafilmesScraper(BaseScraper):
                             parts = parent_text.split('Título Original:')
                             if len(parts) > 1:
                                 next_text = parts[1].strip()
-                                # Para no primeiro separador (Formato, Qualidade, etc) ou quebra de linha
                                 for stop in ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']:
                                     if stop in next_text:
                                         next_text = next_text.split(stop)[0].strip()
                                         break
-                                # Se não encontrou, para na primeira quebra de linha
                                 if '\n' in next_text:
                                     next_text = next_text.split('\n')[0].strip()
                                 
@@ -257,11 +313,9 @@ class BaixafilmesScraper(BaseScraper):
                 if original_title:
                     break
                 
-                # Busca por <b> que contém "Título Original"
                 for b_tag in content_div.find_all('b'):
                     b_text = b_tag.get_text(strip=True).lower()
                     if 'título original' in b_text or 'titulo original' in b_text:
-                        # Tenta pegar do next_sibling primeiro
                         next_sibling = b_tag.next_sibling
                         if next_sibling:
                             if hasattr(next_sibling, 'strip'):
@@ -271,7 +325,6 @@ class BaixafilmesScraper(BaseScraper):
                         else:
                             next_text = ''
                         
-                        # Se não encontrou, tenta extrair do HTML do parent
                         if not next_text:
                             parent_html = str(b_tag.parent)
                             match = re.search(r'(?i)</b>\s*([^<]+?)(?:<br\s*/?>|</div|</p|$)', parent_html)
@@ -279,11 +332,8 @@ class BaixafilmesScraper(BaseScraper):
                                 next_text = match.group(1).strip()
                         
                         if next_text:
-                            # Remove tags HTML
                             next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                            # Remove entidades HTML
                             next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
-                            # Remove espaços extras e normaliza
                             next_text = ' '.join(next_text.split())
                             if next_text:
                                 original_title = next_text
@@ -293,27 +343,22 @@ class BaixafilmesScraper(BaseScraper):
                     break
         
         # Método 3: Fallback - busca em todo o article se não encontrou
-        # Otimizado: busca apenas em elementos de texto (p, div, span) ao invés de todos os elementos
         if not original_title:
-            # Primeiro tenta buscar diretamente no texto do article (mais rápido)
             article_text = article.get_text(' ', strip=True)
             if 'Título Original:' in article_text:
                 parts = article_text.split('Título Original:')
                 if len(parts) > 1:
                     title_part = parts[1].strip()
-                    # Para no primeiro separador encontrado
                     stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
                     for stop in stops:
                         if stop in title_part:
                             idx = title_part.index(stop)
                             title_part = title_part[:idx]
                             break
-                    # Remove espaços extras e normaliza
                     title_part = ' '.join(title_part.split())
                     if title_part:
                         original_title = title_part
             
-            # Se ainda não encontrou, busca apenas em elementos específicos (mais eficiente que find_all(True))
             if not original_title:
                 for elem in article.find_all(['p', 'div', 'span', 'li']):
                     text = elem.get_text(strip=True)
@@ -321,14 +366,12 @@ class BaixafilmesScraper(BaseScraper):
                         parts = text.split('Título Original:')
                         if len(parts) > 1:
                             title_part = parts[1].strip()
-                            # Para no primeiro separador encontrado
                             stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
                             for stop in stops:
                                 if stop in title_part:
                                     idx = title_part.index(stop)
                                     title_part = title_part[:idx]
                                     break
-                            # Remove espaços extras e normaliza
                             title_part = ' '.join(title_part.split())
                             if title_part:
                                 original_title = title_part
@@ -341,7 +384,6 @@ class BaixafilmesScraper(BaseScraper):
                 title_raw = article.find('h1')
             if title_raw:
                 original_title = title_raw.get_text(strip=True)
-                # Remove ano do final
                 original_title = re.sub(r'\s*\(\d{4}(-\d{4})?\)\s*$', '', original_title)
         
         # Remove sufixos comuns
@@ -351,9 +393,8 @@ class BaixafilmesScraper(BaseScraper):
         original_title = original_title.replace(' Torrent', '').strip()
         
         # Extrai título traduzido
-        translated_title = ''
+        title_translated_processed = ''
         if entry_meta:
-            # Busca por <b> que contém "Título Traduzido"
             for b_tag in entry_meta.find_all('b'):
                 b_text = b_tag.get_text(strip=True).lower()
                 if 'título traduzido' in b_text or 'titulo traduzido' in b_text:
@@ -374,13 +415,13 @@ class BaixafilmesScraper(BaseScraper):
                         next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-').replace('&iacute;', 'í')
                         next_text = ' '.join(next_text.split())
                         if next_text:
-                            translated_title = next_text
+                            title_translated_processed = next_text
                             break
         
         # Busca em div.content e div.entry-content se não encontrou
-        if not translated_title:
+        if not title_translated_processed:
             for content_div in doc.select('div.content, div.entry-content, .left'):
-                if translated_title:
+                if title_translated_processed:
                     break
                 for b_tag in content_div.find_all('b'):
                     b_text = b_tag.get_text(strip=True).lower()
@@ -393,14 +434,13 @@ class BaixafilmesScraper(BaseScraper):
                             next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
                             next_text = ' '.join(next_text.split())
                             if next_text:
-                                translated_title = next_text
+                                title_translated_processed = next_text
                                 break
-                if translated_title:
+                if title_translated_processed:
                     break
         
-        # Busca em todo o article se não encontrou (mas não usa h1 como fallback)
-        if not translated_title and article:
-            # Busca em elementos específicos, não no texto geral do article
+        # Busca em todo o article se não encontrou
+        if not title_translated_processed and article:
             for elem in article.find_all(['p', 'div', 'span', 'li']):
                 elem_text = elem.get_text(' ', strip=True)
                 if 'Título Traduzido:' in elem_text:
@@ -415,26 +455,23 @@ class BaixafilmesScraper(BaseScraper):
                                 break
                         title_part = ' '.join(title_part.split())
                         if title_part:
-                            translated_title = title_part
+                            title_translated_processed = title_part
                             break
         
         # Fallback: se não encontrou "Título Traduzido", tenta usar h1.entry-title
-        # sempre usa como fallback (não precisa verificar não-latinos)
-        if not translated_title:
+        if not title_translated_processed:
             title_raw = article.find('h1', class_='entry-title')
             if not title_raw:
                 title_raw = article.find('h1')
             if title_raw:
-                translated_title = title_raw.get_text(strip=True)
+                title_translated_processed = title_raw.get_text(strip=True)
         
         # Limpa o título traduzido se encontrou
-        if translated_title:
-            # Remove qualquer HTML que possa ter sobrado
-            translated_title = re.sub(r'<[^>]+>', '', translated_title)
-            import html
-            translated_title = html.unescape(translated_title)
-            from utils.text.cleaning import clean_translated_title
-            translated_title = clean_translated_title(translated_title)
+        if title_translated_processed:
+            title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
+            title_translated_processed = html.unescape(title_translated_processed)
+            from utils.text.cleaning import clean_title_translated_processed
+            title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
         title = original_title
         
@@ -442,13 +479,11 @@ class BaixafilmesScraper(BaseScraper):
         year = ''
         imdb = ''
         sizes = []
-        audio_info = None  # Para detectar áudio/idioma do HTML
-        audio_html_content = ''  # Armazena HTML completo para verificação adicional
-        all_paragraphs_html = []  # Coleta HTML de todos os parágrafos
+        audio_info = None
+        audio_html_content = ''
+        all_paragraphs_html = []
         
         # Extrai informações de idioma e legenda do HTML
-        # Busca em div.entry-meta primeiro (estrutura padrão)
-        # Pode haver múltiplos entry-meta, então busca em todos
         entry_meta_list = doc.find_all('div', class_='entry-meta')
         
         idioma = ''
@@ -462,19 +497,15 @@ class BaixafilmesScraper(BaseScraper):
         for entry_meta in entry_meta_list:
             entry_meta_html = str(entry_meta)
             
-            # Extrai Idioma (só se ainda não encontrou)
+            # Extrai Idioma
             if not idioma:
-                # Tenta com <b> primeiro
                 idioma_match = re.search(r'(?i)<b>Idioma:</b>\s*([^<]+?)(?:<br|</div|</p|</b|$)', entry_meta_html, re.DOTALL)
                 if idioma_match:
                     idioma = idioma_match.group(1).strip()
-                    # Remove entidades HTML e tags
                     idioma = html.unescape(idioma)
                     idioma = re.sub(r'<[^>]+>', '', idioma).strip()
-                    # Remove espaços extras e normaliza
                     idioma = re.sub(r'\s+', ' ', idioma).strip()
                 else:
-                    # Tenta sem tag bold
                     idioma_match = re.search(r'(?i)Idioma\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', entry_meta_html, re.DOTALL)
                     if idioma_match:
                         idioma = idioma_match.group(1).strip()
@@ -482,19 +513,15 @@ class BaixafilmesScraper(BaseScraper):
                         idioma = re.sub(r'<[^>]+>', '', idioma).strip()
                         idioma = re.sub(r'\s+', ' ', idioma).strip()
             
-            # Extrai Legenda (só se ainda não encontrou)
+            # Extrai Legenda
             if not legenda:
-                # Tenta com <b> primeiro
                 legenda_match = re.search(r'(?i)<b>Legenda:</b>\s*([^<]+?)(?:<br|</div|</p|</b|$)', entry_meta_html, re.DOTALL)
                 if legenda_match:
                     legenda = legenda_match.group(1).strip()
-                    # Remove entidades HTML e tags
                     legenda = html.unescape(legenda)
                     legenda = re.sub(r'<[^>]+>', '', legenda).strip()
-                    # Remove espaços extras e normaliza
                     legenda = re.sub(r'\s+', ' ', legenda).strip()
                 else:
-                    # Tenta sem tag bold
                     legenda_match = re.search(r'(?i)Legenda\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', entry_meta_html, re.DOTALL)
                     if legenda_match:
                         legenda = legenda_match.group(1).strip()
@@ -502,36 +529,21 @@ class BaixafilmesScraper(BaseScraper):
                         legenda = re.sub(r'<[^>]+>', '', legenda).strip()
                         legenda = re.sub(r'\s+', ' ', legenda).strip()
             
-            # Se já encontrou ambos, pode parar
             if idioma and legenda:
                 break
         
-        # Determina audio_info baseado em Idioma e Legenda (após processar todos os entry-meta)
+        # Determina audio_info baseado em Idioma e Legenda
         if idioma or legenda:
-            # Lógica simplificada conforme solicitado:
-            # - Se Idioma tem português → marca com [Brazilian] (via 'português')
-            # - Se Legenda tem português → marca com [Leg] (via 'legendado')
-            # - Se Idioma ou Legenda tem Inglês → marca com [Leg] (via 'legendado')
-            # O sistema de tags é definido pelo utils (add_audio_tag_if_needed)
             idioma_lower = idioma.lower() if idioma else ''
             legenda_lower = legenda.lower() if legenda else ''
             
-            # Verifica se tem português no idioma (áudio)
             has_portugues_audio = 'português' in idioma_lower or 'portugues' in idioma_lower
-            # Verifica se tem português na legenda
             has_portugues_legenda = 'português' in legenda_lower or 'portugues' in legenda_lower
-            # Verifica se tem Inglês no idioma ou legenda
             has_ingles = 'inglês' in idioma_lower or 'ingles' in idioma_lower or 'english' in idioma_lower or 'inglês' in legenda_lower or 'ingles' in legenda_lower or 'english' in legenda_lower
             
-            # Lógica simplificada:
-            # Prioridade: Idioma com português primeiro (gera [Brazilian])
-            # Depois: Legenda com português ou Inglês em qualquer campo (gera [Leg])
-            # IMPORTANTE: Processa mesmo se idioma estiver vazio (pode ter apenas legenda)
             if has_portugues_audio:
-                # Idioma tem português → gera [Brazilian]
                 audio_info = 'português'
             elif has_portugues_legenda or has_ingles:
-                # Legenda tem português OU tem Inglês (em Idioma ou Legenda) → gera [Leg]
                 audio_info = 'legendado'
         
         # Coleta HTML de parágrafos para audio_html_content
@@ -539,7 +551,7 @@ class BaixafilmesScraper(BaseScraper):
             html_content = str(p)
             all_paragraphs_html.append(html_content)
         
-        # Concatena HTML de todos os parágrafos para verificação independente de inglês e legenda
+        # Concatena HTML de todos os parágrafos
         if all_paragraphs_html:
             audio_html_content = ' '.join(all_paragraphs_html)
         
@@ -549,15 +561,12 @@ class BaixafilmesScraper(BaseScraper):
                 text = p.get_text()
                 html_content = str(p)
                 
-                # Extrai ano
                 y = find_year_from_text(text, title)
                 if y:
                     year = y
                 
-                # Extrai tamanhos
                 sizes.extend(find_sizes_from_text(html_content))
                 
-                # Tenta detectar áudio usando função utilitária (fallback)
                 if not audio_info:
                     from utils.parsing.audio_extraction import detect_audio_from_html
                     audio_info = detect_audio_from_html(html_content)
@@ -569,23 +578,18 @@ class BaixafilmesScraper(BaseScraper):
                 text = p.get_text()
                 html_content = str(p)
                 
-                # Extrai ano
                 y = find_year_from_text(text, title)
                 if y:
                     year = y
                 
-                # Extrai tamanhos
                 sizes.extend(find_sizes_from_text(html_content))
-        
-        imdb = ''
         
         # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
         
-        # Extrai ano do texto do article (reutiliza se já foi extraído antes)
+        # Extrai ano do texto do article
         if not year:
             try:
-                # Usa o texto já extraído se disponível, senão extrai
                 article_full_text = article.get_text(' ', strip=True)
                 year_match = re.search(r'(19|20)\d{2}', article_full_text)
                 if year_match:
@@ -593,8 +597,22 @@ class BaixafilmesScraper(BaseScraper):
             except Exception:
                 pass
 
-        # Extrai links magnet - busca TODOS os links <a> no conteúdo
+        # Extrai IMDB
+        imdb = ''
+        for a in article.select('a[href*="imdb.com"]'):
+            href = a.get('href', '')
+            imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
+            if imdb_match:
+                imdb = imdb_match.group(1)
+                break
+            imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
+            if imdb_match:
+                imdb = imdb_match.group(1)
+                break
+
+        # Extrai links magnet - busca TODOS os links <a> no documento
         # A função _resolve_link automaticamente identifica e resolve links protegidos
+        # Primeiro tenta em containers específicos (mais rápido)
         magnet_links = []
         for text_content in doc.select('div.content, div.entry-content, div.modal-downloads, div#modal-downloads'):
             for a in text_content.select('a[href]'):
@@ -612,23 +630,26 @@ class BaixafilmesScraper(BaseScraper):
                             magnet_data = MagnetParser.parse(resolved_magnet)
                             trackers = magnet_data.get('trackers', [])
                             if not trackers:
-                                # Se não tem trackers, adiciona trackers padrão
                                 from tracker.list_provider import TrackerListProvider
                                 tracker_provider = TrackerListProvider(redis_client=self.redis)
                                 default_trackers = tracker_provider.get_trackers()
                                 if default_trackers:
-                                    # Reconstrói magnet com trackers
                                     from urllib.parse import urlencode
                                     magnet_params = {
-                                        'xt': f"urn:btih:{magnet_data.get('info_hash', '')}",
-                                        'dn': magnet_data.get('display_name', '')
+                                        'xt': f"urn:btih:{magnet_data.get('info_hash', '')}"
                                     }
-                                    for tracker in default_trackers[:5]:  # Limita a 5 trackers
+                                    display_name = magnet_data.get('display_name', '')
+                                    if display_name and display_name.strip():
+                                        magnet_params['dn'] = display_name
+                                    for tracker in default_trackers[:5]:
                                         magnet_params.setdefault('tr', []).append(tracker)
                                     resolved_magnet = f"magnet:?{urlencode(magnet_params, doseq=True)}"
                         except Exception:
                             pass
-                    magnet_links.append(resolved_magnet)
+                    
+                    # Adiciona apenas se não estiver na lista (evita duplicados)
+                    if resolved_magnet not in magnet_links:
+                        magnet_links.append(resolved_magnet)
                     continue
                 
                 # Link codificado com token
@@ -642,31 +663,39 @@ class BaixafilmesScraper(BaseScraper):
                                 decoded = base64.b64decode(token).decode('utf-8')
                                 if decoded.startswith('magnet:'):
                                     magnet_links.append(decoded)
-                            except Exception as e:
+                            except Exception:
                                 pass
-                                pass
-                    except Exception as e:
+                    except Exception:
                         pass
-                        pass
+        
+        # Se não encontrou links nos containers específicos, busca em todo o documento (fallback)
+        if not magnet_links:
+            all_links = doc.select('a[href]')
+            for link in all_links:
+                href = link.get('href', '')
+                if not href:
+                    continue
+                
+                # Resolve automaticamente (magnet direto ou protegido)
+                resolved_magnet = self._resolve_link(href)
+                if resolved_magnet and resolved_magnet.startswith('magnet:'):
+                    if resolved_magnet not in magnet_links:
+                        magnet_links.append(resolved_magnet)
         
         if not magnet_links:
             return []
         
-        # Durante testes (skip_metadata=True), limita a 1 magnet por página para reduzir verbosidade
+        # Durante testes (skip_metadata=True), limita a 1 magnet por página
         if self._skip_metadata:
             magnet_links = magnet_links[:1]
         
-        # Cache do texto do article para evitar múltiplas chamadas a get_text() durante o processamento
-        article_text_cached = None
-        
         # Processa cada magnet
-        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
-                # Busca dados cruzados no Redis por info_hash (fallback principal)
+                # Busca dados cruzados no Redis por info_hash
                 cross_data = None
                 try:
                     from utils.text.cross_data import get_cross_data_from_redis
@@ -676,45 +705,38 @@ class BaixafilmesScraper(BaseScraper):
                 
                 # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
-                    if not original_title and cross_data.get('original_title_html'):
-                        original_title = cross_data['original_title_html']
+                    if not original_title and cross_data.get('title_original_html'):
+                        original_title = cross_data['title_original_html']
                     
-                    if not translated_title and cross_data.get('translated_title_html'):
-                        translated_title = cross_data['translated_title_html']
+                    if not title_translated_processed and cross_data.get('title_translated_html'):
+                        title_translated_processed = cross_data['title_translated_html']
                     
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai raw_release_title diretamente do display_name do magnet resolvido
-                # NÃO modificar antes de passar para create_standardized_title
-                raw_release_title = magnet_data.get('display_name', '') or ''
-                missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                # Extrai magnet_original diretamente do display_name do magnet resolvido
+                magnet_original = magnet_data.get('display_name', '') or ''
+                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
                 # Se ainda está missing_dn, tenta buscar do cross_data
                 release_title_from_cross = False
-                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
-                    cross_release = cross_data.get('release_title_magnet')
+                if missing_dn and cross_data and cross_data.get('magnet_processed'):
+                    cross_release = cross_data.get('magnet_processed')
                     if cross_release and cross_release != 'N/A' and len(str(cross_release).strip()) >= 3:
-                        raw_release_title = str(cross_release)
+                        magnet_original = str(cross_release)
                         missing_dn = False
                         release_title_from_cross = True
                 
-                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
-                # IMPORTANTE: Salva mesmo se veio do cross_data, para garantir que outros scrapers possam usar
-                if not missing_dn and raw_release_title:
+                # Salva magnet_processed no Redis se encontrado
+                if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, raw_release_title)
+                        save_release_title_to_redis(info_hash, magnet_original)
                     except Exception:
                         pass
                 
                 fallback_title = title
-                # Usa raw_release_title diretamente, sem modificações prévias
-                # As modificações de temporada devem ser feitas apenas quando missing_dn
-                working_release_title = raw_release_title if not missing_dn else ''
-                
-                # NÃO modifica working_release_title quando não está missing_dn
-                # Isso evita adicionar informações extras que podem causar duplicação
+                working_release_title = magnet_original if not missing_dn else ''
                 
                 original_release_title = prepare_release_title(
                     working_release_title,
@@ -725,14 +747,12 @@ class BaixafilmesScraper(BaseScraper):
                     skip_metadata=self._skip_metadata
                 )
                 
-                # Adiciona temporada do HTML apenas se não tiver informação de temporada/episódio no metadata
-                # E apenas quando missing_dn (quando não tem display_name do magnet)
+                # Adiciona temporada do HTML apenas se não tiver informação de temporada/episódio
                 if missing_dn:
                     has_season_ep_info = re.search(r'(?i)S\d{1,2}(?:E\d{1,2}(?:-\d{1,2})?)?', original_release_title)
                     if not has_season_ep_info and 'temporada' not in original_release_title.lower():
                         try:
-                            if article_text_cached is None:
-                                article_text_cached = article.get_text(' ', strip=True).lower()
+                            article_text_cached = article.get_text(' ', strip=True).lower()
                             season_match = re.search(r'(\d+)\s*(?:ª|a)?\s*temporada', article_text_cached)
                             if season_match:
                                 season_number = season_match.group(1)
@@ -742,11 +762,10 @@ class BaixafilmesScraper(BaseScraper):
                             pass
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
+                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original_magnet=magnet_original
                 )
                 
-                # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
-                # Passa audio_info extraído do HTML (Idioma/Legenda) e audio_html_content para detecção adicional
+                # Adiciona tags de áudio
                 final_title = add_audio_tag_if_needed(
                     standardized_title, 
                     original_release_title, 
@@ -760,8 +779,8 @@ class BaixafilmesScraper(BaseScraper):
                 origem_audio_tag = 'N/A'
                 if audio_info:
                     origem_audio_tag = 'HTML da página (Idioma/Legenda)'
-                elif raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
-                    origem_audio_tag = 'release_title_magnet'
+                elif magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
+                    origem_audio_tag = 'magnet_processed'
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
@@ -770,29 +789,27 @@ class BaixafilmesScraper(BaseScraper):
                 if sizes and idx < len(sizes):
                     size = sizes[idx]
                 
-                # Processa trackers usando função utilitária
+                # Processa trackers
                 trackers = process_trackers(magnet_data)
                 
-                # Se não tem trackers no magnet_link, usa lista dinâmica de trackers como fallback
+                # Se não tem trackers, usa lista dinâmica
                 if not trackers:
                     try:
                         from tracker.list_provider import TrackerListProvider
                         tracker_provider = TrackerListProvider(redis_client=self.redis)
                         dynamic_trackers = tracker_provider.get_trackers()
                         if dynamic_trackers:
-                            # Filtra apenas trackers UDP (compatíveis com o sistema de scrape)
                             trackers = [t for t in dynamic_trackers if t.lower().startswith('udp://')]
                     except Exception:
                         pass
                 
-                # Salva dados cruzados no Redis para reutilização por outros scrapers
-                # IMPORTANTE: Se recuperou release_title_magnet do cross_data, salva de volta para garantir persistência
+                # Salva dados cruzados no Redis
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {
-                        'original_title_html': original_title if original_title else None,
-                        'release_title_magnet': raw_release_title if not missing_dn else None,
-                        'translated_title_html': translated_title if translated_title else None,
+                        'title_original_html': original_title if original_title else None,
+                        'magnet_processed': original_release_title if original_release_title else None,
+                        'title_translated_html': title_translated_processed if title_translated_processed else None,
                         'imdb': imdb if imdb else None,
                         'missing_dn': missing_dn,
                         'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
@@ -805,7 +822,7 @@ class BaixafilmesScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else title,
-                    'translated_title': translated_title if translated_title else None,
+                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
                     'details': absolute_link,
                     'year': year,
                     'imdb': imdb,
@@ -817,7 +834,8 @@ class BaixafilmesScraper(BaseScraper):
                     'size': size,
                     'leech_count': 0,
                     'seed_count': 0,
-                    'similarity': 1.0
+                    'similarity': 1.0,
+                    'magnet_original': magnet_original if magnet_original else None
                 }
                 torrents.append(torrent)
             

@@ -12,7 +12,7 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
     """
     Busca dados cruzados no Redis por info_hash.
     Retorna um dicionário com os campos disponíveis ou None se não encontrado.
-    Campos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
+    Campos: title_original_html, magnet_processed, title_translated_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
     """
     if not info_hash or len(info_hash) != 40:
         return None
@@ -60,7 +60,7 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
 def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
     """
     Salva dados cruzados no Redis por info_hash.
-    Campos aceitos: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
+    Campos aceitos: title_original_html, magnet_processed, title_translated_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
     """
     if not info_hash or len(info_hash) != 40:
         return
@@ -80,9 +80,9 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         
         # Campos permitidos
         allowed_fields = [
-            'original_title_html',
-            'release_title_magnet',
-            'translated_title_html',
+            'title_original_html',
+            'magnet_processed',
+            'title_translated_html',
             'imdb',
             'missing_dn',
             'origem_audio_tag',

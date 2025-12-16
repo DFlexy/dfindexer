@@ -193,6 +193,8 @@ def indexer_handler(site_name: str = None):
                         all_torrents.extend(scraper_torrents)
                         if scraper_stats:
                             all_filter_stats.append(scraper_stats)
+                            # Log individual por scraper para debug
+                            logger.info(f"{log_prefix} [{scraper_label}] [Filtro] Total: {scraper_stats.get('total', 0)} | Filtrados: {scraper_stats.get('filtered', 0)} | Aprovados: {scraper_stats.get('approved', 0)}")
                         logger.info(f"{log_prefix} [{scraper_label}] Encontrados: {len(scraper_torrents)} resultados")
                 except Exception as e:
                     logger.warning(f"{log_prefix} Erro ao buscar em [{scraper_type}]: {e}")

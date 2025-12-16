@@ -53,7 +53,8 @@ _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3  # Número de timeouts consecutivos antes
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60  # 1 minuto de desabilitação após muitos timeouts
 
 _TRACKER_SOURCES = [
-    "https://ngosang.github.io/trackerslist/trackers_all_ip.txt",  # Primeira opção
+    "https://cf.trackerslist.com/best.txt",  # Primeira opção
+    #"https://ngosang.github.io/trackerslist/trackers_all_ip.txt",  # Primeira opção
     "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best_ip.txt",  # Fallback 1
     "https://cdn.jsdelivr.net/gh/ngosang/trackerslist@master/trackers_best_ip.txt",  # Fallback 2
 ]

@@ -73,9 +73,9 @@ def _extract_release_year_starck(doc: BeautifulSoup) -> Optional[int]:
     return None
 
 
-def _extract_release_year_nerd(doc: BeautifulSoup) -> Optional[int]:
+def _extract_release_year_portal(doc: BeautifulSoup) -> Optional[int]:
     """
-    Nerd: <b>Lançamento :</b> 2022<br />
+    Portal: <b>Lançamento :</b> 2022<br />
     """
     for b_tag in doc.find_all('b'):
         b_text = b_tag.get_text(strip=True).lower()
@@ -174,7 +174,9 @@ def _extract_release_year_rede(doc: BeautifulSoup) -> Optional[int]:
 
 def _extract_release_year_baixafilmes(doc: BeautifulSoup) -> Optional[int]:
     """
-    Baixa Filmes: <meta property="og:updated_time" content="2025-12-12T22:12:38-03:00" />
+    Limon Torrents: <meta property="og:updated_time" content="2025-12-12T22:12:38-03:00" />
+    Extrai ano de lançamento da meta tag og:updated_time.
+    Nome da função mantido por compatibilidade histórica (anteriormente usado por baixafilmes).
     """
     meta_updated = doc.find('meta', {'property': 'og:updated_time'})
     if meta_updated:
@@ -192,12 +194,12 @@ def _extract_release_year_baixafilmes(doc: BeautifulSoup) -> Optional[int]:
 # Mapeamento de scrapers para suas funções de extração específicas
 SCRAPER_RELEASE_YEAR_EXTRACTORS: Dict[str, Callable[[BeautifulSoup], Optional[int]]] = {
     'starck': _extract_release_year_starck,
-    'nerd': _extract_release_year_nerd,
+    'portal': _extract_release_year_portal,
     'tfilme': _extract_release_year_tfilme,
     'bludv': _extract_release_year_bludv,
     'comand': _extract_release_year_comand,
     'rede': _extract_release_year_rede,
-    'baixafilmes': _extract_release_year_baixafilmes,
+    'limon': _extract_release_year_baixafilmes,
 }
 
 
@@ -211,7 +213,7 @@ def extract_release_year_from_page(doc: BeautifulSoup, scraper_type: Optional[st
     
     Args:
         doc: Documento BeautifulSoup
-        scraper_type: Tipo do scraper (starck, nerd, tfilme, etc.) para usar regra específica
+        scraper_type: Tipo do scraper (starck, portal, tfilme, etc.) para usar regra específica
     
     Returns:
         Ano extraído (int) ou None se não encontrar ou se o ano for o ano atual
@@ -270,7 +272,7 @@ def extract_date_from_page(doc: BeautifulSoup, url: str, scraper_type: Optional[
     
     Ordem de tentativas:
     1. URL (padrões completos ou apenas ano)
-    2. Meta tag og:updated_time (para baixafilmes)
+    2. Meta tag og:updated_time (para limon)
     3. Campo "Lançamento" (usando regra específica do scraper se disponível)
     
     Args:
@@ -286,8 +288,8 @@ def extract_date_from_page(doc: BeautifulSoup, url: str, scraper_type: Optional[
     if date:
         return date
     
-    # Tentativa 2: Para baixafilmes, tenta extrair data completa de meta tags
-    if scraper_type == 'baixafilmes':
+    # Tentativa 2: Para limon, tenta extrair data completa de meta tags
+    if scraper_type == 'limon':
         # Busca manualmente em todas as meta tags (mais confiável)
         all_meta = doc.find_all('meta')
         meta_updated = None

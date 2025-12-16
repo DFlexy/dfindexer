@@ -86,7 +86,7 @@ def imdb_title_key(base_title: str) -> str:
 # ============================================================================
 
 def release_title_key(info_hash: str) -> str:
-    # Chave Redis para release_title_magnet por info_hash (7d TTL)
+    # Chave Redis para magnet_processed por info_hash (7d TTL)
     return f"release:title:{info_hash.lower()}"
 
 
@@ -96,7 +96,7 @@ def release_title_key(info_hash: str) -> str:
 
 def torrent_cross_data_key(info_hash: str) -> str:
     # Chave Redis Hash para dados cruzados de torrent por info_hash (30d TTL padrão, 24h se tiver tracker)
-    # Armazena: original_title_html, release_title_magnet, translated_title_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
+    # Armazena: title_original_html, magnet_processed, title_translated_html, imdb, missing_dn, origem_audio_tag, tracker_seed, tracker_leech, size
     return f"cross:torrent:{info_hash.lower()}"
 
 

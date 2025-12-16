@@ -5,6 +5,16 @@ import logging
 import sys
 
 
+# Formatter customizado que remove o nome do módulo de todos os logs
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        # Remove o nome do módulo de todos os níveis de log
+        fmt = '%(asctime)s %(levelname)s - %(message)s'
+        
+        formatter = logging.Formatter(fmt, datefmt='%Y-%m-%d %H:%M:%S')
+        return formatter.format(record)
+
+
 # Converte nível numérico para nível do logging do Python
 def _get_log_level_from_numeric(level: int) -> int:
     level_map = {
@@ -29,11 +39,8 @@ def setup_logging(log_level: int, log_format: str = 'console'):
             datefmt='%Y-%m-%d %H:%M:%S'
         )
     else:
-        # Formato console padrão
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        # Formato console padrão com formatter customizado
+        formatter = CustomFormatter()
     
     # Configura handler para stdout
     handler = logging.StreamHandler(sys.stdout)

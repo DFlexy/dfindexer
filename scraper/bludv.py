@@ -87,7 +87,7 @@ class BludvScraper(BaseScraper):
         
         # Extrai título original e traduzido
         original_title = ''
-        translated_title = ''
+        title_translated_processed = ''
         
         # Busca por "Título Original:" e "Título Traduzido:" no conteúdo
         content_div = doc.find('div', class_='content')
@@ -148,7 +148,7 @@ class BludvScraper(BaseScraper):
                     text_parts = elem_text.split('Título Traduzido:')
                     if len(text_parts) > 1:
                         # Pega o texto após o label
-                        translated_title = text_parts[1].strip()
+                        title_translated_processed = text_parts[1].strip()
                         
                         # Tenta extrair do HTML de forma mais precisa
                         html_match = re.search(r'(?i)T[íi]tulo\s+Traduzido\s*:?\s*(.*?)(?:<br|</span|</p|</div|$)', elem_html, re.DOTALL)
@@ -158,21 +158,21 @@ class BludvScraper(BaseScraper):
                             html_text = re.sub(r'<[^>]+>', '', html_text)
                             html_text = html_text.strip()
                             if html_text:
-                                translated_title = html_text
+                                title_translated_processed = html_text
                         
                         # Remove entidades HTML
-                        translated_title = html.unescape(translated_title)
+                        title_translated_processed = html.unescape(title_translated_processed)
                         # Remove espaços múltiplos
-                        translated_title = re.sub(r'\s+', ' ', translated_title).strip()
+                        title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
                         # Para no primeiro separador comum
                         for stop in ['\n', 'Gênero:', 'Duração:', 'Ano:', 'IMDb:']:
-                            if stop in translated_title:
-                                translated_title = translated_title.split(stop)[0].strip()
+                            if stop in title_translated_processed:
+                                title_translated_processed = title_translated_processed.split(stop)[0].strip()
                                 break
-                        if translated_title:
+                        if title_translated_processed:
                             # Limpa o título traduzido
-                            from utils.text.cleaning import clean_translated_title
-                            translated_title = clean_translated_title(translated_title)
+                            from utils.text.cleaning import clean_title_translated_processed
+                            title_translated_processed = clean_title_translated_processed(title_translated_processed)
                             break
         
         # Fallback: usa título da página se não encontrou título original
@@ -411,7 +411,8 @@ class BludvScraper(BaseScraper):
             # Resolve automaticamente (magnet direto ou protegido)
             resolved_magnet = self._resolve_link(href)
             if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                magnet_links.append(resolved_magnet)
+                if resolved_magnet not in magnet_links:
+                    magnet_links.append(resolved_magnet)
         
         if not magnet_links:
             return []
@@ -436,36 +437,36 @@ class BludvScraper(BaseScraper):
                 
                 # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
-                    if not original_title and cross_data.get('original_title_html'):
-                        original_title = cross_data['original_title_html']
+                    if not original_title and cross_data.get('title_original_html'):
+                        original_title = cross_data['title_original_html']
                     
-                    if not translated_title and cross_data.get('translated_title_html'):
-                        translated_title = cross_data['translated_title_html']
+                    if not title_translated_processed and cross_data.get('title_translated_html'):
+                        title_translated_processed = cross_data['title_translated_html']
                     
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # Extrai magnet_original diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
-                raw_release_title = magnet_data.get('display_name', '')
-                missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                magnet_original = magnet_data.get('display_name', '')
+                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
                 # Se ainda está missing_dn, tenta buscar do cross_data
-                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
-                    raw_release_title = cross_data['release_title_magnet']
+                if missing_dn and cross_data and cross_data.get('magnet_processed'):
+                    magnet_original = cross_data['magnet_processed']
                     missing_dn = False
                 
-                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
-                if not missing_dn and raw_release_title:
+                # Salva magnet_processed no Redis se encontrado (para reutilização por outros scrapers)
+                if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, raw_release_title)
+                        save_release_title_to_redis(info_hash, magnet_original)
                     except Exception:
                         pass
                 
-                fallback_title = original_title or translated_title or page_title or ''
+                fallback_title = original_title or title_translated_processed or page_title or ''
                 original_release_title = prepare_release_title(
-                    raw_release_title,
+                    magnet_original,
                     fallback_title,
                     year,
                     missing_dn=missing_dn,
@@ -473,13 +474,13 @@ class BludvScraper(BaseScraper):
                     skip_metadata=self._skip_metadata
                 )
                 
-                # Garante que translated_title seja string (não Tag)
-                translated_title_str = str(translated_title) if translated_title else None
-                if translated_title_str and not isinstance(translated_title_str, str):
-                    translated_title_str = None
+                # Garante que title_translated_processed seja string (não Tag)
+                title_translated_processed_str = str(title_translated_processed) if title_translated_processed else None
+                if title_translated_processed_str and not isinstance(title_translated_processed_str, str):
+                    title_translated_processed_str = None
                 
                 standardized_title = create_standardized_title(
-                    str(original_title) if original_title else '', year, original_release_title, translated_title_html=translated_title_str, raw_release_title_magnet=raw_release_title
+                    str(original_title) if original_title else '', year, original_release_title, title_translated_html=title_translated_processed_str, magnet_original_magnet=magnet_original
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
@@ -495,8 +496,8 @@ class BludvScraper(BaseScraper):
                 
                 # Determina origem_audio_tag
                 origem_audio_tag = 'N/A'
-                if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
-                    origem_audio_tag = 'release_title_magnet'
+                if magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
+                    origem_audio_tag = 'magnet_processed'
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
@@ -510,9 +511,9 @@ class BludvScraper(BaseScraper):
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {
-                        'original_title_html': str(original_title) if original_title else None,
-                        'release_title_magnet': raw_release_title if not missing_dn else None,
-                        'translated_title_html': str(translated_title) if translated_title else None,
+                        'title_original_html': str(original_title) if original_title else None,
+                        'magnet_processed': original_release_title if original_release_title else None,
+                        'title_translated_html': str(title_translated_processed) if title_translated_processed else None,
                         'imdb': imdb if imdb else None,
                         'missing_dn': missing_dn,
                         'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
@@ -524,8 +525,8 @@ class BludvScraper(BaseScraper):
                 
                 torrent = {
                     'title': final_title,
-                    'original_title': original_title if original_title else (translated_title if translated_title else page_title),
-                    'translated_title': translated_title if translated_title else None,
+                    'original_title': original_title if original_title else (title_translated_processed if title_translated_processed else page_title),
+                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
                     'details': absolute_link,
                     'year': year,
                     'imdb': imdb if imdb else '',
@@ -537,7 +538,8 @@ class BludvScraper(BaseScraper):
                     'size': size,
                     'leech_count': 0,
                     'seed_count': 0,
-                    'similarity': 1.0
+                    'similarity': 1.0,
+                    'magnet_original': magnet_original if magnet_original else None
                 }
                 torrents.append(torrent)
             

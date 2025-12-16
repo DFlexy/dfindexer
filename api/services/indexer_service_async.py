@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 SCRAPER_NUMBER_MAP = {
     "1": "starck",
     "2": "rede",
-    "3": "baixafilmes",
+    "3": "limon",
     "4": "tfilme",
     "5": None,
     "6": "comand",
     "7": "bludv",
-    "8": "nerd",
+    "8": "portal",
 }
 
 
@@ -67,26 +67,15 @@ class IndexerServiceAsync:
             torrents = torrents[:max_results]
         
         # Enriquece torrents (async) com filtro se necessário
-        enriched_torrents = await self._enrich_torrents_async(
+        # Retorna estatísticas junto para evitar race condition
+        enriched_torrents, filter_stats = await self._enrich_torrents_async(
             torrents,
             scraper_type,
             filter_func  # Aplica filtro no enriquecimento se fornecido
         )
         
-        # Calcula estatísticas do filtro
-        filter_stats = None
-        if hasattr(self.enricher, '_last_filter_stats'):
-            # Usa estatísticas do enricher (já calculadas durante o enriquecimento)
-            stats = self.enricher._last_filter_stats
-            if stats:
-                filter_stats = {
-                    'total': stats.get('total', 0),
-                    'filtered': stats.get('filtered', 0),
-                    'approved': stats.get('approved', 0),
-                    'scraper_name': stats.get('scraper_name', '')
-                }
-        elif filter_func and enriched_torrents:
-            # Fallback: calcula estatísticas manualmente se não foram calculadas pelo enricher
+        # Fallback: calcula estatísticas manualmente se não foram calculadas pelo enricher
+        if filter_stats is None and filter_func and enriched_torrents:
             total_before_filter = len(enriched_torrents)
             filtered_count = sum(1 for t in enriched_torrents if not filter_func(t))
             approved_count = total_before_filter - filtered_count
@@ -97,6 +86,7 @@ class IndexerServiceAsync:
                 'approved': approved_count,
                 'scraper_name': scraper.SCRAPER_TYPE if hasattr(scraper, 'SCRAPER_TYPE') else ''
             }
+        
         
         self.processor.sanitize_torrents(enriched_torrents)
         self.processor.remove_internal_fields(enriched_torrents)
@@ -127,23 +117,13 @@ class IndexerServiceAsync:
             torrents = torrents[:max_results]
         
         # Enriquece torrents (async)
-        enriched_torrents = await self._enrich_torrents_async(
+        # Retorna estatísticas junto para evitar race condition
+        enriched_torrents, filter_stats = await self._enrich_torrents_async(
             torrents,
             scraper_type,
             None,
             is_test=is_test
         )
-        
-        filter_stats = None
-        if hasattr(self.enricher, '_last_filter_stats'):
-            stats = self.enricher._last_filter_stats
-            if stats:
-                filter_stats = {
-                    'total': stats.get('total', 0),
-                    'filtered': stats.get('filtered', 0),
-                    'approved': stats.get('approved', 0),
-                    'scraper_name': stats.get('scraper_name', '')
-                }
         
         self.processor.sanitize_torrents(enriched_torrents)
         self.processor.remove_internal_fields(enriched_torrents)
@@ -159,8 +139,8 @@ class IndexerServiceAsync:
         scraper_type: str,
         filter_func: Optional[Callable[[Dict], bool]] = None,
         is_test: bool = False
-    ) -> List[Dict]:
-        """Enriquece torrents usando enricher async."""
+    ) -> tuple[List[Dict], Optional[Dict]]:
+        """Enriquece torrents usando enricher async e retorna estatísticas."""
         from scraper import available_scraper_types
         
         scraper_name = None
@@ -178,7 +158,8 @@ class IndexerServiceAsync:
             skip_metadata = True
             skip_trackers = True
         
-        enriched = await self.enricher.enrich(
+        # Enriquece e recebe estatísticas diretamente do retorno (evita race condition)
+        enriched, filter_stats = await self.enricher.enrich(
             torrents,
             skip_metadata=skip_metadata,
             skip_trackers=skip_trackers,
@@ -186,7 +167,7 @@ class IndexerServiceAsync:
             scraper_name=scraper_name
         )
         
-        return enriched
+        return enriched, filter_stats
     
     def get_scraper_info(self) -> Dict:
         """Obtém informações dos scrapers disponíveis."""

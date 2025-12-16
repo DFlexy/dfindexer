@@ -24,6 +24,18 @@ _max_sessions = None
 # Lock para proteger validação/invalidação de sessões (evita race conditions)
 _session_validation_lock = threading.Lock()
 
+# Locks por base_url para proteger criação de sessão (evita múltiplas threads criando simultaneamente)
+_session_creation_locks = {}
+_session_creation_locks_lock = threading.Lock()
+
+def _get_session_creation_lock(base_url: str) -> threading.Lock:
+    """Obtém um lock específico para criação de sessão de uma base_url"""
+    global _session_creation_locks
+    with _session_creation_locks_lock:
+        if base_url not in _session_creation_locks:
+            _session_creation_locks[base_url] = threading.Lock()
+        return _session_creation_locks[base_url]
+
 # Cache para evitar logs duplicados consecutivos
 _last_log_cache = {}
 _last_log_lock = threading.Lock()
@@ -267,6 +279,7 @@ class FlareSolverrClient:
         global _session_validation_lock
         
         # Tenta Redis primeiro (reutiliza sessão existente se disponível)
+        need_to_create = False
         if self.redis and not skip_redis:
             try:
                 session_key = self._get_session_key(base_url)
@@ -292,15 +305,30 @@ class FlareSolverrClient:
                                     logger.warning(f"FlareSolverr: sessão inválida detectada, removendo do cache para {base_url} (ID: {session_id[:20]}...)")
                                     self.redis.delete(session_key)
                                     self.redis.delete(self._get_session_created_key(base_url))
+                                    # Sessão removida, precisa criar nova
+                                    need_to_create = True
                                 else:
                                     logger.debug(f"FlareSolverr: sessão foi recriada por outro scraper para {base_url}, não removendo")
+                                    # Sessão foi recriada, tentar usar a nova
+                                    cached_new = self.redis.get(session_key)
+                                    if cached_new:
+                                        new_session_id = cached_new.decode('utf-8')
+                                        if self._validate_session(new_session_id):
+                                            return new_session_id
+                                    need_to_create = True
                         else:
-                            logger.debug(f"FlareSolverr: sessão foi removida/recriada por outro scraper para {base_url}")
+                            # Sessão foi removida/recriada, precisa criar nova
+                            need_to_create = True
                 else:
                     logger.debug(f"FlareSolverr: nenhuma sessão encontrada no cache para {base_url}")
+                    need_to_create = True
             except Exception as e:
                 logger.debug(f"FlareSolverr: erro ao obter sessão do Redis: {type(e).__name__}")
-                pass
+                need_to_create = True
+        
+        # Se não precisa criar (já encontrou sessão válida), retorna
+        if not need_to_create and self.redis and not skip_redis:
+            return None
         
         # Usa memória apenas se Redis não está disponível desde o início
         if not self.redis or skip_redis:
@@ -315,6 +343,22 @@ class FlareSolverrClient:
                 else:
                     # Expirou ou inválida, remove
                     del _request_cache.flaresolverr_sessions[base_url]
+        
+        # Protege criação de sessão com lock por base_url (evita múltiplas threads criando simultaneamente)
+        creation_lock = _get_session_creation_lock(base_url)
+        with creation_lock:
+            # Verifica novamente se outra thread já criou a sessão enquanto esperávamos o lock
+            if self.redis and not skip_redis:
+                try:
+                    session_key = self._get_session_key(base_url)
+                    cached = self.redis.get(session_key)
+                    if cached:
+                        session_id = cached.decode('utf-8')
+                        if self._validate_session(session_id):
+                            logger.debug(f"FlareSolverr: sessão já foi criada por outra thread para {base_url} (ID: {session_id[:20]}...)")
+                            return session_id
+                except Exception:
+                    pass
         
         # Cria nova sessão (respeitando limite global)
         session_id = self._create_session(base_url, skip_redis)
@@ -381,8 +425,6 @@ class FlareSolverrClient:
                 html_content = solution.get("response", "")
                 
                 if html_content:
-                    content_length = len(html_content)
-                    logger.debug(f"FlareSolverr: resposta recebida para {url[:50]}... ({content_length} caracteres)")
                     return html_content.encode('utf-8')
                 else:
                     logger.warning(f"FlareSolverr retornou resposta vazia para {url[:50]}... (status=ok mas response vazio)")

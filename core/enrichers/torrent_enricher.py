@@ -84,18 +84,18 @@ class TorrentEnricher:
         from utils.text.cross_data import get_cross_data_from_redis
         
         for torrent in torrents:
-            # Preenche original_title e translated_title do cross-data ANTES do filtro
+            # Preenche original_title e title_translated_processed do cross-data ANTES do filtro
             info_hash = torrent.get('info_hash')
             if info_hash:
                 try:
                     cross_data = get_cross_data_from_redis(info_hash)
                     if cross_data:
                         # Preenche original_title se não estiver preenchido
-                        if not torrent.get('original_title') and cross_data.get('original_title_html'):
-                            torrent['original_title'] = cross_data.get('original_title_html', '')
-                        # Preenche translated_title se não estiver preenchido
-                        if not torrent.get('translated_title') and cross_data.get('translated_title_html'):
-                            torrent['translated_title'] = cross_data.get('translated_title_html', '')
+                        if not torrent.get('original_title') and cross_data.get('title_original_html'):
+                            torrent['original_title'] = cross_data.get('title_original_html', '')
+                        # Preenche title_translated_processed se não estiver preenchido
+                        if not torrent.get('title_translated_processed') and cross_data.get('title_translated_html'):
+                            torrent['title_translated_processed'] = cross_data.get('title_translated_html', '')
                         # Adiciona release_title_magnet do cross-data
                         if cross_data.get('release_title_magnet'):
                             torrent['release_title_magnet'] = cross_data.get('release_title_magnet')
@@ -123,7 +123,7 @@ class TorrentEnricher:
                             # Tenta obter título de múltiplas fontes para melhorar o log
                             title = (torrent.get('title') or 
                                     torrent.get('original_title') or 
-                                    torrent.get('translated_title') or
+                                    torrent.get('title_translated_processed') or
                                     torrent.get('release_title_magnet') or
                                     None)
                             metadata = fetch_metadata_from_itorrents(info_hash, scraper_name=scraper_name, title=title)
@@ -194,7 +194,7 @@ class TorrentEnricher:
                     # Tenta obter título de múltiplas fontes para melhorar o log
                     title = (torrent.get('title') or 
                             torrent.get('original_title') or 
-                            torrent.get('translated_title') or
+                            torrent.get('title_translated_processed') or
                             torrent.get('release_title_magnet') or
                             None)
                     metadata = fetch_metadata_from_itorrents(info_hash, scraper_name=scraper_name, title=title)
@@ -470,7 +470,7 @@ class TorrentEnricher:
                             # Tenta obter título de múltiplas fontes para melhorar o log
                             title = (torrent.get('title') or 
                                     torrent.get('original_title') or 
-                                    torrent.get('translated_title') or
+                                    torrent.get('title_translated_processed') or
                                     torrent.get('release_title_magnet') or
                                     None)
                             metadata = fetch_metadata_from_itorrents(info_hash, scraper_name=scraper_name, title=title)
@@ -502,6 +502,12 @@ class TorrentEnricher:
         # Anexa dados de peers (seeds/leechers) via trackers
         from utils.parsing.magnet_utils import extract_trackers_from_magnet
         from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Obtém scraper_name para logs
+        scraper_name = getattr(self, '_current_scraper_name', None)
         
         # Primeiro, tenta buscar dados de tracker do cross-data
         infohash_map = {}
@@ -512,16 +518,39 @@ class TorrentEnricher:
             if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
                 continue
             
+            # Monta identificação para o log
+            log_parts = []
+            if scraper_name:
+                log_parts.append(f"[{scraper_name}]")
+            title = torrent.get('title', '')
+            if title:
+                title_preview = title[:50] if len(title) > 50 else title
+                log_parts.append(title_preview)
+            log_parts.append(f"(hash: {info_hash})")
+            log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
+            
             # Tenta buscar do cross-data primeiro
             cross_data = get_cross_data_from_redis(info_hash)
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
-                # Se ambos estão presentes (mesmo que sejam 0), usa do cross-data para evitar scrape desnecessário
+                # Se ambos estão presentes e não são ambos 0, usa do cross-data para evitar scrape desnecessário
                 if tracker_seed is not None and tracker_leech is not None:
-                    torrent['seed_count'] = tracker_seed
-                    torrent['leech_count'] = tracker_leech
-                    continue
+                    # Se ambos são 0, prossegue para fazer scrape ao invés de usar os valores
+                    if not (tracker_seed == 0 and tracker_leech == 0):
+                        torrent['seed_count'] = tracker_seed
+                        torrent['leech_count'] = tracker_leech
+                        # Log removido - hits do Redis são muito comuns
+                        continue
+                    else:
+                        # Ambos são 0, não usa e prossegue para scrape
+                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+                else:
+                    # Não tem ambos valores, prossegue para scrape
+                    logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+            else:
+                # Não encontrou no cross-data, prossegue para scrape
+                logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
             
             # Se não encontrou no cross-data, adiciona para fazer scrape
             # Extrai trackers do torrent primeiro
@@ -555,14 +584,32 @@ class TorrentEnricher:
                     torrent['seed_count'] = seed
                     
                     # Salva no cross-data sempre que obtém dados do tracker (mesmo se 0, para evitar consultas futuras)
+                    saved_to_redis = False
                     try:
                         cross_data_to_save = {
                             'tracker_seed': seed,
                             'tracker_leech': leech
                         }
                         save_cross_data_to_redis(info_hash, cross_data_to_save)
+                        saved_to_redis = True
                     except Exception:
                         pass
+                    
+                    # Log com resultado da busca e salvamento
+                    log_parts = []
+                    if scraper_name:
+                        log_parts.append(f"[{scraper_name}]")
+                    title = torrent.get('title', '')
+                    if title:
+                        title_preview = title[:50] if len(title) > 50 else title
+                        log_parts.append(title_preview)
+                    log_parts.append(f"(hash: {info_hash})")
+                    log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
+                    
+                    if saved_to_redis:
+                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Salvo no Redis")
+                    else:
+                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Scrape realizado (erro ao salvar no Redis)")
         except Exception:
             pass
 

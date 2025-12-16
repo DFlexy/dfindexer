@@ -21,7 +21,7 @@ from utils.text.title_helpers import (
 
 # Normaliza o título original do release antes de gerar o padrão final
 def prepare_release_title(
-    release_title_magnet: str,
+    magnet_processed: str,
     fallback_title: str,
     year: str = '',
     missing_dn: bool = False,
@@ -29,10 +29,10 @@ def prepare_release_title(
     skip_metadata: bool = False
 ) -> str:
     """
-    Prepara o release_title_magnet seguindo o fluxograma correto:
-    1. Se release_title_magnet existe e tem >= 3 caracteres: normaliza e usa diretamente (missing_dn permanece False)
-    2. Se release_title_magnet está vazio/curto E missing_dn = True: busca metadata, depois fallback
-    3. Se release_title_magnet está vazio/curto E missing_dn = False: usa fallback_title
+    Prepara o magnet_processed seguindo o fluxograma correto:
+    1. Se magnet_processed existe e tem >= 3 caracteres: normaliza e usa diretamente (missing_dn permanece False)
+    2. Se magnet_processed está vazio/curto E missing_dn = True: busca metadata, depois fallback
+    3. Se magnet_processed está vazio/curto E missing_dn = False: usa fallback_title
     4. Adiciona ano apenas se fornecido e não estiver no título
     5. Adiciona WEB-DL apenas se missing_dn = True após TODO o processamento
     """
@@ -40,13 +40,13 @@ def prepare_release_title(
     original_release_title = None
     final_missing_dn = missing_dn  # Mantém o estado original de missing_dn
 
-    # ETAPA 1: release_title_magnet está vazio ou muito curto (< 3 caracteres)?
-    release_title_magnet = (release_title_magnet or '').strip()
+    # ETAPA 1: magnet_processed está vazio ou muito curto (< 3 caracteres)?
+    magnet_processed = (magnet_processed or '').strip()
     
-    if release_title_magnet and len(release_title_magnet) >= 3:
-        # SIM: release_title_magnet existe e tem >= 3 caracteres
+    if magnet_processed and len(magnet_processed) >= 3:
+        # SIM: magnet_processed existe e tem >= 3 caracteres
         # Normalizar (unescape, unquote, remover duplicações) e usar diretamente
-        normalized = release_title_magnet
+        normalized = magnet_processed
         normalized = html.unescape(normalized)
         try:
             normalized = unquote(normalized)
@@ -61,7 +61,7 @@ def prepare_release_title(
         # Ex: "(BDRip 1080p x264)" -> "BDRip.1080p.x264"
         normalized = re.sub(r'\(([^)]+)\)', lambda m: m.group(1).replace(' ', '.'), normalized)
         
-        # Remove duplicações consecutivas do release_title_magnet
+        # Remove duplicações consecutivas do magnet_processed
         # Ex: "S01E04.S01E04.2025..." -> "S01E04.2025..."
         # Normaliza espaços para pontos para facilitar detecção de duplicações
         temp_normalized = re.sub(r'\s+', '.', normalized.strip())
@@ -84,12 +84,12 @@ def prepare_release_title(
                 prev_part = part
         
         original_release_title = '.'.join(cleaned_parts).strip('.')
-        # IMPORTANTE: Como release_title_magnet existe e tem >= 3 caracteres, missing_dn = False
+        # IMPORTANTE: Como magnet_processed existe e tem >= 3 caracteres, missing_dn = False
         final_missing_dn = False
         # Preserva pontos - create_standardized_title precisa deles para parsing
         # → Ir direto para etapa 5 (adicionar ano se necessário)
     else:
-        # NÃO: release_title_magnet está vazio ou muito curto
+        # NÃO: magnet_processed está vazio ou muito curto
         if missing_dn:
             # missing_dn = True: buscar metadata, depois fallback
             if info_hash:
@@ -166,23 +166,26 @@ def prepare_release_title(
 
 
 # Constrói o título padronizado final (Title.SxxEyy.Year….)
-def create_standardized_title(original_title_html: str, year: str, release_title_magnet: str, translated_title_html: Optional[str] = None, raw_release_title_magnet: Optional[str] = None) -> str:
+def create_standardized_title(title_original_html: str, year: str, magnet_processed: str, title_translated_html: Optional[str] = None, magnet_original_magnet: Optional[str] = None) -> str:
     
     def finalize_title(value: str) -> str:
-        value = _apply_season_temporada_tags(value, release_title_magnet, original_title_html, year)
+        # Usa magnet_original_magnet se disponível (preserva informação original como "1ª Temporada")
+        # Senão usa magnet_processed (já processado)
+        release_for_season_detection = magnet_original_magnet if magnet_original_magnet else magnet_processed
+        value = _apply_season_temporada_tags(value, release_for_season_detection, title_original_html, year)
         value = _reorder_title_components(value)
         return _ensure_default_format(value)
     # Determina base_title seguindo fallback
     base_title = ''
     
     # Verifica se tem título original válido
-    if original_title_html and original_title_html.strip():
+    if title_original_html and title_original_html.strip():
         # Verifica se tem caracteres não-latinos (Russo, Chinês, Coreano, Japonês, Tailandês, Hindi/Devanagari/Bengali, Árabe, Hebreu, Grego, Telugu, Tamil, Kannada, Malayalam, Gujarati, Oriya)
-        has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u09ff\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0c00-\u0c7f\u0b80-\u0bff\u0c80-\u0cff\u0d00-\u0d7f\u0a80-\u0aff\u0b00-\u0b7f]', original_title_html))
+        has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u09ff\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0c00-\u0c7f\u0b80-\u0bff\u0c80-\u0cff\u0d00-\u0d7f\u0a80-\u0aff\u0b00-\u0b7f]', title_original_html))
         
         if not has_non_latin:
             # Título Original da página: Como base principal (apenas o nome, sem SxxExx, ano, etc.)
-            base_title = clean_title(original_title_html)
+            base_title = clean_title(title_original_html)
             base_title = remove_accents(base_title)
             # Remove informações de temporada/ano do título da página
             # IMPORTANTE: Só remove se for claramente temporada (S01, S1, S01E01) ou ano no final
@@ -195,20 +198,20 @@ def create_standardized_title(original_title_html: str, year: str, release_title
             # Capitaliza cada palavra após pontos (preserva capitalização correta: Fate.Stay.Night)
             base_title = '.'.join(word.capitalize() if word else '' for word in base_title.split('.'))
             
-            # Continua processando release_title_magnet para extrair SxxExx, ano e informações técnicas
-            # Não retorna direto, sempre processa o release_title_magnet
+            # Continua processando magnet_processed para extrair SxxExx, ano e informações técnicas
+            # Não retorna direto, sempre processa o magnet_processed
         else:
             # Fallback1: Title Não-latinos Ex:Russo/Koreano
-            # Verifica se release_title_magnet (raw) também tem caracteres não-latinos
-            # Usa raw_release_title_magnet se disponível, senão usa release_title_magnet
-            raw_to_check = raw_release_title_magnet if raw_release_title_magnet else release_title_magnet
+            # Verifica se magnet_processed (raw) também tem caracteres não-latinos
+            # Usa magnet_original_magnet se disponível, senão usa magnet_processed
+            raw_to_check = magnet_original_magnet if magnet_original_magnet else magnet_processed
             release_has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u09ff\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0c00-\u0c7f\u0b80-\u0bff\u0c80-\u0cff\u0d00-\u0d7f\u0a80-\u0aff\u0b00-\u0b7f]', raw_to_check or ''))
             
-            # Se translated_title_html existe, usa ele (é preferível ao release_title_magnet quando original tem não-latinos)
-            if translated_title_html and translated_title_html.strip():
-                # Fallback1.1: Título Traduzido da página quando original_title_html tem não-latinos
-                # Usa translated_title_html mesmo se release_title_magnet não tem não-latinos
-                base_title = clean_title(translated_title_html)
+            # Se title_translated_html existe, usa ele (é preferível ao magnet_processed quando original tem não-latinos)
+            if title_translated_html and title_translated_html.strip():
+                # Fallback1.1: Título Traduzido da página quando title_original_html tem não-latinos
+                # Usa title_translated_html mesmo se magnet_processed não tem não-latinos
+                base_title = clean_title(title_translated_html)
                 base_title = remove_accents(base_title)
                 # Remove informações de temporada/ano do título traduzido (apenas o nome base)
                 base_title = re.sub(r'(?i)\s*\(?\s*S\d{1,2}(E\d{1,2})?.*$', '', base_title)  # Remove SxxExx se houver
@@ -218,27 +221,27 @@ def create_standardized_title(original_title_html: str, year: str, release_title
                 base_title = base_title.strip('.')
                 # Capitaliza cada palavra após pontos (preserva capitalização correta: Fate.Stay.Night)
                 base_title = '.'.join(word.capitalize() if word else '' for word in base_title.split('.'))
-                # Continua processando release_title_magnet para extrair SxxExx, ano e informações técnicas
+                # Continua processando magnet_processed para extrair SxxExx, ano e informações técnicas
             else:
-                # Fallback1: Usar title do magnet (release_title_magnet) - extrai apenas o nome base
-                base_title = _extract_base_title_from_release(release_title_magnet)
-                # Continua processando release_title_magnet para extrair SxxExx, ano e informações técnicas
+                # Fallback1: Usar title do magnet (magnet_processed) - extrai apenas o nome base
+                base_title = _extract_base_title_from_release(magnet_processed)
+                # Continua processando magnet_processed para extrair SxxExx, ano e informações técnicas
     else:
         # Fallback2: Nome do magnet se página não tem título válido
-        base_title = _extract_base_title_from_release(release_title_magnet)
+        base_title = _extract_base_title_from_release(magnet_processed)
         result = finalize_title(base_title)
         return result
     
-    # Processa release_title_magnet para extrair apenas informações técnicas (SxxExx, Sx, ano, qualidade, codec, etc.)
-    # IMPORTANTE: Se raw_release_title_magnet está disponível e tem pontos, usa ele diretamente
+    # Processa magnet_processed para extrair apenas informações técnicas (SxxExx, Sx, ano, qualidade, codec, etc.)
+    # IMPORTANTE: Se magnet_original_magnet está disponível e tem pontos, usa ele diretamente
     # Isso preserva a estrutura original do título do magnet/Redis
-    # Prefere raw_release_title_magnet quando disponível porque preserva a estrutura original
-    if raw_release_title_magnet and raw_release_title_magnet.strip():
-        # Usa raw_release_title_magnet se disponível (vem do magnet/Redis com estrutura preservada)
-        clean_release = clean_title(raw_release_title_magnet)
-    elif release_title_magnet and release_title_magnet.strip():
-        # Usa release_title_magnet (resultado de prepare_release_title) como fallback
-        clean_release = clean_title(release_title_magnet)
+    # Prefere magnet_original_magnet quando disponível porque preserva a estrutura original
+    if magnet_original_magnet and magnet_original_magnet.strip():
+        # Usa magnet_original_magnet se disponível (vem do magnet/Redis com estrutura preservada)
+        clean_release = clean_title(magnet_original_magnet)
+    elif magnet_processed and magnet_processed.strip():
+        # Usa magnet_processed (resultado de prepare_release_title) como fallback
+        clean_release = clean_title(magnet_processed)
     else:
         # Se ambos estão vazios, retorna apenas base_title
         result = finalize_title(base_title)
@@ -510,7 +513,7 @@ def create_standardized_title(original_title_html: str, year: str, release_title
         else:
             return finalize_title(f"{base_title}.{season_ep_str}{processed_magnet_text}")
     
-    # Extrai apenas informações técnicas do release_title_magnet, removendo qualquer título
+    # Extrai apenas informações técnicas do magnet_processed, removendo qualquer título
     # Padrões técnicos: Sx, anos, qualidades, codecs, etc.
     technical_parts = []
     parts = clean_release.split('.')

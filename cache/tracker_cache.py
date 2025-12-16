@@ -33,7 +33,6 @@ class TrackerCache:
                 peers_str = self.redis.hget(key, 'peers')
                 if peers_str:
                     data = json.loads(peers_str.decode('utf-8'))
-                    logger.debug(f"[TrackerCache] HIT: hash: {info_hash_lower} (seed: {data.get('seeders', 0)}, leech: {data.get('leechers', 0)})")
                     return data
                 # Log removido - MISSs são esperados para novos hashes
             except Exception as e:
@@ -47,9 +46,7 @@ class TrackerCache:
                 _request_cache.tracker_cache = {}
             
             cached = _request_cache.tracker_cache.get(info_hash_lower)
-            if cached:
-                logger.debug(f"[TrackerCache] HIT (memória): hash: {info_hash_lower}")
-            # Log removido - MISSs são esperados para novos hashes
+            # Log removido - HITs e MISSs são esperados
             return cached
         
         return None

@@ -24,13 +24,13 @@ settings:
     label: Scraper
     default: "1"
     options:
-      "1": Starck Filmes
-      "2": Rede Torrent
-      "3": Baixa Filmes
-      "4": Torrent dos Filmes
-      "6": Comando Torrents
-      "7": Bludv Filmes
-      "8": Nerd Torrent
+      "1": Starck
+      "2": Rede
+      "3": Limon
+      "4": Tfilme
+      "6": Comando
+      "7": Bludv
+      "8": Portal
   
   - name: use_flaresolverr
     type: select

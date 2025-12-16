@@ -24,7 +24,7 @@ def process_magnet_links(
         magnet_links: Lista de magnet links resolvidos
         page_data: Dicionário com dados extraídos da página:
             - original_title: Título original
-            - translated_title: Título traduzido
+            - title_translated_processed: Título traduzido
             - page_title: Título da página (fallback)
             - year: Ano
             - imdb: ID do IMDB
@@ -51,7 +51,7 @@ def process_magnet_links(
     
     # Extrai dados da página
     original_title = page_data.get('original_title', '')
-    translated_title = page_data.get('translated_title', '')
+    title_translated_processed = page_data.get('title_translated_processed', '')
     page_title = page_data.get('page_title', '')
     year = page_data.get('year', '')
     imdb = page_data.get('imdb', '')
@@ -77,42 +77,42 @@ def process_magnet_links(
             
             # Cria cópias locais para não modificar os originais
             local_original_title = original_title
-            local_translated_title = translated_title
+            local_title_translated_processed = title_translated_processed
             local_imdb = imdb
             
             # Preenche campos faltantes com dados cruzados do Redis
             if cross_data:
-                if not local_original_title and cross_data.get('original_title_html'):
-                    local_original_title = cross_data['original_title_html']
+                if not local_original_title and cross_data.get('title_original_html'):
+                    local_original_title = cross_data['title_original_html']
                 
-                if not local_translated_title and cross_data.get('translated_title_html'):
-                    local_translated_title = cross_data['translated_title_html']
+                if not local_title_translated_processed and cross_data.get('title_translated_html'):
+                    local_title_translated_processed = cross_data['title_translated_html']
                 
                 if not local_imdb and cross_data.get('imdb'):
                     local_imdb = cross_data['imdb']
             
-            # Extrai raw_release_title diretamente do display_name do magnet resolvido
-            raw_release_title = magnet_data.get('display_name', '')
-            missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+            # Extrai magnet_original diretamente do display_name do magnet resolvido
+            magnet_original = magnet_data.get('display_name', '')
+            missing_dn = not magnet_original or len(magnet_original.strip()) < 3
             
             # Se ainda está missing_dn, tenta buscar do cross_data
-            if missing_dn and cross_data and cross_data.get('release_title_magnet'):
-                raw_release_title = cross_data['release_title_magnet']
+            if missing_dn and cross_data and cross_data.get('magnet_processed'):
+                magnet_original = cross_data['magnet_processed']
                 missing_dn = False
             
-            # Salva release_title_magnet no Redis se encontrado
-            if not missing_dn and raw_release_title:
+            # Salva magnet_processed no Redis se encontrado
+            if not missing_dn and magnet_original:
                 try:
-                    save_release_title_to_redis(info_hash, raw_release_title)
+                    save_release_title_to_redis(info_hash, magnet_original)
                 except Exception:
                     pass
             
             # Prepara fallback_title
-            fallback_title = local_original_title or local_translated_title or page_title or ''
+            fallback_title = local_original_title or local_title_translated_processed or page_title or ''
             
             # Prepara release_title
             original_release_title = prepare_release_title(
-                raw_release_title,
+                magnet_original,
                 fallback_title,
                 year,
                 missing_dn=missing_dn,
@@ -120,18 +120,18 @@ def process_magnet_links(
                 skip_metadata=skip_metadata
             )
             
-            # Garante que translated_title seja string
-            translated_title_str = str(local_translated_title) if local_translated_title else None
-            if translated_title_str and not isinstance(translated_title_str, str):
-                translated_title_str = None
+            # Garante que title_translated_processed seja string
+            title_translated_processed_str = str(local_title_translated_processed) if local_title_translated_processed else None
+            if title_translated_processed_str and not isinstance(title_translated_processed_str, str):
+                title_translated_processed_str = None
             
             # Cria título padronizado
             standardized_title = create_standardized_title(
                 str(local_original_title) if local_original_title else '',
                 year,
                 original_release_title,
-                translated_title_html=translated_title_str,
-                raw_release_title_magnet=raw_release_title
+                title_translated_html=title_translated_processed_str,
+                magnet_original_magnet=magnet_original
             )
             
             # Adiciona tags de áudio
@@ -146,8 +146,8 @@ def process_magnet_links(
             
             # Determina origem_audio_tag
             origem_audio_tag = 'N/A'
-            if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
-                origem_audio_tag = 'release_title_magnet'
+            if magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
+                origem_audio_tag = 'magnet_processed'
             elif missing_dn and info_hash:
                 origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
             
@@ -162,9 +162,9 @@ def process_magnet_links(
             # Salva dados cruzados no Redis
             try:
                 cross_data_to_save = {
-                    'original_title_html': str(local_original_title) if local_original_title else None,
-                    'release_title_magnet': raw_release_title if not missing_dn else None,
-                    'translated_title_html': str(local_translated_title) if local_translated_title else None,
+                    'title_original_html': str(local_original_title) if local_original_title else None,
+                    'magnet_processed': magnet_original if not missing_dn else None,
+                    'title_translated_html': str(local_title_translated_processed) if local_title_translated_processed else None,
                     'imdb': local_imdb if local_imdb else None,
                     'missing_dn': missing_dn,
                     'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
@@ -177,8 +177,8 @@ def process_magnet_links(
             # Cria torrent dict
             torrent = {
                 'title': final_title,
-                'original_title': local_original_title if local_original_title else (local_translated_title if local_translated_title else page_title),
-                'translated_title': local_translated_title if local_translated_title else None,
+                'original_title': local_original_title if local_original_title else (local_title_translated_processed if local_title_translated_processed else page_title),
+                'title_translated_processed': local_title_translated_processed if local_title_translated_processed else None,
                 'details': absolute_link,
                 'year': year,
                 'imdb': local_imdb if local_imdb else '',
@@ -190,7 +190,8 @@ def process_magnet_links(
                 'size': size,
                 'leech_count': 0,
                 'seed_count': 0,
-                'similarity': 1.0
+                'similarity': 1.0,
+                'magnet_original': magnet_original if magnet_original else None
             }
             torrents.append(torrent)
         

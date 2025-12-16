@@ -384,6 +384,12 @@
             word-break: break-all;
         }
 
+        .magnet-name {
+            font-size: 0.65em;
+            color: #e0e0e0;
+            word-break: break-word;
+        }
+
         .magnet-button {
             display: inline-block;
             padding: 4px 14px;
@@ -522,6 +528,9 @@
             }
             .hash-value {
                 font-size: 0.7em;
+            }
+            .magnet-name {
+                font-size: 0.8em;
             }
             .magnet-button {
                 width: 100%;
@@ -727,7 +736,20 @@
                 const leech = formatNumber(torrent.tracker_leech !== undefined ? torrent.tracker_leech : (torrent.leech_count !== undefined ? torrent.leech_count : 0));
                 const size = formatSize(torrent.size);
                 const hash = torrent.info_hash || 'N/A';
-                const releaseTitleMagnet = torrent.release_title_magnet || 'N/A';
+                // Tenta extrair o nome do magnet do próprio link magnet se magnet_original não estiver disponível
+                let releaseTitleMagnet = torrent.magnet_original;
+                if (!releaseTitleMagnet && magnetLink && magnetLink !== '#') {
+                    try {
+                        // Tenta extrair o parâmetro dn= do magnet link
+                        const dnMatch = magnetLink.match(/[&?]dn=([^&]+)/i);
+                        if (dnMatch) {
+                            releaseTitleMagnet = decodeURIComponent(dnMatch[1]);
+                        }
+                    } catch (e) {
+                        // Ignora erros de decodificação
+                    }
+                }
+                releaseTitleMagnet = releaseTitleMagnet || 'N/A';
                 return `<div class="result-item"><div class="result-content">
                     <div class="result-line"><span class="result-label">TÍTULO PROCESSADO:</span><span class="result-value result-title">${finalTitle}</span></div>
                     <div class="result-line"><span class="result-label">LINK:</span><span class="result-value">${detailsUrl !== '#' ? `<a href="${detailsUrl}" target="_blank" class="result-link" title="${detailsUrl}">${formattedUrl}</a>` : 'N/A'}</span></div>
@@ -735,7 +757,7 @@
                     <div class="result-line"><span class="result-label">LEGENDA:</span><span class="result-value">${legendaStr !== 'N/A' ? `<span class="badge audio">${legendaStr}</span>` : 'N/A'}</span></div>
                     <div class="result-line"><span class="result-label">INFO:</span><span class="result-value"><span class="badge info">S: ${seeds}</span><span class="badge info">L: ${leech}</span><span class="badge info">${size}</span></span></div>
                     <div class="result-line"><span class="result-label">HASH:</span><span class="result-value hash-value">${hash}</span></div>
-                    <div class="result-line"><span class="result-label">NOME MAGNET:</span><span class="result-value">${releaseTitleMagnet}</span></div>
+                    <div class="result-line"><span class="result-label">MAGNET:</span><span class="result-value magnet-name">${releaseTitleMagnet}</span></div>
                     <div class="result-line"><span class="result-label">DOWNLOAD:</span><span class="result-value">${magnetLink !== '#' ? `<a href="${magnetLink}" class="magnet-button">Magnet</a>` : 'N/A'}</span></div>
                 </div></div>`;
             }).join('');
@@ -757,8 +779,8 @@
             'starck': false,
             'comand': true,      // Comando precisa de FlareSolverr (Cloudflare)
             'bludv': true,       // Bludv precisa de FlareSolverr (Cloudflare)
-            'baixafilmes': false,
-            'nerd': false,
+            'limon': false,
+            'portal': false,
             'tfilme': false,
             'rede': false
         };

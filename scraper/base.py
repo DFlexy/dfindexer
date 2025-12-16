@@ -1047,6 +1047,19 @@ class BaseScraper(ABC):
         # Primeiro, tenta buscar dados de tracker do cross-data
         from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
         
+        # Obtém nome do scraper para logs
+        scraper_name = None
+        if hasattr(self, 'SCRAPER_TYPE'):
+            scraper_type = getattr(self, 'SCRAPER_TYPE', '')
+            if scraper_type:
+                from scraper import available_scraper_types
+                types_info = available_scraper_types()
+                normalized_type = scraper_type.lower().strip()
+                if normalized_type in types_info:
+                    scraper_name = types_info[normalized_type].get('display_name', scraper_type)
+                else:
+                    scraper_name = getattr(self, 'DISPLAY_NAME', '') or scraper_type
+        
         infohash_map: Dict[str, List[str]] = {}
         for torrent in torrents:
             info_hash = (torrent.get('info_hash') or '').lower()
@@ -1055,16 +1068,39 @@ class BaseScraper(ABC):
             if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
                 continue
             
+            # Monta identificação para o log
+            log_parts = []
+            if scraper_name:
+                log_parts.append(f"[{scraper_name}]")
+            title = torrent.get('title', '')
+            if title:
+                title_preview = title[:50] if len(title) > 50 else title
+                log_parts.append(title_preview)
+            log_parts.append(f"(hash: {info_hash})")
+            log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
+            
             # Tenta buscar do cross-data primeiro
             cross_data = get_cross_data_from_redis(info_hash)
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
-                # Se ambos estão presentes (mesmo que sejam 0), usa do cross-data para evitar scrape desnecessário
+                # Se ambos estão presentes e não são ambos 0, usa do cross-data para evitar scrape desnecessário
                 if tracker_seed is not None and tracker_leech is not None:
-                    torrent['seed_count'] = tracker_seed
-                    torrent['leech_count'] = tracker_leech
-                    continue
+                    # Se ambos são 0, prossegue para fazer scrape ao invés de usar os valores
+                    if not (tracker_seed == 0 and tracker_leech == 0):
+                        torrent['seed_count'] = tracker_seed
+                        torrent['leech_count'] = tracker_leech
+                        # Log removido - hits do Redis são muito comuns
+                        continue
+                    else:
+                        # Ambos são 0, não usa e prossegue para scrape
+                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+                else:
+                    # Não tem ambos valores, prossegue para scrape
+                    logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+            else:
+                # Não encontrou no cross-data, prossegue para scrape
+                logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
             
             # Se não encontrou no cross-data, adiciona para fazer scrape
             trackers = torrent.get('trackers') or []
@@ -1108,13 +1144,31 @@ class BaseScraper(ABC):
             
             # Salva no cross-data sempre que obtém dados do tracker (mesmo se 0, para evitar consultas futuras)
             # Isso permite que outros scrapers reutilizem o resultado (0 ou não)
+            saved_to_redis = False
             try:
                 cross_data_to_save = {
                     'tracker_seed': seed,
                     'tracker_leech': leech
                 }
                 save_cross_data_to_redis(info_hash, cross_data_to_save)
+                saved_to_redis = True
             except Exception as e:
                 # Log silencioso - não queremos interromper o processamento por erro no cross-data
                 logger.debug(f"Cross-data save error: {info_hash[:16]}")
+            
+            # Log com resultado da busca e salvamento
+            log_parts = []
+            if scraper_name:
+                log_parts.append(f"[{scraper_name}]")
+            title = torrent.get('title', '')
+            if title:
+                title_preview = title[:50] if len(title) > 50 else title
+                log_parts.append(title_preview)
+            log_parts.append(f"(hash: {info_hash})")
+            log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
+            
+            if saved_to_redis:
+                logger.debug(f"[Tracker] Buscando tracker: {log_id} → Salvo no Redis")
+            else:
+                logger.debug(f"[Tracker] Buscando tracker: {log_id} → Scrape realizado (erro ao salvar no Redis)")
 

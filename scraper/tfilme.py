@@ -242,7 +242,7 @@ class TfilmeScraper(BaseScraper):
                             original_title = lines[0].strip()
         
         # Extrai título traduzido
-        translated_title = ''
+        title_translated_processed = ''
         for content_div in article.select('div.content'):
             html_content = str(content_div)
             
@@ -250,10 +250,10 @@ class TfilmeScraper(BaseScraper):
             title_regex = re.compile(r'(?i)t[íi]tulo\s+traduzido:\s*</b>\s*([^<\n\r]+)')
             match = title_regex.search(html_content)
             if match:
-                translated_title = match.group(1).strip()
+                title_translated_processed = match.group(1).strip()
                 # Remove qualquer HTML que possa ter sobrado
-                translated_title = re.sub(r'<[^>]+>', '', translated_title)
-                translated_title = html.unescape(translated_title)
+                title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
+                title_translated_processed = html.unescape(title_translated_processed)
             else:
                 # Tenta extrair do texto
                 text = content_div.get_text()
@@ -269,7 +269,7 @@ class TfilmeScraper(BaseScraper):
                                 break
                         lines = title_part.split('\n')
                         if lines:
-                            translated_title = lines[0].strip()
+                            title_translated_processed = lines[0].strip()
                 elif 'Titulo Traduzido:' in text:
                     parts = text.split('Titulo Traduzido:')
                     if len(parts) > 1:
@@ -282,14 +282,14 @@ class TfilmeScraper(BaseScraper):
                                 break
                         lines = title_part.split('\n')
                         if lines:
-                            translated_title = lines[0].strip()
-            if translated_title:
+                            title_translated_processed = lines[0].strip()
+            if title_translated_processed:
                 # Remove qualquer HTML que possa ter sobrado
-                translated_title = re.sub(r'<[^>]+>', '', translated_title)
-                translated_title = html.unescape(translated_title)
+                title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
+                title_translated_processed = html.unescape(title_translated_processed)
                 # Limpa o título traduzido
-                from utils.text.cleaning import clean_translated_title
-                translated_title = clean_translated_title(translated_title)
+                from utils.text.cleaning import clean_title_translated_processed
+                title_translated_processed = clean_title_translated_processed(title_translated_processed)
                 break
         
         # Extrai ano e tamanhos
@@ -394,20 +394,35 @@ class TfilmeScraper(BaseScraper):
         
         # Extrai links magnet - busca TODOS os links <a> no conteúdo
         # A função _resolve_link automaticamente identifica e resolve links protegidos
+        # Primeiro tenta em container específico (mais rápido)
         text_content = article.find('div', class_='content')
-        if not text_content:
-            return []
         
         magnet_links = []
-        for link in text_content.select('a[href]'):
-            href = link.get('href', '')
-            if not href:
-                continue
-            
-            # Resolve automaticamente (magnet direto ou protegido)
-            resolved_magnet = self._resolve_link(href)
-            if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                magnet_links.append(resolved_magnet)
+        if text_content:
+            for link in text_content.select('a[href]'):
+                href = link.get('href', '')
+                if not href:
+                    continue
+                
+                # Resolve automaticamente (magnet direto ou protegido)
+                resolved_magnet = self._resolve_link(href)
+                if resolved_magnet and resolved_magnet.startswith('magnet:'):
+                    if resolved_magnet not in magnet_links:
+                        magnet_links.append(resolved_magnet)
+        
+        # Se não encontrou links no container específico, busca em todo o documento (fallback)
+        if not magnet_links:
+            all_links = doc.select('a[href]')
+            for link in all_links:
+                href = link.get('href', '')
+                if not href:
+                    continue
+                
+                # Resolve automaticamente (magnet direto ou protegido)
+                resolved_magnet = self._resolve_link(href)
+                if resolved_magnet and resolved_magnet.startswith('magnet:'):
+                    if resolved_magnet not in magnet_links:
+                        magnet_links.append(resolved_magnet)
         
         if not magnet_links:
             return []
@@ -471,36 +486,36 @@ class TfilmeScraper(BaseScraper):
                 
                 # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
-                    if not original_title and cross_data.get('original_title_html'):
-                        original_title = cross_data['original_title_html']
+                    if not original_title and cross_data.get('title_original_html'):
+                        original_title = cross_data['title_original_html']
                     
-                    if not translated_title and cross_data.get('translated_title_html'):
-                        translated_title = cross_data['translated_title_html']
+                    if not title_translated_processed and cross_data.get('title_translated_html'):
+                        title_translated_processed = cross_data['title_translated_html']
                     
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # Extrai magnet_original diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
-                raw_release_title = magnet_data.get('display_name', '')
-                missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                magnet_original = magnet_data.get('display_name', '')
+                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
                 # Se ainda está missing_dn, tenta buscar do cross_data
-                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
-                    raw_release_title = cross_data['release_title_magnet']
+                if missing_dn and cross_data and cross_data.get('magnet_processed'):
+                    magnet_original = cross_data['magnet_processed']
                     missing_dn = False
                 
-                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
-                if not missing_dn and raw_release_title:
+                # Salva magnet_processed no Redis se encontrado (para reutilização por outros scrapers)
+                if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, raw_release_title)
+                        save_release_title_to_redis(info_hash, magnet_original)
                     except Exception:
                         pass
                 
                 fallback_title = page_title or original_title or ''
                 original_release_title = prepare_release_title(
-                    raw_release_title,
+                    magnet_original,
                     fallback_title,
                     year,
                     missing_dn=missing_dn,
@@ -509,7 +524,7 @@ class TfilmeScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
+                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original_magnet=magnet_original
                 )
                 
                 # Adiciona [Brazilian] se detectar DUAL/DUBLADO/NACIONAL, [Eng] se LEGENDADO, ou ambos se houver os dois
@@ -524,8 +539,8 @@ class TfilmeScraper(BaseScraper):
                 
                 # Determina origem_audio_tag
                 origem_audio_tag = 'N/A'
-                if raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
-                    origem_audio_tag = 'release_title_magnet'
+                if magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
+                    origem_audio_tag = 'magnet_processed'
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
@@ -541,9 +556,9 @@ class TfilmeScraper(BaseScraper):
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {
-                        'original_title_html': original_title if original_title else None,
-                        'release_title_magnet': raw_release_title if not missing_dn else None,
-                        'translated_title_html': translated_title if translated_title else None,
+                        'title_original_html': original_title if original_title else None,
+                        'magnet_processed': original_release_title if original_release_title else None,
+                        'title_translated_html': title_translated_processed if title_translated_processed else None,
                         'imdb': imdb if imdb else None,
                         'missing_dn': missing_dn,
                         'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
@@ -556,7 +571,7 @@ class TfilmeScraper(BaseScraper):
                 torrent = {
                     'title': final_title,
                     'original_title': original_title if original_title else page_title,
-                    'translated_title': translated_title if translated_title else None,
+                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
                     'details': absolute_link,
                     'year': year,
                     'imdb': imdb,
@@ -568,6 +583,7 @@ class TfilmeScraper(BaseScraper):
                     'size': size,
                     'leech_count': 0,
                     'seed_count': 0,
+                    'magnet_original': magnet_original if magnet_original else None,
                     'similarity': 1.0
                 }
                 torrents.append(torrent)

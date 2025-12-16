@@ -17,7 +17,7 @@ class QueryFilter:
                 query,
                 torrent.get('title', ''),
                 torrent.get('original_title', ''),
-                torrent.get('translated_title', '')
+                torrent.get('title_translated_processed', '')
             )
         
         return filter_func

@@ -129,7 +129,7 @@ def process_links_parallel(
     logger.debug(f"{scraper_prefix}Processando {total_links} links em paralelo. Ordem original:")
     for idx, link in enumerate(original_order):
         link_short = link.split('/')[-2] if '/' in link else link[-50:]
-        logger.debug(f"{scraper_prefix}  [{idx+1}] {link_short}")
+        logger.debug(f"{scraper_prefix}[{idx+1}] {link_short}")
     
     # Cria mapeamento de link -> índice original para manter ordem
     link_to_index = {link: idx for idx, link in enumerate(original_order)}
@@ -181,7 +181,7 @@ def process_links_parallel(
             link = original_order[idx]
             link_short = link.split('/')[-2] if '/' in link else link[-50:]
             torrents_count = len(results_by_index[idx])
-            logger.info(f"{scraper_prefix}Página [{idx+1}/{total_links}]: {link_short} - {torrents_count} magnets encontrados")
+            logger.info(f"{scraper_prefix}Página processada [{idx+1}/{total_links}]: {link_short} - {torrents_count} magnets encontrados")
     
     return all_torrents
 

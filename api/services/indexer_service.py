@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 SCRAPER_NUMBER_MAP = {
     "1": "starck",
     "2": "rede",
-    "3": "baixafilmes",
+    "3": "limon",
     "4": "tfilme",
     "5": None,  # Removido (vaca)
     "6": "comand",
     "7": "bludv",
-    "8": "nerd",
+    "8": "portal",
 }
 
 
@@ -38,7 +38,7 @@ class IndexerService:
         self.enricher = TorrentEnricher()
         self.processor = TorrentProcessor()
     
-        # Busca torrents por query
+    # Busca torrents por query
     def search(self, scraper_type: str, query: str, use_flaresolverr: bool = False, filter_results: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
@@ -54,12 +54,14 @@ class IndexerService:
         if max_results and max_results > 0:
             torrents = torrents[:max_results]
         
-        # Calcula estatísticas do filtro
+        # Calcula estatísticas do filtro - faz cópia imediatamente para evitar race condition
         filter_stats = None
         if hasattr(scraper, '_enricher') and hasattr(scraper._enricher, '_last_filter_stats'):
-            # Usa estatísticas do enricher (já calculadas durante o enriquecimento)
+            # Faz cópia imediata das estatísticas para evitar que sejam sobrescritas por outras requisições
             stats = scraper._enricher._last_filter_stats
             if stats:
+                # Cria cópia profunda para evitar race condition entre requisições simultâneas
+                # IMPORTANTE: Coleta ANTES de qualquer outra operação que possa sobrescrever
                 filter_stats = {
                     'total': stats.get('total', 0),
                     'filtered': stats.get('filtered', 0),
@@ -89,7 +91,7 @@ class IndexerService:
     def get_last_filter_stats(self):
         return self.enricher._last_filter_stats if hasattr(self.enricher, '_last_filter_stats') else None
     
-        # Obtém torrents de uma página
+    # Obtém torrents de uma página
     def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         

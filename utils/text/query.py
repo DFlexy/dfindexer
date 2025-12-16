@@ -8,7 +8,7 @@ from utils.text.cleaning import remove_accents
 
 
 # Confere se o resultado corresponde à busca (ignorando stop words)
-def check_query_match(query: str, title: str, original_title_html: str = '', translated_title_html: str = '') -> bool:
+def check_query_match(query: str, title: str, title_original_html: str = '', title_translated_html: str = '') -> bool:
     if not query or not query.strip():
         return True  # Query vazia, não filtra
     
@@ -40,7 +40,7 @@ def check_query_match(query: str, title: str, original_title_html: str = '', tra
             break
     
     # Combina título + título original + título traduzido para busca
-    combined_title = f"{title} {original_title_html} {translated_title_html}".lower()
+    combined_title = f"{title} {title_original_html} {title_translated_html}".lower()
     # Remove pontos e normaliza espaços
     combined_title = combined_title.replace('.', ' ')
     combined_title = re.sub(r'\s+', ' ', combined_title)

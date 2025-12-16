@@ -21,14 +21,14 @@ from utils.logging import ScraperLogContext
 logger = logging.getLogger(__name__)
 
 # Contexto de logging centralizado para este scraper
-_log_ctx = ScraperLogContext("Nerd", logger)
+_log_ctx = ScraperLogContext("Portal", logger)
 
 
-# Scraper específico para Nerd Torrent HD
-class NerdScraper(BaseScraper):
-    SCRAPER_TYPE = "nerd"
+# Scraper específico para Portal Filmes
+class PortalScraper(BaseScraper):
+    SCRAPER_TYPE = "portal"
     DEFAULT_BASE_URL = "https://portalfilmes.com/"
-    DISPLAY_NAME = "Nerd"
+    DISPLAY_NAME = "Portal"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
@@ -230,7 +230,7 @@ class NerdScraper(BaseScraper):
         
         # Extrai título traduzido de "Baixar Título:" ou "Baixar Filme:"
         # Primeiro tenta buscar no elemento poster-info (mais específico)
-        translated_title = ''
+        title_translated_processed = ''
         poster_info = doc.select_one('.poster-info')
         if poster_info:
             poster_html = str(poster_info)
@@ -249,15 +249,15 @@ class NerdScraper(BaseScraper):
                     html_text = re.sub(r'(?i).*?IMDb:.*$', '', html_text)
                     html_text = html_text.strip()
                     if html_text:
-                        translated_title = html_text
+                        title_translated_processed = html_text
                 else:
                     # Fallback: extrai do texto, para antes de "Titulo Original:", "IMDb:", etc.
                     text_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', poster_text)
                     if text_match:
-                        translated_title = text_match.group(1).strip()
+                        title_translated_processed = text_match.group(1).strip()
         
         # Se não encontrou no poster-info, busca em todos os elementos do content_div
-        if not translated_title:
+        if not title_translated_processed:
             for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
                 elem_html = str(elem)
                 elem_text = elem.get_text(' ', strip=True)
@@ -275,18 +275,18 @@ class NerdScraper(BaseScraper):
                         html_text = re.sub(r'(?i).*?IMDb:.*$', '', html_text)
                         html_text = html_text.strip()
                         if html_text:
-                            translated_title = html_text
+                            title_translated_processed = html_text
                     else:
                         # Fallback: extrai do texto, para antes de "Titulo Original:", "IMDb:", etc.
                         text_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', elem_text)
                         if text_match:
-                            translated_title = text_match.group(1).strip()
+                            title_translated_processed = text_match.group(1).strip()
                     
-                    if translated_title:
+                    if title_translated_processed:
                         break
         
         # Fallback: busca na meta tag og:description
-        if not translated_title:
+        if not title_translated_processed:
             og_description = doc.find('meta', property='og:description')
             if og_description:
                 og_content = og_description.get('content', '')
@@ -295,10 +295,10 @@ class NerdScraper(BaseScraper):
                     # Extrai tudo até "Título Original:" ou fim da string
                     meta_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+Título Original|$)', og_content)
                     if meta_match:
-                        translated_title = meta_match.group(1).strip()
+                        title_translated_processed = meta_match.group(1).strip()
         
         # Fallback adicional: busca na meta tag og:title
-        if not translated_title:
+        if not title_translated_processed:
             og_title = doc.find('meta', property='og:title')
             if og_title:
                 og_title_content = og_title.get('content', '')
@@ -314,19 +314,19 @@ class NerdScraper(BaseScraper):
                     og_title_clean = html.unescape(og_title_clean)
                     og_title_clean = re.sub(r'\s+', ' ', og_title_clean).strip()
                     if og_title_clean:
-                        translated_title = og_title_clean
+                        title_translated_processed = og_title_clean
         
         # Processa o título traduzido encontrado
-        if translated_title:
+        if title_translated_processed:
             # Remove "Torrent" do final
-            translated_title = re.sub(r'\s+Torrent\s*$', '', translated_title, flags=re.IGNORECASE)
+            title_translated_processed = re.sub(r'\s+Torrent\s*$', '', title_translated_processed, flags=re.IGNORECASE)
             # Remove ano entre parênteses (ex: (2025))
-            translated_title = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', translated_title)
+            title_translated_processed = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', title_translated_processed)
             # Remove outros padrões comuns
-            translated_title = re.sub(r'\s*Torrent\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', translated_title, flags=re.IGNORECASE)
+            title_translated_processed = re.sub(r'\s*Torrent\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', title_translated_processed, flags=re.IGNORECASE)
             
-            translated_title = html.unescape(translated_title)
-            translated_title = re.sub(r'\s+', ' ', translated_title).strip()
+            title_translated_processed = html.unescape(title_translated_processed)
+            title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
             
             # Para antes de outros campos (Gênero, Duração, etc.)
             # Usa regex para encontrar qualquer variação (com ou sem acento, com ou sem espaço antes)
@@ -340,14 +340,14 @@ class NerdScraper(BaseScraper):
                 r'Lançamento',
             ]
             for pattern in stop_patterns:
-                match = re.search(pattern, translated_title, re.IGNORECASE)
+                match = re.search(pattern, title_translated_processed, re.IGNORECASE)
                 if match:
-                    translated_title = translated_title[:match.start()].strip()
+                    title_translated_processed = title_translated_processed[:match.start()].strip()
                     break
             
-            if translated_title:
-                from utils.text.cleaning import clean_translated_title
-                translated_title = clean_translated_title(translated_title)
+            if title_translated_processed:
+                from utils.text.cleaning import clean_title_translated_processed
+                title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
         # Fallback: usa título da página se não encontrou título original
         if not original_title:
@@ -362,7 +362,7 @@ class NerdScraper(BaseScraper):
         all_paragraphs_html = []  # Coleta HTML de todos os parágrafos
         
         # Extrai informações de idioma e legenda do HTML
-        # Busca em content_div primeiro (estrutura padrão do nerd)
+        # Busca em content_div primeiro (estrutura padrão do portal)
         content_html = str(content_div)
         idioma = ''
         legenda = ''
@@ -488,7 +488,8 @@ class NerdScraper(BaseScraper):
             # Resolve automaticamente (magnet direto ou protegido)
             resolved_magnet = self._resolve_link(href)
             if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                magnet_links.append(resolved_magnet)
+                if resolved_magnet not in magnet_links:
+                    magnet_links.append(resolved_magnet)
         
         if not magnet_links:
             return []
@@ -513,36 +514,36 @@ class NerdScraper(BaseScraper):
                 
                 # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
-                    if not original_title and cross_data.get('original_title_html'):
-                        original_title = cross_data['original_title_html']
+                    if not original_title and cross_data.get('title_original_html'):
+                        original_title = cross_data['title_original_html']
                     
-                    if not translated_title and cross_data.get('translated_title_html'):
-                        translated_title = cross_data['translated_title_html']
+                    if not title_translated_processed and cross_data.get('title_translated_html'):
+                        title_translated_processed = cross_data['title_translated_html']
                     
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai raw_release_title diretamente do display_name do magnet resolvido
+                # Extrai magnet_original diretamente do display_name do magnet resolvido
                 # NÃO modificar antes de passar para create_standardized_title
-                raw_release_title = magnet_data.get('display_name', '')
-                missing_dn = not raw_release_title or len(raw_release_title.strip()) < 3
+                magnet_original = magnet_data.get('display_name', '')
+                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
                 # Se ainda está missing_dn, tenta buscar do cross_data
-                if missing_dn and cross_data and cross_data.get('release_title_magnet'):
-                    raw_release_title = cross_data['release_title_magnet']
+                if missing_dn and cross_data and cross_data.get('magnet_processed'):
+                    magnet_original = cross_data['magnet_processed']
                     missing_dn = False
                 
-                # Salva release_title_magnet no Redis se encontrado (para reutilização por outros scrapers)
-                if not missing_dn and raw_release_title:
+                # Salva magnet_processed no Redis se encontrado (para reutilização por outros scrapers)
+                if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, raw_release_title)
+                        save_release_title_to_redis(info_hash, magnet_original)
                     except Exception:
                         pass
                 
-                fallback_title = original_title if original_title else (translated_title if translated_title else page_title or '')
+                fallback_title = original_title if original_title else (title_translated_processed if title_translated_processed else page_title or '')
                 original_release_title = prepare_release_title(
-                    raw_release_title,
+                    magnet_original,
                     fallback_title,
                     year,
                     missing_dn=missing_dn,
@@ -551,7 +552,7 @@ class NerdScraper(BaseScraper):
                 )
                 
                 standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, translated_title_html=translated_title if translated_title else None, raw_release_title_magnet=raw_release_title
+                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original_magnet=magnet_original
                 )
                 
                 # Adiciona [Brazilian], [Eng] (via HTML) e/ou [Leg] conforme detectado
@@ -569,8 +570,8 @@ class NerdScraper(BaseScraper):
                 origem_audio_tag = 'N/A'
                 if audio_info:
                     origem_audio_tag = f'HTML da página (detect_audio_from_html)'
-                elif raw_release_title and ('dual' in raw_release_title.lower() or 'dublado' in raw_release_title.lower() or 'legendado' in raw_release_title.lower()):
-                    origem_audio_tag = 'release_title_magnet'
+                elif magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
+                    origem_audio_tag = 'magnet_processed'
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
@@ -583,9 +584,9 @@ class NerdScraper(BaseScraper):
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {
-                        'original_title_html': original_title if original_title else None,
-                        'release_title_magnet': raw_release_title if not missing_dn else None,
-                        'translated_title_html': translated_title if translated_title else None,
+                        'title_original_html': original_title if original_title else None,
+                        'magnet_processed': original_release_title if original_release_title else None,
+                        'title_translated_html': title_translated_processed if title_translated_processed else None,
                         'imdb': imdb if imdb else None,
                         'missing_dn': missing_dn,
                         'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
@@ -597,8 +598,8 @@ class NerdScraper(BaseScraper):
                 
                 torrent = {
                     'title': final_title,
-                    'original_title': original_title if original_title else (translated_title if translated_title else page_title),
-                    'translated_title': translated_title if translated_title else None,
+                    'original_title': original_title if original_title else (title_translated_processed if title_translated_processed else page_title),
+                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
                     'details': absolute_link,
                     'year': year,
                     'imdb': imdb if imdb else '',
@@ -610,7 +611,8 @@ class NerdScraper(BaseScraper):
                     'size': size,
                     'leech_count': 0,
                     'seed_count': 0,
-                    'similarity': 1.0
+                    'similarity': 1.0,
+                    'magnet_original': magnet_original if magnet_original else None
                 }
                 torrents.append(torrent)
             
