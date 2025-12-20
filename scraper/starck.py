@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://www.starckfilmes-v6.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v8.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):

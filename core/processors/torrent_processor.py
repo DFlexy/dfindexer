@@ -48,6 +48,7 @@ class TorrentProcessor:
         # Remove apenas campos internos dos torrents
         # Garante que campo 'date' sempre tenha valor (fallback final se necessário)
         # Adiciona campo 'title' como alias de 'title_processed' para compatibilidade com Prowlarr
+        # Garante que campos obrigatórios para Prowlarr estejam presentes e válidos
         from datetime import datetime
         
         for torrent in torrents:
@@ -64,6 +65,47 @@ class TorrentProcessor:
             date_value = torrent.get('date')
             if not date_value or (isinstance(date_value, str) and date_value.strip() == ''):
                 torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            
+            # Garante que seed_count e leech_count sejam sempre números (não None)
+            # O Prowlarr precisa desses campos como números válidos
+            if torrent.get('seed_count') is None:
+                torrent['seed_count'] = 0
+            else:
+                try:
+                    torrent['seed_count'] = int(torrent['seed_count'])
+                except (ValueError, TypeError):
+                    torrent['seed_count'] = 0
+            
+            if torrent.get('leech_count') is None:
+                torrent['leech_count'] = 0
+            else:
+                try:
+                    torrent['leech_count'] = int(torrent['leech_count'])
+                except (ValueError, TypeError):
+                    torrent['leech_count'] = 0
+            
+            # Garante que magnet_link esteja presente (campo obrigatório para Prowlarr)
+            if not torrent.get('magnet_link') and torrent.get('magnet'):
+                torrent['magnet_link'] = torrent['magnet']
+            
+            # Garante que details esteja presente (campo obrigatório para Prowlarr)
+            if not torrent.get('details'):
+                # Se não tiver details, tenta usar o magnet_link como fallback
+                # ou cria um link vazio (melhor que None)
+                torrent['details'] = torrent.get('magnet_link', '')
+            
+            # Garante que info_hash esteja presente (campo obrigatório para Prowlarr)
+            if not torrent.get('info_hash'):
+                # Tenta extrair do magnet_link se disponível
+                magnet_link = torrent.get('magnet_link', '')
+                if magnet_link and 'xt=urn:btih:' in magnet_link.lower():
+                    try:
+                        import re
+                        match = re.search(r'xt=urn:btih:([a-f0-9]{40})', magnet_link, re.IGNORECASE)
+                        if match:
+                            torrent['info_hash'] = match.group(1).lower()
+                    except Exception:
+                        pass
     
     @staticmethod
     def sort_by_date(torrents: List[Dict], reverse: bool = True) -> None:

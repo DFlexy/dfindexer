@@ -648,7 +648,8 @@ def add_audio_tag_if_needed(title: str, magnet_processed: str, info_hash: Option
         # Remove DUAL se [Brazilian] ou [Eng] foi adicionado
         if '[Brazilian]' in tags_to_add or '[Eng]' in tags_to_add:
             # Remove DUAL standalone
-            title = re.sub(r'\.?\.?DUAL\.?\.?', '.', title, flags=re.IGNORECASE)
+            # IMPORTANTE: NÃO remove DUAL.5.1, DUAL.2.0 ou DUAL.7.1 (são informações técnicas de áudio)
+            title = re.sub(r'\.?\.?DUAL(?![\.\s]?(?:5\.1|2\.0|7\.1))\.?\.?', '.', title, flags=re.IGNORECASE)
             title = re.sub(r'\.{2,}', '.', title)
             title = title.strip('.')
         # Remove DUBLADO, NACIONAL, PORTUGUES se [Brazilian] foi adicionado

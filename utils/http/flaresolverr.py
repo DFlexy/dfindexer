@@ -240,7 +240,13 @@ class FlareSolverrClient:
                     f"Verifique se o serviço está rodando e acessível."
                 )
             else:
-                logger.error(f"Erro ao criar sessão FlareSolverr para {base_url}: {e}")
+                # Extrai apenas o tipo de erro para reduzir verbosidade
+                error_type = type(e).__name__
+                error_msg = str(e)
+                if "Connection" in error_type or "Connection refused" in error_msg or "Max retries exceeded" in error_msg:
+                    logger.error(f"Erro ao criar sessão FlareSolverr para {base_url}: conexão recusada ou indisponível")
+                else:
+                    logger.error(f"Erro ao criar sessão FlareSolverr para {base_url}: {error_type}")
             # Cacheia falha de criação (2 minutos)
             self._cache_session_creation_failure(base_url, skip_redis)
             return None
@@ -271,7 +277,6 @@ class FlareSolverrClient:
         except Exception as e:
             # Em caso de erro na validação, assume que a sessão é válida
             # (evita invalidar sessões válidas por problemas temporários)
-            logger.debug(f"FlareSolverr: erro ao validar sessão (assumindo válida): {type(e).__name__}")
             return True
     
     def _should_log(self, log_key: str) -> bool:
@@ -424,22 +429,27 @@ class FlareSolverrClient:
                 except:
                     error_detail = response.text[:200] if response.text else ""
                 
-                logger.warning(
-                    f"FlareSolverr retornou erro 500 para {url}. "
-                    f"Sessão: {session_id[:20]}... Detalhes: {error_detail}"
-                )
                 # Invalida sessão apenas se o erro indicar problema específico com a sessão
                 # NÃO invalida por problemas temporários do Chrome/FlareSolverr (tab crashed, chromedriver exited, etc.)
                 should_invalidate = False
+                is_temporary_error = False
                 if base_url and error_detail:
                     error_lower = error_detail.lower()
                     # Problemas que indicam sessão inválida
                     if "session" in error_lower and ("not found" in error_lower or "invalid" in error_lower):
                         should_invalidate = True
                     # Problemas temporários do Chrome/FlareSolverr - NÃO invalidar
-                    elif "tab crashed" in error_lower or "chromedriver" in error_lower or "chrome" in error_lower:
-                        logger.debug(f"FlareSolverr: erro temporário do Chrome detectado, mantendo sessão: {error_detail[:100]}")
+                    elif "tab crashed" in error_lower or "chromedriver" in error_lower or "chrome" in error_lower or "can't start new thread" in error_lower:
+                        is_temporary_error = True
+                        logger.debug(f"FlareSolverr: erro temporário detectado para {url[:50]}...: {error_detail[:100]}")
                         should_invalidate = False
+                
+                # Loga como WARNING apenas se não for erro temporário conhecido
+                if not is_temporary_error:
+                    logger.warning(
+                        f"FlareSolverr retornou erro 500 para {url}. "
+                        f"Sessão: {session_id[:20]}... Detalhes: {error_detail}"
+                    )
                 
                 if should_invalidate:
                     self._invalidate_session(session_id, base_url, skip_redis)
@@ -484,7 +494,15 @@ class FlareSolverrClient:
             logger.warning(f"Timeout ao resolver {url} via FlareSolverr")
             return None
         except Exception as e:
-            logger.error(f"Erro ao resolver {url} via FlareSolverr: {e}")
+            # Extrai apenas o tipo de erro e mensagem resumida
+            error_type = type(e).__name__
+            error_msg = str(e)
+            # Resumo para erros de conexão
+            if "Connection" in error_type or "Connection refused" in error_msg or "Max retries exceeded" in error_msg:
+                logger.error(f"Erro ao resolver {url[:50]}... via FlareSolverr: conexão recusada ou indisponível")
+            else:
+                # Para outros erros, mostra apenas o tipo
+                logger.error(f"Erro ao resolver {url[:50]}... via FlareSolverr: {error_type}")
             return None
     
     def _cache_session_creation_failure(self, base_url: str, skip_redis: bool = False):

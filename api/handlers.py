@@ -277,6 +277,26 @@ def indexer_handler(site_name: str = None):
             else:
                 filter_stats = None
         
+        # Validação final: garante que todos os resultados tenham campos obrigatórios
+        # Remove resultados inválidos que não podem ser exibidos no Prowlarr
+        valid_torrents = []
+        for torrent in torrents:
+            # Campos obrigatórios para Prowlarr
+            has_title = torrent.get('title') or torrent.get('title_processed')
+            has_magnet = torrent.get('magnet_link') or torrent.get('magnet')
+            has_info_hash = torrent.get('info_hash')
+            has_details = torrent.get('details')
+            
+            # Se faltar algum campo crítico, remove o resultado
+            if not has_title or not has_magnet or not has_info_hash or not has_details:
+                logger.debug(f"{log_prefix if 'log_prefix' in locals() else '[UNKNOWN]'} Removendo resultado inválido (faltam campos obrigatórios): title={bool(has_title)}, magnet={bool(has_magnet)}, info_hash={bool(has_info_hash)}, details={bool(has_details)}")
+                continue
+            
+            valid_torrents.append(torrent)
+        
+        # Atualiza lista de torrents com apenas os válidos
+        torrents = valid_torrents
+        
         response_data = {
             'results': torrents,
             'count': len(torrents)
@@ -284,6 +304,17 @@ def indexer_handler(site_name: str = None):
         
         if is_prowlarr_test:
             response_data['teste'] = True
+        
+        # Log de debug: verifica se há resultados e se têm campos obrigatórios
+        if torrents:
+            sample_torrent = torrents[0] if torrents else {}
+            required_fields = ['title', 'magnet_link', 'info_hash', 'details', 'seed_count', 'leech_count']
+            missing_fields = [field for field in required_fields if not sample_torrent.get(field) and sample_torrent.get(field) != 0]
+            if missing_fields:
+                logger.warning(f"{log_prefix if 'log_prefix' in locals() else '[UNKNOWN]'} Campos obrigatórios faltando no resultado: {missing_fields}")
+        elif len(torrents) == 0 and filter_stats and filter_stats.get('approved', 0) > 0:
+            # Se há resultados aprovados mas nenhum válido, loga aviso
+            logger.warning(f"{log_prefix if 'log_prefix' in locals() else '[UNKNOWN]'} {filter_stats.get('approved', 0)} resultados aprovados, mas nenhum válido após validação final")
         
         return jsonify(response_data)
     
