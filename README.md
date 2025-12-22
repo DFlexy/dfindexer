@@ -180,7 +180,6 @@ Para poder selecionar o FlareSolverr:
 1. Edite o indexador no Prowlarr
 2. Selecione o campo **[Usar FlareSolverr]**
 3. No momento, somente 3 sites precisam ser selecionados:
-- ✅ **XFilmes**
 - ✅ **©Ø₥@₦ÐØ**
 - ✅ **฿£µÐ√**
    
