@@ -9,6 +9,7 @@ from tracker import get_tracker_service
 from magnet.metadata_async import fetch_metadata_from_itorrents_async
 from magnet.parser import MagnetParser
 from utils.text.utils import format_bytes
+from utils.http.proxy import get_aiohttp_proxy_connector
 import aiohttp
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,15 @@ class TorrentEnricherAsync:
         """Obtém ou cria sessão aiohttp reutilizável."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=30, connect=5)
-            connector = aiohttp.TCPConnector(limit=100, limit_per_host=20)
+            # Tenta usar ProxyConnector primeiro (método recomendado)
+            proxy_connector = get_aiohttp_proxy_connector()
+            if proxy_connector:
+                # Quando usa ProxyConnector, não precisa passar proxy no ClientSession
+                connector = proxy_connector
+            else:
+                # Se não tem proxy connector, usa TCPConnector normal
+                connector = aiohttp.TCPConnector(limit=100, limit_per_host=20)
+            
             self._session = aiohttp.ClientSession(
                 timeout=timeout,
                 connector=connector,
@@ -500,17 +509,12 @@ class TorrentEnricherAsync:
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
-                # Se ambos estão presentes e não são ambos 0, usa do cross-data para evitar scrape desnecessário
+                # Se ambos estão presentes, usa do cross-data (mesmo se for 0, 0 - evita scrape desnecessário)
                 if tracker_seed is not None and tracker_leech is not None:
-                    # Se ambos são 0, prossegue para fazer scrape ao invés de usar os valores
-                    if not (tracker_seed == 0 and tracker_leech == 0):
-                        torrent['seed_count'] = tracker_seed
-                        torrent['leech_count'] = tracker_leech
-                        # Log removido - hits do Redis são muito comuns
-                        continue
-                    else:
-                        # Ambos são 0, não usa e prossegue para scrape
-                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+                    torrent['seed_count'] = tracker_seed
+                    torrent['leech_count'] = tracker_leech
+                    # Log removido - hits do Redis são muito comuns
+                    continue
                 else:
                     # Não tem ambos valores, prossegue para scrape
                     logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
@@ -546,6 +550,20 @@ class TorrentEnricherAsync:
                     leech, seed = leech_seed
                     torrent['leech_count'] = leech
                     torrent['seed_count'] = seed
+                    
+                    # Salva no TrackerCache se ainda não estiver salvo (garante consistência)
+                    # Isso cobre casos onde (0, 0) foi retornado mas não foi salvo no TrackerCache
+                    try:
+                        from cache.tracker_cache import TrackerCache
+                        tracker_cache = TrackerCache()
+                        # Verifica se já está no cache
+                        cached = tracker_cache.get(info_hash)
+                        if not cached:
+                            # Se não está no cache, salva (mesmo que seja 0, 0 - é sucesso)
+                            tracker_data = {"leech": leech, "seed": seed}
+                            tracker_cache.set(info_hash, tracker_data)
+                    except Exception:
+                        pass
                     
                     saved_to_redis = False
                     try:

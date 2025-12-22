@@ -147,7 +147,7 @@ def _extract_audio_legenda_rede(doc: BeautifulSoup, article: Optional[BeautifulS
 
 def _extract_audio_legenda_baixafilmes(doc: BeautifulSoup, entry_meta_list: Optional[list] = None) -> Tuple[str, str]:
     """
-    Limon Torrents: Extrai "Idioma" e "Legenda" de div.entry-meta.
+    XFilmes: Extrai "Idioma" e "Legenda" de div.entry-meta.
     Nome da função mantido por compatibilidade histórica (anteriormente usado por baixafilmes).
     DEPRECATED: Legenda foi movida para utils/parsing/legend_extraction.py
     Mantida apenas para compatibilidade.
@@ -272,7 +272,7 @@ def _extract_audio_legenda_comand(doc: BeautifulSoup, content_div: Optional[Beau
 SCRAPER_AUDIO_LEGENDA_EXTRACTORS: Dict[str, Callable] = {
     'bludv': _extract_audio_legenda_bludv,
     'rede': _extract_audio_legenda_rede,
-    'limon': _extract_audio_legenda_baixafilmes,  # Limon usa esta função
+    'xfilmes': _extract_audio_legenda_baixafilmes,  # XFilmes usa esta função
     'comand': _extract_audio_legenda_comand,
 }
 

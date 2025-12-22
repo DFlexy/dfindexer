@@ -24,8 +24,11 @@ _CIRCUIT_BREAKER_KEY = circuit_metadata_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3
 _CIRCUIT_BREAKER_503_THRESHOLD = 5
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60
-_CIRCUIT_BREAKER_FAILURE_CACHE_TTL = 60
-_CIRCUIT_BREAKER_503_CACHE_TTL = 300
+_CIRCUIT_BREAKER_COUNTER_TTL = 60  # TTL para contadores do circuit breaker (timeouts, 503s)
+# TTLs para cache de falha por hash (não são do circuit breaker, são do cache de falha)
+_METADATA_FAILURE_CACHE_TTL = 60  # TTL para cache de falhas genéricas por hash
+_METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
+_METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
 _hash_locks = {}
 _hash_locks_lock = threading.Lock()
 # Rastreia hashes que estão sendo buscados para evitar logs duplicados
@@ -117,7 +120,6 @@ def _is_circuit_breaker_open() -> bool:
                 disabled_until_float = float(disabled_until_str)
                 now = time.time()
                 if now < disabled_until_float:
-                    remaining = int(disabled_until_float - now)
                     # Throttling de logs - só loga uma vez por minuto
                     log_key = "circuit_breaker_open"
                     should_log = False
@@ -159,12 +161,14 @@ def _record_timeout():
         try:
             # Usa Redis Hash para armazenar contadores
             timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
-            redis.expire(_CIRCUIT_BREAKER_KEY, 60)  # Expira hash após 1 minuto
+            # Expira hash com TTL do contador (garante que não expire antes do disabled)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             # Se atingiu o limite, abre o circuit breaker
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
@@ -204,12 +208,14 @@ def _record_503():
         try:
             # Usa Redis Hash para armazenar contadores
             error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
-            redis.expire(_CIRCUIT_BREAKER_KEY, 60)  # Expira hash após 1 minuto
+            # Expira hash com TTL do contador (garante que não expire antes do disabled)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             # Se atingiu o limite, abre o circuit breaker
             if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
@@ -240,6 +246,7 @@ def _record_503():
 def _record_success():
     """
     Registra uma requisição bem-sucedida, resetando os contadores de erros.
+    Se o circuit breaker estiver aberto, fecha (half-open state).
     Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query).
     """
     redis = get_redis_client()
@@ -249,6 +256,8 @@ def _record_success():
         try:
             # Reseta contadores no Hash
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
+            # Fecha circuit breaker se estiver aberto (half-open state - permite tentar novamente)
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception:
             pass
     
@@ -274,25 +283,32 @@ def _is_failure_cached(info_hash: str) -> bool:
         return False
 
 
-def _cache_failure(info_hash: str, is_503: bool = False):
+
+
+def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = None):
     """
     Cacheia uma falha para evitar tentativas repetidas.
     Usa Redis primeiro, memória apenas se Redis não disponível.
+    Parte do sistema de circuit breaker.
     
     Args:
         info_hash: Hash do torrent
         is_503: Se True, cacheia por mais tempo (5 minutos) no Redis, pois é erro de serviço indisponível
+        ttl: TTL customizado (opcional). Se não fornecido, usa TTL padrão baseado em is_503
     """
     info_hash_lower = info_hash.lower()
     
     try:
         from cache.metadata_cache import MetadataCache
         metadata_cache = MetadataCache()
-        if is_503:
+        if ttl is not None:
+            # TTL customizado (ex: para "não encontrado" - 2 minutos)
+            metadata_cache.set_failure(info_hash_lower, ttl)
+        elif is_503:
             # Erros 503 são cacheados por mais tempo
-            metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_503_CACHE_TTL)
+            metadata_cache.set_failure(info_hash_lower, _METADATA_503_CACHE_TTL)
         else:
-            metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL)
+            metadata_cache.set_failure(info_hash_lower, _METADATA_FAILURE_CACHE_TTL)
     except Exception:
         pass
 
@@ -377,6 +393,11 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Tuple[
         'User-Agent': 'TorrentMetadataService/1.0',
         'Accept-Encoding': 'gzip',
     })
+    # Configura proxy se disponível
+    from utils.http.proxy import get_proxy_dict
+    proxy_dict = get_proxy_dict()
+    if proxy_dict:
+        session.proxies.update(proxy_dict)
     
     # Timeout otimizado para balancear velocidade e confiabilidade
     timeout_config = (3, 3)  # (connect_timeout, read_timeout) - aumentado de (2, 1.5) para reduzir timeouts
@@ -540,7 +561,7 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             
             return None
         
-        # Verifica se há falha recente em cache
+        # Verifica se há falha recente em cache (inclui "não encontrado" e outras falhas)
         if _is_failure_cached(info_hash):
             # Throttling de logs - só loga uma vez a cada 60 segundos por hash
             now = time.time()
@@ -608,6 +629,8 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             if not torrent_data:
                 # Timeouts não devem cachear falha - podem ser temporários (rede lenta, servidor ocupado)
                 # Apenas cacheia se foi erro HTTP específico (já foi cacheado dentro de _fetch_torrent_header)
+                # Cacheia "não encontrado" usando circuit breaker (TTL de 2 minutos para permitir novas tentativas)
+                _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
                 # Logs de erro removidos para reduzir verbosidade
                 # Remove do conjunto de hashes sendo buscados mesmo em caso de falha
                 logger.debug(f"[Metadata] Buscando metadata: {log_id} → Não encontrado")
@@ -624,6 +647,8 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         size = _parse_bencode_size(torrent_data)
         
         if not size:
+            # Cacheia "não encontrado" usando circuit breaker (TTL de 2 minutos)
+            _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
             logger.debug(f"[Metadata] Buscando metadata: {log_id} → Não encontrado (sem size)")
             with _hash_fetching_lock:
                 _hash_fetching.discard(info_hash_lower)

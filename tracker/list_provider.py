@@ -241,6 +241,7 @@ class TrackerListProvider:
     def _fetch_remote_trackers(self) -> Optional[List[str]]:
         from requests.adapters import HTTPAdapter
         from urllib3.util.retry import Retry
+        from utils.http.proxy import get_proxy_dict
         
         session = requests.Session()
         session.headers.update({"User-Agent": "DFIndexer/1.0"})
@@ -261,6 +262,10 @@ class TrackerListProvider:
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
+        # Configura proxy se disponível
+        proxy_dict = get_proxy_dict()
+        if proxy_dict:
+            session.proxies.update(proxy_dict)
         
         for source in _TRACKER_SOURCES:
             try:

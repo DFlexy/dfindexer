@@ -83,3 +83,10 @@ class Config:
     HTTP_RETRY_MAX_ATTEMPTS: int = int(os.getenv('HTTP_RETRY_MAX_ATTEMPTS', '3'))  # Número máximo de tentativas
     HTTP_RETRY_BACKOFF_BASE: float = float(os.getenv('HTTP_RETRY_BACKOFF_BASE', '1.0'))  # Base do backoff exponencial (segundos)
     
+    # Proxy Configuration
+    PROXY_TYPE: str = os.getenv('PROXY_TYPE', 'http').lower().strip()  # http, https, socks5, socks5h
+    PROXY_HOST: Optional[str] = os.getenv('PROXY_HOST', None)
+    PROXY_PORT: Optional[str] = os.getenv('PROXY_PORT', None)
+    PROXY_USER: Optional[str] = os.getenv('PROXY_USER', None)
+    PROXY_PASS: Optional[str] = os.getenv('PROXY_PASS', None)
+    

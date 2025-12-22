@@ -125,12 +125,16 @@ class TrackerService:
             info_hash = futures[future]
             try:
                 peers = future.result()
-                if peers:
+                # Se peers não é None, significa que conseguiu obter resposta do tracker (sucesso)
+                # Mesmo que seja (0, 0), devemos salvar para evitar consultas futuras
+                if peers is not None:
                     results[info_hash] = peers
                     self._store_cache(info_hash, peers)
                 else:
+                    # peers é None = falha ao obter dados (não salva, vai para circuito breaker)
                     results[info_hash] = (0, 0)
             except Exception as exc:  # noqa: BLE001
+                # Exceção = falha (não salva, vai para circuito breaker)
                 logger.warning("Falha ao obter peers para %s: %s", info_hash, exc)
                 results[info_hash] = (0, 0)
 
@@ -171,11 +175,14 @@ class TrackerService:
                 peers = self._scrape_single_tracker(
                     tracker, info_hash_bytes, info_hash
                 )
-                if peers:
+                # Se peers não é None, significa que conseguiu obter resposta do tracker (sucesso)
+                # Mesmo que seja (0, 0), é um resultado válido
+                if peers is not None:
                     leechers, seeders = peers
                     if seeders or leechers:
                         logger.debug("Tracker %s: %s (S:%d L:%d)", tracker, info_hash, seeders, leechers)
                         return leechers, seeders
+                    # Se ambos são 0, armazena em best para retornar ao final (é resultado válido)
                     if best is None:
                         best = (leechers, seeders)
             except Exception as exc:  # noqa: BLE001
@@ -214,7 +221,8 @@ class TrackerService:
                     short_msg = error_msg.split('\n')[0][:100]  # Primeira linha, máximo 100 chars
                     logger.debug("Tracker %s: %s - %s", tracker, error_type, short_msg[:50])
 
-        if best:
+        # Se best não é None, retorna (mesmo que seja 0, 0 - é resultado válido)
+        if best is not None:
             return best
         return None
 

@@ -24,7 +24,9 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
         if not redis:
             return None
         
-        key = torrent_cross_data_key(info_hash)
+        # Normaliza info_hash para lowercase (consistência com outras partes do código)
+        info_hash_lower = info_hash.lower()
+        key = torrent_cross_data_key(info_hash_lower)
         # Busca todos os campos do hash
         data = redis.hgetall(key)
         if not data:
@@ -77,7 +79,9 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         if not redis:
             return
         
-        key = torrent_cross_data_key(info_hash)
+        # Normaliza info_hash para lowercase (consistência com outras partes do código)
+        info_hash_lower = info_hash.lower()
+        key = torrent_cross_data_key(info_hash_lower)
         
         # Prepara dados para salvar - usa todas as variáveis do projeto diretamente, sem filtros
         to_save = {}

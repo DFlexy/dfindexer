@@ -546,17 +546,12 @@ class TorrentEnricher:
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
-                # Se ambos estão presentes e não são ambos 0, usa do cross-data para evitar scrape desnecessário
+                # Se ambos estão presentes, usa do cross-data (mesmo se for 0, 0 - evita scrape desnecessário)
                 if tracker_seed is not None and tracker_leech is not None:
-                    # Se ambos são 0, prossegue para fazer scrape ao invés de usar os valores
-                    if not (tracker_seed == 0 and tracker_leech == 0):
-                        torrent['seed_count'] = tracker_seed
-                        torrent['leech_count'] = tracker_leech
-                        # Log removido - hits do Redis são muito comuns
-                        continue
-                    else:
-                        # Ambos são 0, não usa e prossegue para scrape
-                        logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
+                    torrent['seed_count'] = tracker_seed
+                    torrent['leech_count'] = tracker_leech
+                    # Log removido - hits do Redis são muito comuns
+                    continue
                 else:
                     # Não tem ambos valores, prossegue para scrape
                     logger.debug(f"[Tracker] Buscando tracker: {log_id} → Não encontrado")
@@ -594,6 +589,20 @@ class TorrentEnricher:
                     leech, seed = leech_seed
                     torrent['leech_count'] = leech
                     torrent['seed_count'] = seed
+                    
+                    # Salva no TrackerCache se ainda não estiver salvo (garante consistência)
+                    # Isso cobre casos onde (0, 0) foi retornado mas não foi salvo no TrackerCache
+                    try:
+                        from cache.tracker_cache import TrackerCache
+                        tracker_cache = TrackerCache()
+                        # Verifica se já está no cache
+                        cached = tracker_cache.get(info_hash)
+                        if not cached:
+                            # Se não está no cache, salva (mesmo que seja 0, 0 - é sucesso)
+                            tracker_data = {"leech": leech, "seed": seed}
+                            tracker_cache.set(info_hash, tracker_data)
+                    except Exception:
+                        pass
                     
                     # Salva no cross-data sempre que obtém dados do tracker (mesmo se 0, para evitar consultas futuras)
                     saved_to_redis = False

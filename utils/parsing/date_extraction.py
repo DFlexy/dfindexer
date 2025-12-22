@@ -174,7 +174,7 @@ def _extract_release_year_rede(doc: BeautifulSoup) -> Optional[int]:
 
 def _extract_release_year_baixafilmes(doc: BeautifulSoup) -> Optional[int]:
     """
-    Limon Torrents: <meta property="og:updated_time" content="2025-12-12T22:12:38-03:00" />
+    XFilmes: <meta property="og:updated_time" content="2025-12-12T22:12:38-03:00" />
     Extrai ano de lançamento da meta tag og:updated_time.
     Nome da função mantido por compatibilidade histórica (anteriormente usado por baixafilmes).
     """
@@ -199,7 +199,7 @@ SCRAPER_RELEASE_YEAR_EXTRACTORS: Dict[str, Callable[[BeautifulSoup], Optional[in
     'bludv': _extract_release_year_bludv,
     'comand': _extract_release_year_comand,
     'rede': _extract_release_year_rede,
-    'limon': _extract_release_year_baixafilmes,
+    'xfilmes': _extract_release_year_baixafilmes,
 }
 
 
@@ -272,7 +272,7 @@ def extract_date_from_page(doc: BeautifulSoup, url: str, scraper_type: Optional[
     
     Ordem de tentativas:
     1. URL (padrões completos ou apenas ano)
-    2. Meta tag og:updated_time (para limon)
+    2. Meta tag og:updated_time (para xfilmes)
     3. Campo "Lançamento" (usando regra específica do scraper se disponível)
     
     Args:
@@ -288,8 +288,8 @@ def extract_date_from_page(doc: BeautifulSoup, url: str, scraper_type: Optional[
     if date:
         return date
     
-    # Tentativa 2: Para limon, tenta extrair data completa de meta tags
-    if scraper_type == 'limon':
+    # Tentativa 2: Para xfilmes, tenta extrair data completa de meta tags
+    if scraper_type == 'xfilmes':
         # Busca manualmente em todas as meta tags (mais confiável)
         all_meta = doc.find_all('meta')
         meta_updated = None

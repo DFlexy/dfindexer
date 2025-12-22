@@ -10,6 +10,7 @@ import requests
 from cache.redis_client import get_redis_client
 from cache.redis_keys import flaresolverr_session_key, flaresolverr_created_key, flaresolverr_session_creation_failure_key
 from app.config import Config
+from utils.http.proxy import get_proxy_dict
 
 logger = logging.getLogger(__name__)
 
@@ -140,11 +141,14 @@ class FlareSolverrClient:
                 "session": session_id
             }
             
+            # Configura proxy se disponível
+            proxy_dict = get_proxy_dict()
             response = requests.post(
                 self.api_url,
                 json=payload,
                 timeout=150,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                proxies=proxy_dict if proxy_dict else None
             )
             response.raise_for_status()
             
@@ -187,11 +191,14 @@ class FlareSolverrClient:
                                             "cmd": "sessions.destroy",
                                             "session": created_session_id
                                         }
+                                        # Configura proxy se disponível
+                                        proxy_dict = get_proxy_dict()
                                         requests.post(
                                             self.api_url,
                                             json=destroy_payload,
                                             timeout=5,
-                                            headers={"Content-Type": "application/json"}
+                                            headers={"Content-Type": "application/json"},
+                                            proxies=proxy_dict if proxy_dict else None
                                         )
                                     except Exception:
                                         pass  # Ignora erros ao destruir
@@ -259,11 +266,14 @@ class FlareSolverrClient:
                 "cmd": "sessions.list"
             }
             
+            # Configura proxy se disponível
+            proxy_dict = get_proxy_dict()
             response = requests.post(
                 self.api_url,
                 json=payload,
                 timeout=10,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                proxies=proxy_dict if proxy_dict else None
             )
             response.raise_for_status()
             
@@ -414,11 +424,14 @@ class FlareSolverrClient:
                 "maxTimeout": 60000
             }
             
+            # Configura proxy se disponível
+            proxy_dict = get_proxy_dict()
             response = requests.post(
                 self.api_url,
                 json=payload,
                 timeout=90,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                proxies=proxy_dict if proxy_dict else None
             )
             
             if response.status_code == 500:
@@ -555,11 +568,14 @@ class FlareSolverrClient:
                 "session": session_id
             }
             
+            # Configura proxy se disponível
+            proxy_dict = get_proxy_dict()
             requests.post(
                 self.api_url,
                 json=payload,
                 timeout=10,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                proxies=proxy_dict if proxy_dict else None
             )
         except Exception:
             pass  # Ignora erros ao destruir

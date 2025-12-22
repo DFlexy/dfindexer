@@ -48,7 +48,7 @@ O sistema adiciona automaticamente tags de idioma aos títulos quando detecta in
 - ✅ **Я€Ð€**
 - ✅ **†₣!£₥€**
 - ✅ **₱ØЯ†@£**
-- ✅ **£!₥Ø₦** - Necessário selecionar o FlareSolverr
+- ✅ **Ẍ₣!£₥€$**
 - ✅ **©Ø₥@₦ÐØ** - Necessário selecionar o FlareSolverr
 - ✅ **฿£µÐ√** - Necessário selecionar o FlareSolverr
 
@@ -135,6 +135,17 @@ docker run -d \
 | `FLARESOLVERR_ADDRESS`                  | Endereço do servidor FlareSolverr (ex: http://flaresolverr:8191)         | `None` (opcional)  |
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                            | `console` ou `json`                                                      | `console`          |
+| `PROXY_TYPE`                            | Tipo de proxy: `http`, `https`, `socks5`, `socks5h` (opcional)           | `http`             |
+| `PROXY_HOST`                            | Host do proxy (opcional)                                                 | `None`             |
+| `PROXY_PORT`                            | Porta do proxy (opcional)                                                | `None`             |
+| `PROXY_USER`                            | Usuário do proxy (opcional, requer PROXY_PASS)                           | `None`             |
+| `PROXY_PASS`                            | Senha do proxy (opcional, requer PROXY_USER)                             | `None`             |
+
+#### Opções de PROXY_TYPE:
+- **`http`**: Proxy HTTP padrão (padrão)
+- **`https`**: Proxy HTTPS (túnel HTTP sobre TLS)
+- **`socks5`**: Proxy SOCKS5 (resolve DNS no cliente)
+- **`socks5h`**: Proxy SOCKS5 (resolve DNS no servidor proxy - recomendado para evitar vazamentos de DNS)
 
 
 ## 🔌 Prowlarr
@@ -169,7 +180,7 @@ Para poder selecionar o FlareSolverr:
 1. Edite o indexador no Prowlarr
 2. Selecione o campo **[Usar FlareSolverr]**
 3. No momento, somente 3 sites precisam ser selecionados:
-- ✅ **£!₥Ø₦**
+- ✅ **XFilmes**
 - ✅ **©Ø₥@₦ÐØ**
 - ✅ **฿£µÐ√**
    

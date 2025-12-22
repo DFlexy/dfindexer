@@ -22,13 +22,13 @@ from utils.logging import ScraperLogContext
 logger = logging.getLogger(__name__)
 
 # Contexto de logging centralizado para este scraper
-_log_ctx = ScraperLogContext("Limon", logger)
+_log_ctx = ScraperLogContext("XFilmes", logger)
 
-# Scraper específico para Limon Torrents
-class LimonScraper(BaseScraper):
-    SCRAPER_TYPE = "limon"
-    DEFAULT_BASE_URL = "https://www.limontorrents.org/"
-    DISPLAY_NAME = "Limon"
+# Scraper específico para XFilmes
+class XFilmesScraper(BaseScraper):
+    SCRAPER_TYPE = "xfilmes"
+    DEFAULT_BASE_URL = "https://www.xfilmes.com.br/"
+    DISPLAY_NAME = "XFilmes"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
@@ -38,7 +38,7 @@ class LimonScraper(BaseScraper):
     # Extrai links dos resultados de busca
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        # Estrutura do limontorrents.org: .post > .inner > .title > a
+        # Estrutura do xfilmes.com.br: .post > .inner > .title > a
         for item in doc.select('.post'):
             # Tenta primeiro .title > a
             link_elem = item.select_one('div.title > a')
@@ -115,53 +115,34 @@ class LimonScraper(BaseScraper):
         
         return self.enrich_torrents(all_torrents, filter_func=filter_func)
     
-    # Extrai links da página inicial - busca apenas "Tendências de Hoje"
+    # Extrai links da página inicial - busca apenas "Últimos Filmes e Séries"
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
         links = []
         
-        # Encontra a seção "Tendências de Hoje"
-        # Estrutura: h2.titulo > strong com "Tendências de Hoje"
-        tendencias_h2 = None
-        for h2 in doc.find_all('h2', class_='titulo'):
+        # Encontra a seção "Últimos Filmes e Séries"
+        # Estrutura: div.main_title > h2 com "Últimos Filmes e Séries"
+        ultimos_h2 = None
+        for h2 in doc.find_all('h2'):
             h2_text = h2.get_text()
-            if 'Tendências de Hoje' in h2_text:
-                tendencias_h2 = h2
+            if 'Últimos Filmes e Séries' in h2_text or 'Ultimos Filmes e Series' in h2_text:
+                ultimos_h2 = h2
                 break
         
-        if tendencias_h2:
+        if ultimos_h2:
             # Encontra o container main_title que contém o h2
-            main_title_container = tendencias_h2.find_parent('div', class_='main_title')
+            main_title_container = ultimos_h2.find_parent('div', class_='main_title')
             
-            # Busca posts que vêm depois do main_title, parando quando encontrar outro main_title
-            # Os posts estão como irmãos do main_title, não dentro dele
+            # Encontra o container post_list que contém o main_title
+            post_list_container = None
             if main_title_container:
-                current = main_title_container.find_next_sibling()
-                while current:
-                    # Para se encontrar outro main_title (início de outra seção)
-                    if current.name == 'div' and 'main_title' in current.get('class', []):
-                        break
-                    
-                    # Para se encontrar outro h2.titulo (início de outra seção)
-                    if current.name == 'h2' and 'titulo' in current.get('class', []):
-                        break
-                    
-                    # Para se encontrar paginação
-                    if current.name == 'nav' and 'pagination' in current.get('class', []):
-                        break
-                    
-                    # Se é um post direto, extrai o link
-                    if current.name == 'div' and 'post' in current.get('class', []):
-                        link_elem = current.select_one('div.title > a')
-                        if not link_elem:
-                            link_elem = current.select_one('div.thumb > a')
-                        if link_elem:
-                            href = link_elem.get('href')
-                            if href:
-                                absolute_url = urljoin(self.base_url, href)
-                                links.append(absolute_url)
-                    
-                    # Também busca posts dentro de containers filhos (caso estejam aninhados)
-                    for post in current.select('div.post'):
+                post_list_container = main_title_container.find_parent('div', class_='post_list')
+            
+            if post_list_container:
+                # Busca posts dentro do div.row que vem após o main_title
+                row_container = main_title_container.find_next_sibling('div', class_='row')
+                if row_container:
+                    # Extrai todos os posts dentro deste row
+                    for post in row_container.select('div.post'):
                         link_elem = post.select_one('div.title > a')
                         if not link_elem:
                             link_elem = post.select_one('div.thumb > a')
@@ -171,21 +152,62 @@ class LimonScraper(BaseScraper):
                                 absolute_url = urljoin(self.base_url, href)
                                 if absolute_url not in links:  # Evita duplicados
                                     links.append(absolute_url)
-                    
-                    current = current.find_next_sibling()
+                
+                # Se não encontrou posts no row, tenta buscar todos os posts após o main_title
+                # mas limitando a posts que pertencem a esta seção (dentro do mesmo post_list)
+                if not links:
+                    current = main_title_container.find_next_sibling()
+                    while current:
+                        # Para se encontrar outro post_list (início de outra seção)
+                        if current.name == 'div' and 'post_list' in current.get('class', []):
+                            break
+                        
+                        # Para se encontrar outro main_title (início de outra seção)
+                        if current.name == 'div' and 'main_title' in current.get('class', []):
+                            break
+                        
+                        # Para se encontrar paginação
+                        if current.name == 'div' and 'pagination' in current.get('class', []):
+                            break
+                        
+                        # Se é um post direto, extrai o link
+                        if current.name == 'div' and 'post' in current.get('class', []):
+                            link_elem = current.select_one('div.title > a')
+                            if not link_elem:
+                                link_elem = current.select_one('div.thumb > a')
+                            if link_elem:
+                                href = link_elem.get('href')
+                                if href:
+                                    absolute_url = urljoin(self.base_url, href)
+                                    if absolute_url not in links:  # Evita duplicados
+                                        links.append(absolute_url)
+                        
+                        # Também busca posts dentro de containers filhos (caso estejam aninhados)
+                        for post in current.select('div.post'):
+                            link_elem = post.select_one('div.title > a')
+                            if not link_elem:
+                                link_elem = post.select_one('div.thumb > a')
+                            if link_elem:
+                                href = link_elem.get('href')
+                                if href:
+                                    absolute_url = urljoin(self.base_url, href)
+                                    if absolute_url not in links:  # Evita duplicados
+                                        links.append(absolute_url)
+                        
+                        current = current.find_next_sibling()
             
             # Se não encontrou posts após o main_title, tenta buscar todos os posts após o h2
             # mas limitando a posts que não pertencem a outra seção
             if not links:
-                for post in tendencias_h2.find_all_next('div', class_='post'):
+                for post in ultimos_h2.find_all_next('div', class_='post'):
                     # Para se encontrar outro main_title antes deste post
                     prev_main_title = post.find_previous('div', class_='main_title')
                     if prev_main_title and prev_main_title != main_title_container:
                         break
                     
-                    # Para se encontrar outro h2.titulo antes deste post
-                    prev_h2 = post.find_previous('h2', class_='titulo')
-                    if prev_h2 and prev_h2 != tendencias_h2:
+                    # Para se encontrar outro post_list antes deste post
+                    prev_post_list = post.find_previous('div', class_='post_list')
+                    if prev_post_list and prev_post_list != post_list_container:
                         break
                     
                     link_elem = post.select_one('div.title > a')
@@ -199,7 +221,7 @@ class LimonScraper(BaseScraper):
                                 links.append(absolute_url)
         else:
             # Fallback: se não encontrar a seção, usa comportamento padrão
-            _log_ctx.info("Seção 'Tendências de Hoje' não encontrada - usando fallback genérico")
+            _log_ctx.info("Seção 'Últimos Filmes e Séries' não encontrada - usando fallback genérico")
             for item in doc.select('.post'):
                 link_elem = item.select_one('div.title > a')
                 if not link_elem:
@@ -233,152 +255,65 @@ class LimonScraper(BaseScraper):
         if not article:
             return []
         
-        # Extrai título original
+        # Extrai título original - segue padrão dos outros scrapers
         original_title = ''
         
-        # Método 1: Busca específica em div.entry-meta (estrutura padrão do site)
-        entry_meta = doc.find('div', class_='entry-meta')
-        if entry_meta:
-            # Busca por <b> que contém "Título Original"
-            for b_tag in entry_meta.find_all('b'):
-                b_text = b_tag.get_text(strip=True).lower()
-                if 'título original' in b_text or 'titulo original' in b_text:
-                    # Método 1: Extrai diretamente do HTML bruto do parent (mais confiável)
-                    parent_html = str(b_tag.parent)
-                    
-                    # Regex específico: captura tudo após </b> até <br>
-                    patterns = [
-                        r'(?i)</b>\s*([^<]+?)\s*<br\s*/?>',
-                        r'(?i)</b>\s*([^<]+?)(?:<br|</div|</p|$)',
-                        r'(?i)T[íi]tulo\s+Original\s*:?\s*</b>\s*([^<]+?)\s*<br',
-                    ]
-                    
-                    next_text = ''
-                    for pattern in patterns:
-                        match = re.search(pattern, parent_html)
-                        if match:
-                            next_text = match.group(1).strip()
-                            break
-                    
-                    if next_text:
-                        next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                        next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-').replace('&iacute;', 'í')
-                        next_text = ' '.join(next_text.split())
-                        
-                        if next_text:
-                            original_title = next_text
-                            break
-                    
-                    # Método 2: Tenta pegar o next_sibling
-                    if not original_title:
-                        next_sibling = b_tag.next_sibling
-                        if next_sibling:
-                            if hasattr(next_sibling, 'strip'):
-                                next_text = str(next_sibling).strip()
-                            else:
-                                next_text = next_sibling.get_text(strip=True) if hasattr(next_sibling, 'get_text') else ''
-                            
-                            if next_text:
-                                next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                                next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
-                                if '<br' in next_text or '\n' in next_text:
-                                    parts = re.split(r'<br\s*/?>|\n', next_text)
-                                    if parts:
-                                        next_text = parts[0].strip()
-                                
-                                next_text = ' '.join(next_text.split())
-                                if next_text:
-                                    original_title = next_text
-                                    break
-                    
-                    # Método 3: Extrai do texto do parent fazendo split
-                    if not original_title:
-                        parent_text = b_tag.parent.get_text()
-                        if 'Título Original:' in parent_text:
-                            parts = parent_text.split('Título Original:')
-                            if len(parts) > 1:
-                                next_text = parts[1].strip()
-                                for stop in ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']:
-                                    if stop in next_text:
-                                        next_text = next_text.split(stop)[0].strip()
-                                        break
-                                if '\n' in next_text:
-                                    next_text = next_text.split('\n')[0].strip()
-                                
-                                if next_text:
-                                    next_text = ' '.join(next_text.split())
-                                    original_title = next_text
-                                    break
+        # Busca em div.content ou div.entry-content (estrutura padrão do site)
+        entry_content = article.select_one('div.content, div.entry-content, .left')
+        if entry_content:
+            html_content = str(entry_content)
+            
+            # Padrão 1: HTML com tags <strong>Título Original</strong>: texto<br />
+            # Captura apenas o texto até o <br> imediato
+            title_original_match = re.search(
+                r'<strong>T[íi]tulo Original[:\s]*</strong>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
+                html_content,
+                re.IGNORECASE | re.DOTALL
+            )
+            if title_original_match:
+                original_title = title_original_match.group(1).strip()
+                original_title = re.sub(r'<[^>]+>', '', original_title).strip()
+                original_title = html.unescape(original_title)
+                original_title = re.sub(r'\s+', ' ', original_title).strip()
+                # Remove caracteres de pontuação no final
+                original_title = original_title.rstrip(' .,:;')
+                if len(original_title) > 200:
+                    original_title = original_title[:200].strip()
+            
+            # Padrão 2: HTML com tags <b>Título Original:</b> texto<br />
+            if not original_title:
+                title_original_match = re.search(
+                    r'<b>T[íi]tulo Original[:\s]*</b>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
+                    html_content,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if title_original_match:
+                    original_title = title_original_match.group(1).strip()
+                    original_title = re.sub(r'<[^>]+>', '', original_title).strip()
+                    original_title = html.unescape(original_title)
+                    original_title = re.sub(r'\s+', ' ', original_title).strip()
+                    # Remove caracteres de pontuação no final
+                    original_title = original_title.rstrip(' .,:;')
+                    if len(original_title) > 200:
+                        original_title = original_title[:200].strip()
         
-        # Método 2: Busca em div.content e div.entry-content se não encontrou
-        if not original_title:
-            for content_div in doc.select('div.content, div.entry-content, .left'):
-                if original_title:
-                    break
-                
-                for b_tag in content_div.find_all('b'):
-                    b_text = b_tag.get_text(strip=True).lower()
-                    if 'título original' in b_text or 'titulo original' in b_text:
-                        next_sibling = b_tag.next_sibling
-                        if next_sibling:
-                            if hasattr(next_sibling, 'strip'):
-                                next_text = str(next_sibling).strip()
-                            else:
-                                next_text = ''
-                        else:
-                            next_text = ''
-                        
-                        if not next_text:
-                            parent_html = str(b_tag.parent)
-                            match = re.search(r'(?i)</b>\s*([^<]+?)(?:<br\s*/?>|</div|</p|$)', parent_html)
-                            if match:
-                                next_text = match.group(1).strip()
-                        
-                        if next_text:
-                            next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                            next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
-                            next_text = ' '.join(next_text.split())
-                            if next_text:
-                                original_title = next_text
-                                break
-                
-                if original_title:
-                    break
-        
-        # Método 3: Fallback - busca em todo o article se não encontrou
+        # Fallback: busca em todo o article se não encontrou
         if not original_title:
             article_text = article.get_text(' ', strip=True)
-            if 'Título Original:' in article_text:
-                parts = article_text.split('Título Original:')
+            if 'Título Original:' in article_text or 'Titulo Original:' in article_text:
+                parts = article_text.split('Título Original:') if 'Título Original:' in article_text else article_text.split('Titulo Original:')
                 if len(parts) > 1:
                     title_part = parts[1].strip()
-                    stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
+                    stops = ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
                     for stop in stops:
                         if stop in title_part:
                             idx = title_part.index(stop)
                             title_part = title_part[:idx]
                             break
-                    title_part = ' '.join(title_part.split())
+                    title_part = html.unescape(title_part)
+                    title_part = re.sub(r'\s+', ' ', title_part).strip()
                     if title_part:
                         original_title = title_part
-            
-            if not original_title:
-                for elem in article.find_all(['p', 'div', 'span', 'li']):
-                    text = elem.get_text(strip=True)
-                    if 'Título Original:' in text:
-                        parts = text.split('Título Original:')
-                        if len(parts) > 1:
-                            title_part = parts[1].strip()
-                            stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
-                            for stop in stops:
-                                if stop in title_part:
-                                    idx = title_part.index(stop)
-                                    title_part = title_part[:idx]
-                                    break
-                            title_part = ' '.join(title_part.split())
-                            if title_part:
-                                original_title = title_part
-                                break
         
         # Fallback para h1.entry-title
         if not original_title:
@@ -395,71 +330,59 @@ class LimonScraper(BaseScraper):
         original_title = original_title.replace(' Torrent Legendado', '').strip()
         original_title = original_title.replace(' Torrent', '').strip()
         
-        # Extrai título traduzido
+        # Extrai título traduzido - segue padrão dos outros scrapers
         title_translated_processed = ''
-        if entry_meta:
-            for b_tag in entry_meta.find_all('b'):
-                b_text = b_tag.get_text(strip=True).lower()
-                if 'título traduzido' in b_text or 'titulo traduzido' in b_text:
-                    parent_html = str(b_tag.parent)
-                    patterns = [
-                        r'(?i)</b>\s*([^<]+?)\s*<br\s*/?>',
-                        r'(?i)</b>\s*([^<]+?)(?:<br|</div|</p|$)',
-                        r'(?i)T[íi]tulo\s+Traduzido\s*:?\s*</b>\s*([^<]+?)\s*<br',
-                    ]
-                    next_text = ''
-                    for pattern in patterns:
-                        match = re.search(pattern, parent_html)
-                        if match:
-                            next_text = match.group(1).strip()
-                            break
-                    if next_text:
-                        next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                        next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-').replace('&iacute;', 'í')
-                        next_text = ' '.join(next_text.split())
-                        if next_text:
-                            title_translated_processed = next_text
-                            break
         
-        # Busca em div.content e div.entry-content se não encontrou
-        if not title_translated_processed:
-            for content_div in doc.select('div.content, div.entry-content, .left'):
-                if title_translated_processed:
-                    break
-                for b_tag in content_div.find_all('b'):
-                    b_text = b_tag.get_text(strip=True).lower()
-                    if 'título traduzido' in b_text or 'titulo traduzido' in b_text:
-                        parent_html = str(b_tag.parent)
-                        match = re.search(r'(?i)</b>\s*([^<]+?)(?:<br\s*/?>|</div|</p|$)', parent_html)
-                        if match:
-                            next_text = match.group(1).strip()
-                            next_text = re.sub(r'<[^>]+>', '', next_text).strip()
-                            next_text = next_text.replace('&nbsp;', ' ').replace('&mdash;', '-')
-                            next_text = ' '.join(next_text.split())
-                            if next_text:
-                                title_translated_processed = next_text
-                                break
-                if title_translated_processed:
-                    break
+        if entry_content:
+            html_content = str(entry_content)
+            
+            # Padrão 1: HTML com tags <strong>Título Traduzido</strong>: texto<br />
+            # Captura apenas o texto até o <br> imediato
+            title_translated_match = re.search(
+                r'<strong>T[íi]tulo Traduzido[:\s]*</strong>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
+                html_content,
+                re.IGNORECASE | re.DOTALL
+            )
+            if title_translated_match:
+                title_translated_processed = title_translated_match.group(1).strip()
+                title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed).strip()
+                title_translated_processed = html.unescape(title_translated_processed)
+                title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
+                # Remove caracteres de pontuação no final
+                title_translated_processed = title_translated_processed.rstrip(' .,:;')
+            
+            # Padrão 2: HTML com tags <b>Título Traduzido:</b> texto<br />
+            if not title_translated_processed:
+                title_translated_match = re.search(
+                    r'<b>T[íi]tulo Traduzido[:\s]*</b>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
+                    html_content,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if title_translated_match:
+                    title_translated_processed = title_translated_match.group(1).strip()
+                    title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed).strip()
+                    title_translated_processed = html.unescape(title_translated_processed)
+                    title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
+                    # Remove caracteres de pontuação no final
+                    title_translated_processed = title_translated_processed.rstrip(' .,:;')
         
-        # Busca em todo o article se não encontrou
+        # Fallback: busca em todo o article se não encontrou
         if not title_translated_processed and article:
-            for elem in article.find_all(['p', 'div', 'span', 'li']):
-                elem_text = elem.get_text(' ', strip=True)
-                if 'Título Traduzido:' in elem_text:
-                    parts = elem_text.split('Título Traduzido:')
-                    if len(parts) > 1:
-                        title_part = parts[1].strip()
-                        stops = ['\n\n', 'Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:', 'Título Original:']
-                        for stop in stops:
-                            if stop in title_part:
-                                idx = title_part.index(stop)
-                                title_part = title_part[:idx]
-                                break
-                        title_part = ' '.join(title_part.split())
-                        if title_part:
-                            title_translated_processed = title_part
+            article_text = article.get_text(' ', strip=True)
+            if 'Título Traduzido:' in article_text or 'Titulo Traduzido:' in article_text:
+                parts = article_text.split('Título Traduzido:') if 'Título Traduzido:' in article_text else article_text.split('Titulo Traduzido:')
+                if len(parts) > 1:
+                    title_part = parts[1].strip()
+                    stops = ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:', 'Título Original:', 'Titulo Original:']
+                    for stop in stops:
+                        if stop in title_part:
+                            idx = title_part.index(stop)
+                            title_part = title_part[:idx]
                             break
+                    title_part = html.unescape(title_part)
+                    title_part = re.sub(r'\s+', ' ', title_part).strip()
+                    if title_part:
+                        title_translated_processed = title_part
         
         # Fallback: se não encontrou "Título Traduzido", tenta usar h1.entry-title
         if not title_translated_processed:
@@ -521,7 +444,7 @@ class LimonScraper(BaseScraper):
         
         # Extrai legenda usando função dedicada
         from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
-        legenda = extract_legenda_from_page(doc, scraper_type='limon', entry_meta_list=entry_meta_list)
+        legenda = extract_legenda_from_page(doc, scraper_type='xfilmes', entry_meta_list=entry_meta_list)
         
         # Determina legend_info baseado na legenda extraída
         legend_info = determine_legend_info(legenda) if legenda else None

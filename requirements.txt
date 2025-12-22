@@ -8,3 +8,4 @@ redis==7.1.0
 aioredis==2.0.1
 lxml==6.0.2  
 waitress==3.0.2
+PySocks==1.7.1

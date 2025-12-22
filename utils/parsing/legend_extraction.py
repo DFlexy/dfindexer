@@ -366,9 +366,9 @@ def _extract_legenda_comand(doc: BeautifulSoup, content_div: Optional[BeautifulS
     return legenda
 
 
-def _extract_legenda_limon(doc: BeautifulSoup, entry_meta_list: Optional[list] = None) -> str:
+def _extract_legenda_xfilmes(doc: BeautifulSoup, entry_meta_list: Optional[list] = None) -> str:
     """
-    Limon Torrents: Extrai "Legenda" de div.entry-meta.
+    XFilmes: Extrai "Legenda" de div.entry-meta.
     """
     legenda = ''
     
@@ -551,7 +551,7 @@ LEGENDA_EXTRACTORS = {
     'rede': _extract_legenda_rede,
     'bludv': _extract_legenda_bludv,
     'comand': _extract_legenda_comand,
-    'limon': _extract_legenda_limon,
+    'xfilmes': _extract_legenda_xfilmes,
     'starck': _extract_legenda_starck,
     'tfilme': _extract_legenda_tfilme,
     'portal': _extract_legenda_portal,
@@ -568,11 +568,11 @@ def extract_legenda_from_page(doc: BeautifulSoup, scraper_type: Optional[str] = 
     
     Args:
         doc: Documento BeautifulSoup
-        scraper_type: Tipo do scraper ('rede', 'bludv', 'comand', 'limon', etc.)
+        scraper_type: Tipo do scraper ('rede', 'bludv', 'comand', 'xfilmes', etc.)
         **kwargs: Argumentos adicionais específicos do scraper:
             - article: Elemento article (para rede)
             - content_div: Elemento div.content (para bludv/comand)
-            - entry_meta_list: Lista de div.entry-meta (para limon)
+            - entry_meta_list: Lista de div.entry-meta (para xfilmes)
     
     Returns:
         String com a legenda extraída ou string vazia se não encontrado

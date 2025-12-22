@@ -28,20 +28,13 @@ class MetadataCache:
         if self.redis:
             try:
                 key = metadata_key(info_hash_lower)
-                # Verifica se a chave existe antes de tentar ler
-                exists = self.redis.exists(key)
-                if exists:
-                    data_str = self.redis.get(key)
-                    if data_str:
-                        data = json.loads(data_str.decode('utf-8'))
-                        # Log removido - HITs são muito comuns e geram muito ruído
-                        return data
-                    else:
-                        # Chave existe mas retornou None - pode ser problema de encoding ou TTL expirado
-                        logger.debug(f"[MetadataCache] MISS (Redis): {info_hash_lower[:16]}... (chave existe mas vazia: {key})")
-                else:
-                    # Log removido - MISSs são esperados para novos hashes
-                    pass
+                # Busca diretamente - get retorna None se não existir (mais eficiente que exists + get)
+                data_str = self.redis.get(key)
+                if data_str:
+                    data = json.loads(data_str.decode('utf-8'))
+                    # Log removido - HITs são muito comuns e geram muito ruído
+                    return data
+                # Log removido - MISSs são esperados para novos hashes
             except json.JSONDecodeError as e:
                 # Erro ao decodificar JSON - pode ser corrupção de dados
                 logger.warning(f"[MetadataCache] Erro ao decodificar JSON: {info_hash_lower[:16]}... (chave: {key}) - {e}")

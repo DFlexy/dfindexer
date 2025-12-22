@@ -24,8 +24,11 @@ _CIRCUIT_BREAKER_KEY = circuit_metadata_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3
 _CIRCUIT_BREAKER_503_THRESHOLD = 5
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60
-_CIRCUIT_BREAKER_FAILURE_CACHE_TTL = 60
-_CIRCUIT_BREAKER_503_CACHE_TTL = 300
+_CIRCUIT_BREAKER_COUNTER_TTL = 60  # TTL para contadores do circuit breaker (timeouts, 503s)
+# TTLs para cache de falha por hash (não são do circuit breaker, são do cache de falha)
+_METADATA_FAILURE_CACHE_TTL = 60  # TTL para cache de falhas genéricas por hash
+_METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
+_METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
 _hash_locks = {}
 _hash_locks_lock = asyncio.Lock()
 
@@ -106,11 +109,13 @@ async def _record_timeout():
     if redis:
         try:
             timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
-            redis.expire(_CIRCUIT_BREAKER_KEY, 60)
+            # Expira hash com TTL do contador (garante que não expire antes do disabled)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
@@ -128,11 +133,13 @@ async def _record_503():
     if redis:
         try:
             error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
-            redis.expire(_CIRCUIT_BREAKER_KEY, 60)
+            # Expira hash com TTL do contador (garante que não expire antes do disabled)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
@@ -144,12 +151,18 @@ async def _record_503():
 
 
 async def _record_success():
-    """Registra uma requisição bem-sucedida (async)."""
+    """
+    Registra uma requisição bem-sucedida, resetando os contadores de erros (async).
+    Se o circuit breaker estiver aberto, fecha (half-open state).
+    """
     redis = get_redis_client()
     
     if redis:
         try:
+            # Reseta contadores no Hash
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
+            # Fecha circuit breaker se estiver aberto (half-open state - permite tentar novamente)
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception:
             pass
 
@@ -166,17 +179,29 @@ async def _is_failure_cached(info_hash: str) -> bool:
         return False
 
 
-async def _cache_failure(info_hash: str, is_503: bool = False):
-    """Cacheia uma falha (async)."""
+async def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = None):
+    """
+    Cacheia uma falha para evitar tentativas repetidas (async).
+    Parte do sistema de circuit breaker.
+    
+    Args:
+        info_hash: Hash do torrent
+        is_503: Se True, cacheia por mais tempo (5 minutos) no Redis, pois é erro de serviço indisponível
+        ttl: TTL customizado (opcional). Se não fornecido, usa TTL padrão baseado em is_503
+    """
     info_hash_lower = info_hash.lower()
     
     try:
         from cache.metadata_cache import MetadataCache
         metadata_cache = MetadataCache()
-        if is_503:
-            metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_503_CACHE_TTL)
+        if ttl is not None:
+            # TTL customizado (ex: para "não encontrado" - 2 minutos)
+            metadata_cache.set_failure(info_hash_lower, ttl)
+        elif is_503:
+            # Erros 503 são cacheados por mais tempo
+            metadata_cache.set_failure(info_hash_lower, _METADATA_503_CACHE_TTL)
         else:
-            metadata_cache.set_failure(info_hash_lower, _CIRCUIT_BREAKER_FAILURE_CACHE_TTL)
+            metadata_cache.set_failure(info_hash_lower, _METADATA_FAILURE_CACHE_TTL)
     except Exception:
         pass
 
@@ -386,6 +411,8 @@ async def fetch_metadata_from_itorrents_async(
             )
         
         if not torrent_data:
+            # Torrent não encontrado - cacheia falha para evitar tentativas repetidas
+            await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
             # Logs de erro removidos para reduzir verbosidade
             return None
         
@@ -393,6 +420,8 @@ async def fetch_metadata_from_itorrents_async(
         size = _parse_bencode_size(torrent_data)
         
         if not size:
+            # Tamanho não encontrado - cacheia falha para evitar tentativas repetidas
+            await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
             return None
         
         # Tenta extrair nome
