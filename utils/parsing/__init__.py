@@ -1,10 +1,7 @@
 """Copyright (c) 2025 DFlexy"""
 """https://github.com/DFlexy"""
 
-from utils.parsing.magnet_utils import process_trackers, extract_trackers_from_magnet
-
-__all__ = ['process_trackers', 'extract_trackers_from_magnet']
-
+# Módulo de parsing e extração de dados
 from utils.parsing.date_extraction import parse_date_from_string
 from utils.parsing.html_extraction import (
     extract_imdb_from_page,

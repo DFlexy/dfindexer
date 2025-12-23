@@ -27,8 +27,12 @@ _MAX_CONCURRENT_REQUESTS = 5
 _REQUEST_SEMAPHORE = threading.Semaphore(_MAX_CONCURRENT_REQUESTS)
 
 
+# ============================================================================
+# GRUPO 1: VERIFICAÇÃO DE LINKS PROTEGIDOS
+# ============================================================================
+
 def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None) -> bool:
-    # Verifica se um link é protegido e precisa ser resolvido (usa padrões padrão se não especificado)
+    # Verifica se um link é protegido e precisa ser resolvido
     if not href:
         return False
     
@@ -42,6 +46,10 @@ def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None)
     
     return any(pattern in href for pattern in protected_patterns)
 
+
+# ============================================================================
+# GRUPO 2: RESOLVER DE LINKS DE ADWARE (systemads.org, seuvideo.xyz)
+# ============================================================================
 
 def decode_ad_link(ad_link: str) -> Optional[str]:
     # Decodifica link de adware (systemads.org, seuvideo.xyz)
@@ -101,8 +109,141 @@ def decode_ad_link(ad_link: str) -> Optional[str]:
         return None
 
 
+# ============================================================================
+# GRUPO 3: RESOLVER DE DATA-U
+# ============================================================================
+
+def _unshuffle_string(shuffled: str) -> Optional[str]:
+    # Replica a função unshuffleString do JavaScript do Starck Filmes
+    # Desembaralha uma string usando step=3
+    try:
+        length = len(shuffled)
+        original = [''] * length
+        used = [False] * length
+        
+        step = 3
+        index = 0
+        
+        for i in range(length):
+            while used[index]:
+                index = (index + 1) % length
+            
+            used[index] = True
+            original[i] = shuffled[index]
+            index = (index + step) % length
+        
+        return ''.join(original)
+    except Exception:
+        return None
+
+
+def decode_data_u(data_u_value: str) -> Optional[str]:
+    # Decodifica o atributo data-u seguindo o processo do JavaScript do Starck Filmes
+    if not data_u_value:
+        return None
+    
+    try:
+        unshuffled = _unshuffle_string(data_u_value)
+        if not unshuffled:
+            return None
+        
+        if "magnet:" in unshuffled:
+            return unshuffled
+        
+        if unshuffled.lower().startswith(("http://", "https://")):
+            return unshuffled
+        
+        return None
+        
+    except Exception:
+        return None
+
+
+# ============================================================================
+# GRUPO 4: RESOLVER DE BASE64 EMBARALHADO
+# ============================================================================
+
+def _extract_base64_from_scrambled(text: str) -> Optional[str]:
+    # Tenta extrair Base64 de texto potencialmente embaralhado
+    import string
+    
+    base64_chars = set(string.ascii_letters + string.digits + '+/=')
+    cleaned = ''.join(c for c in text if c in base64_chars or c in '&')
+    
+    if '&' in cleaned:
+        parts = cleaned.split('&')
+        
+        concatenated = ''.join(parts)
+        result = _try_decode_base64_sequence(concatenated)
+        if result:
+            return result
+        
+        concatenated = ''.join(reversed(parts))
+        result = _try_decode_base64_sequence(concatenated)
+        if result:
+            return result
+        
+        for part in parts:
+            if len(part) >= 20:
+                result = _try_decode_base64_sequence(part)
+                if result:
+                    return result
+    else:
+        result = _try_decode_base64_sequence(cleaned)
+        if result:
+            return result
+    
+    return None
+
+
+def _try_decode_base64_sequence(text: str) -> Optional[str]:
+    # Tenta decodificar uma sequência que pode ser Base64 válido
+    if not text or len(text) < 20:
+        return None
+    
+    # Remove caracteres não-Base64
+    import string
+    base64_chars = set(string.ascii_letters + string.digits + '+/=')
+    cleaned = ''.join(c for c in text if c in base64_chars)
+    
+    if len(cleaned) < 20:
+        return None
+    
+    # Tenta diferentes pontos de início e comprimentos
+    for start in range(min(5, len(cleaned))):
+        # Tenta diferentes comprimentos (múltiplos de 4)
+        for length in range(20, min(len(cleaned) - start + 1, 500), 4):
+            candidate = cleaned[start:start + length]
+            
+            if len(candidate) < 20:
+                continue
+            
+            try:
+                # Adiciona padding se necessário
+                padding = 4 - len(candidate) % 4
+                if padding != 4:
+                    candidate_padded = candidate + '=' * padding
+                else:
+                    candidate_padded = candidate
+                
+                decoded_bytes = base64.b64decode(candidate_padded)
+                decoded_str = decoded_bytes.decode('utf-8', errors='ignore')
+                
+                if decoded_str.startswith('magnet:'):
+                    return decoded_str
+            except Exception:
+                continue
+    
+    return None
+
+
+# ============================================================================
+# GRUPO 5: RESOLVER PRINCIPAL DE LINKS PROTEGIDOS (Redirects HTTP + Extração HTML)
+# ============================================================================
+
 def resolve_protected_link(protlink_url: str, session: requests.Session, base_url: str = '', redis=None) -> Optional[str]:
-    # Resolve link protegido seguindo redirects e extraindo o magnet link (Redis primeiro, memória se Redis não disponível)
+    # Resolve link protegido seguindo redirects e extraindo o magnet link
+    # Usa Redis primeiro, memória se Redis não disponível
     redis_client = redis or get_redis_client()
     
     # Tenta Redis primeiro
@@ -124,6 +265,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
             cached_magnet = _request_cache.protlink_cache[protlink_url]
             return cached_magnet
     
+    # Tenta resolver usando decodificação de adware primeiro
     if 'systemads.org' in protlink_url or 'seuvideo.xyz' in protlink_url or 'get.php' in protlink_url:
         decoded_magnet = decode_ad_link(protlink_url)
         if decoded_magnet:
@@ -171,10 +313,6 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                 request_timeout = 10 if 't.co' in current_url else timeout
                 
                 try:
-                    # Adiciona pequeno delay entre redirects para evitar detecção
-                    if redirect_count > 0:
-                        time.sleep(0.3)
-                    
                     response = session.get(
                         current_url,
                         allow_redirects=False,
@@ -182,15 +320,11 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                         headers={
                             'Referer': base_url if redirect_count == 0 else current_url,
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                            'Accept-Encoding': 'gzip, deflate, br',
+                            'Accept-Encoding': 'gzip, deflate',
                             'Connection': 'keep-alive',
-                            'Upgrade-Insecure-Requests': '1',
-                            'Sec-Fetch-Dest': 'document',
-                            'Sec-Fetch-Mode': 'navigate',
-                            'Sec-Fetch-Site': 'none' if redirect_count == 0 else 'same-origin',
-                            'Cache-Control': 'max-age=0'
+                            'Upgrade-Insecure-Requests': '1'
                         }
                     )
                 except requests.exceptions.ReadTimeout:
@@ -218,6 +352,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                 except requests.exceptions.RequestException:
                     break
                 
+                # Processa redirects HTTP (301, 302, etc)
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get('Location', '')
                     
@@ -243,6 +378,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                     else:
                         break
                 
+                # Processa resposta HTML (status 200)
                 if response.status_code == 200:
                     try:
                         html_content = response.text
@@ -257,7 +393,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                         doc = BeautifulSoup(html_content, 'html.parser')
                         redirect_link = None
                         
-                        # Busca redirect no HTML
+                        # Busca redirect no HTML (links, meta refresh, JavaScript)
                         for a in doc.select('a[id*="redirect"], a[id*="Redirect"], a[href*="receber.php"], a[href*="redirecionando"]'):
                             href = a.get('href', '')
                             if href and ('receber.php' in href or 'redirecionando' in href.lower() or 'recebi.php' in href):
@@ -373,16 +509,18 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                         logger.error(f"Erro ao processar resposta HTML: {e}")
                         break
                 
-                # Extrai magnet da página final
+                # Extrai magnet da página final usando múltiplas estratégias
                 if response.status_code == 200:
                     magnet_link = None
                     
+                    # Estratégia 1: Links <a> com href magnet
                     for a in doc.select('a[href^="magnet:"], a[href*="magnet:"]'):
                         magnet_href = a.get('href', '')
                         if magnet_href.startswith('magnet:'):
                             magnet_link = magnet_href
                             break
                     
+                    # Estratégia 2: Meta refresh com magnet
                     if not magnet_link:
                         for meta in doc.select('meta[http-equiv="refresh"]'):
                             content = meta.get('content', '')
@@ -395,6 +533,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                                         magnet_link = extended.group(0)
                                     break
                     
+                    # Estratégia 3: JavaScript patterns
                     if not magnet_link:
                         js_patterns = [
                             r'window\.location\s*=\s*["\'](magnet:[^"\']+)["\']',
@@ -422,6 +561,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                             if magnet_link:
                                 break
                     
+                    # Estratégia 4: JavaScript raw patterns no HTML
                     if not magnet_link:
                         js_raw_patterns = [
                             r'window\.location\s*=\s*["\'](magnet:\?[^"\']+)["\']',
@@ -434,6 +574,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                                 magnet_link = max(matches, key=len)
                                 break
                     
+                    # Estratégia 5: Busca direta em scripts (primeiros 3)
                     if not magnet_link:
                         for script in doc.select('script')[:3]:
                             script_text = script.string or ''
@@ -446,6 +587,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                                             magnet_link = match
                                     break
                     
+                    # Estratégia 6: Busca em todos os scripts
                     if not magnet_link:
                         for script in doc.select('script'):
                             script_text = script.string or ''
@@ -463,38 +605,47 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                                 if magnet_link:
                                     break
                     
+                    # Estratégia 7: Atributos data-* (data-u, data-download, etc)
                     if not magnet_link:
-                        data_attrs = doc.select('[data-download], [data-link], [data-magnet], [data-url]')
+                        data_attrs = doc.select('[data-download], [data-link], [data-magnet], [data-url], [data-u]')
                         for elem in data_attrs:
-                            for attr in ['data-download', 'data-link', 'data-magnet', 'data-url']:
+                            for attr in ['data-download', 'data-link', 'data-magnet', 'data-url', 'data-u']:
                                 encoded_value = elem.get(attr, '')
                                 if encoded_value:
-                                    try:
-                                        padding = 4 - len(encoded_value) % 4
-                                        if padding != 4:
-                                            encoded_padded = encoded_value + '=' * padding
-                                        else:
-                                            encoded_padded = encoded_value
-                                        
-                                        decoded_bytes = base64.b64decode(encoded_padded)
-                                        decoded_str = decoded_bytes.decode('utf-8')
-                                        
-                                        if decoded_str.startswith('magnet:'):
-                                            magnet_link = decoded_str
+                                    # Se é data-u, usa decodificação especializada (Grupo 3)
+                                    if attr == 'data-u':
+                                        decoded_magnet = decode_data_u(encoded_value)
+                                        if decoded_magnet:
+                                            magnet_link = decoded_magnet
                                             break
-                                    except Exception:
+                                    else:
+                                        # Para outros atributos, tenta decodificação padrão Base64
                                         try:
-                                            base64url = encoded_value.replace('-', '+').replace('_', '/')
-                                            padding = 4 - len(base64url) % 4
+                                            padding = 4 - len(encoded_value) % 4
                                             if padding != 4:
-                                                base64url = base64url + '=' * padding
-                                            decoded_bytes = base64.b64decode(base64url)
+                                                encoded_padded = encoded_value + '=' * padding
+                                            else:
+                                                encoded_padded = encoded_value
+                                            
+                                            decoded_bytes = base64.b64decode(encoded_padded)
                                             decoded_str = decoded_bytes.decode('utf-8')
+                                            
                                             if decoded_str.startswith('magnet:'):
                                                 magnet_link = decoded_str
                                                 break
                                         except Exception:
-                                            pass
+                                            try:
+                                                base64url = encoded_value.replace('-', '+').replace('_', '/')
+                                                padding = 4 - len(base64url) % 4
+                                                if padding != 4:
+                                                    base64url = base64url + '=' * padding
+                                                decoded_bytes = base64.b64decode(base64url)
+                                                decoded_str = decoded_bytes.decode('utf-8')
+                                                if decoded_str.startswith('magnet:'):
+                                                    magnet_link = decoded_str
+                                                    break
+                                            except Exception:
+                                                pass
                                     
                                     if encoded_value.startswith('magnet:'):
                                         magnet_link = encoded_value
@@ -502,6 +653,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                             if magnet_link:
                                 break
                     
+                    # Estratégia 8: Busca direta por regex no HTML
                     if not magnet_link:
                         magnet_match = re.search(r'magnet:\?[^"\'\s<>]+', html_content)
                         if magnet_match:

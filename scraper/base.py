@@ -31,9 +31,7 @@ _url_fetching_lock = threading.Lock()  # Lock para o conjunto _url_fetching
 
 
 def _get_url_lock(url: str):
-    """
-    Obtém um lock específico para uma URL, evitando requisições simultâneas.
-    """
+    # Obtém um lock específico para uma URL, evitando requisições simultâneas
     with _url_locks_lock:
         if url not in _url_locks:
             _url_locks[url] = threading.Lock()
@@ -727,6 +725,15 @@ class BaseScraper(ABC):
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
         links = self._search_variations(query)
+        
+        # Log das páginas encontradas
+        scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
+        if links:
+            # Mostra todas as páginas encontradas (uma por linha para melhor legibilidade)
+            pages_list = '\n'.join([f"  - {link}" for link in links])
+            logger.debug(f"[{scraper_name}] Páginas encontradas ({len(links)}):\n{pages_list}")
+        else:
+            logger.debug(f"[{scraper_name}] Nenhuma página encontrada para a query: '{query}'")
         
         all_torrents = []
         for link in links:

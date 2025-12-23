@@ -98,35 +98,52 @@ class MagnetParser:
         # Mantém apenas caracteres hexadecimais válidos (0-9, a-f, A-F) ou base32 válidos
         encoded_clean = ''.join(c for c in encoded if c.isalnum() or c in '+-=')
         
+        # Extrai apenas caracteres hex válidos
+        hex_chars = ''.join(c for c in encoded_clean if c in '0123456789abcdefABCDEF')
+        
+        # Se tem exatamente 40 caracteres hex, usa eles
+        if len(hex_chars) == 40:
+            try:
+                return bytes.fromhex(hex_chars)
+            except ValueError:
+                pass
+        
+        # Se tem mais de 40 caracteres hex, tenta pegar os primeiros 40
+        if len(hex_chars) > 40:
+            try:
+                return bytes.fromhex(hex_chars[:40])
+            except ValueError:
+                pass
+        
+        # Se tem exatamente 40 caracteres após limpeza completa
         if len(encoded_clean) == 40:
             try:
-                # Verifica se todos os caracteres são hexadecimais válidos
                 if all(c in '0123456789abcdefABCDEF' for c in encoded_clean):
                     return bytes.fromhex(encoded_clean)
-                else:
-                    raise ValueError("InfoHash hex contém caracteres inválidos")
             except ValueError:
-                raise ValueError("InfoHash hex inválido")
-        elif len(encoded_clean) == 32:
+                pass
+        
+        # Se tem exatamente 32 caracteres, tenta base32
+        if len(encoded_clean) == 32:
             try:
                 return base64.b32decode(encoded_clean.upper())
             except Exception:
-                raise ValueError("InfoHash base32 inválido")
-        else:
-            # Se o tamanho está incorreto após limpeza, tenta usar o original
-            # Pode ser que o problema seja com caracteres especiais que foram removidos
-            if len(encoded) != len(encoded_clean):
-                # Tenta usar o encoded original se a limpeza removeu caracteres
-                if len(encoded) == 40:
-                    try:
-                        if all(c in '0123456789abcdefABCDEF' for c in encoded):
-                            return bytes.fromhex(encoded)
-                    except ValueError:
-                        pass
-                elif len(encoded) == 32:
-                    try:
-                        return base64.b32decode(encoded.upper())
-                    except Exception:
-                        pass
-            raise ValueError(f"Tamanho de info_hash inválido: {len(encoded_clean)} (original: {len(encoded)})")
+                pass
+        
+        # Se o original tem tamanho correto, tenta usar ele
+        if len(encoded) == 40:
+            try:
+                hex_only = ''.join(c for c in encoded if c in '0123456789abcdefABCDEF')
+                if len(hex_only) >= 40:
+                    return bytes.fromhex(hex_only[:40])
+            except ValueError:
+                pass
+        
+        if len(encoded) == 32:
+            try:
+                return base64.b32decode(encoded.upper())
+            except Exception:
+                pass
+        
+        raise ValueError(f"Tamanho de info_hash inválido: {len(encoded_clean)} (original: {len(encoded)})")
 

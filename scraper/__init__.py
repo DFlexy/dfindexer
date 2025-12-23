@@ -1,4 +1,4 @@
-"""Ferramentas utilitárias para descoberta e criação dinâmica de scrapers."""
+# Ferramentas utilitárias para descoberta e criação dinâmica de scrapers
 
 from __future__ import annotations
 

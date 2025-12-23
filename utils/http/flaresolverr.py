@@ -387,7 +387,6 @@ class FlareSolverrClient:
                     if time.time() < expire_at:
                         # Valida sessão antes de retornar (fora do lock para não bloquear)
                         if self._validate_session(session_id):
-                            logger.debug(f"FlareSolverr: sessão encontrada no cache compartilhado para {base_url} (ID: {session_id[:20]}...)")
                             return session_id
                         else:
                             # Sessão inválida, remove do cache

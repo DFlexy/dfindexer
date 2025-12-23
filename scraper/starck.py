@@ -268,7 +268,35 @@ class StarckScraper(BaseScraper):
                     if resolved_magnet not in magnet_links:
                         magnet_links.append(resolved_magnet)
         
+        # Busca direta por elementos com data-u (pode estar em botões, divs, etc.)
         if not magnet_links:
+            from utils.parsing.link_resolver import decode_data_u
+            
+            # Busca primeiro no post
+            data_u_elements = post.select('[data-u]')
+            
+            for elem in data_u_elements:
+                data_u_value = elem.get('data-u', '')
+                if data_u_value:
+                    decoded_magnet = decode_data_u(data_u_value)
+                    if decoded_magnet and decoded_magnet.startswith('magnet:'):
+                        if decoded_magnet not in magnet_links:
+                            magnet_links.append(decoded_magnet)
+            
+            # Se não encontrou no post, busca em todo o documento
+            if not magnet_links:
+                data_u_elements_fallback = doc.select('[data-u]')
+                
+                for elem in data_u_elements_fallback:
+                    data_u_value = elem.get('data-u', '')
+                    if data_u_value:
+                        decoded_magnet = decode_data_u(data_u_value)
+                        if decoded_magnet and decoded_magnet.startswith('magnet:'):
+                            if decoded_magnet not in magnet_links:
+                                magnet_links.append(decoded_magnet)
+        
+        if not magnet_links:
+            logger.debug("[Starck] ❌ Nenhum magnet encontrado após todas as tentativas")
             return []
         
         # Processa cada magnet

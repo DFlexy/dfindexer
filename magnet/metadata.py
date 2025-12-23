@@ -37,10 +37,8 @@ _hash_fetching_lock = threading.Lock()
 
 
 def _is_redis_connection_error(error: Exception) -> bool:
-    """
-    Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível).
-    Retorna True se for erro de conexão, False caso contrário.
-    """
+    # Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível)
+    # Retorna True se for erro de conexão, False caso contrário
     error_str = str(error).lower()
     connection_errors = [
         "connection refused",
@@ -56,16 +54,9 @@ def _is_redis_connection_error(error: Exception) -> bool:
 
 
 def _log_redis_error(operation: str, error: Exception, log_once: bool = True) -> None:
-    """
-    Loga erros do Redis de forma mais amigável.
-    Se for erro de conexão (Redis desabilitado), mostra mensagem informativa.
-    Se for outro erro, mostra detalhes técnicos apenas em DEBUG.
-    
-    Args:
-        operation: Descrição da operação que falhou (ex: "verificar circuit breaker")
-        error: Exceção capturada
-        log_once: Se True, só loga uma vez por operação (evita spam)
-    """
+    # Loga erros do Redis de forma mais amigável
+    # Se for erro de conexão (Redis desabilitado), mostra mensagem informativa
+    # Se for outro erro, mostra detalhes técnicos apenas em DEBUG
     if _is_redis_connection_error(error):
         logger.debug(f"Redis fallback: {operation}")
     else:
@@ -105,11 +96,9 @@ _cache_failure_log_lock = threading.Lock()
 _CACHE_FAILURE_LOG_COOLDOWN = 60
 
 def _is_circuit_breaker_open() -> bool:
-    """
-    Verifica se o circuit breaker está aberto (desabilitado).
-    Retorna True se deve evitar consultas por um período.
-    Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query).
-    """
+    # Verifica se o circuit breaker está aberto (desabilitado)
+    # Retorna True se deve evitar consultas por um período
+    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
     # Tenta usar Redis primeiro (circuit breaker global)
@@ -150,10 +139,8 @@ def _is_circuit_breaker_open() -> bool:
 
 
 def _record_timeout():
-    """
-    Registra um timeout e abre o circuit breaker se houver muitos timeouts consecutivos.
-    Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query).
-    """
+    # Registra um timeout e abre o circuit breaker se houver muitos timeouts consecutivos
+    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
     # Tenta usar Redis primeiro (circuit breaker global)
@@ -197,10 +184,8 @@ def _record_timeout():
 
 
 def _record_503():
-    """
-    Registra um erro 503 e abre o circuit breaker se houver muitos 503s consecutivos.
-    Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query).
-    """
+    # Registra um erro 503 e abre o circuit breaker se houver muitos 503s consecutivos
+    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
     # Tenta usar Redis primeiro (circuit breaker global)
