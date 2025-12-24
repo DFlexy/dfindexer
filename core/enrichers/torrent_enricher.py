@@ -230,6 +230,8 @@ class TorrentEnricher:
                         if metadata:
                             torrent['_metadata'] = metadata
                             torrent['_metadata_fetched'] = True
+                            # Salva metadata['name'] no cross_data se disponível
+                            self._save_metadata_name_to_cross_data(torrent, metadata)
                     except Exception:
                         pass
         else:
@@ -239,6 +241,8 @@ class TorrentEnricher:
                     if metadata:
                         torrent['_metadata'] = metadata
                         torrent['_metadata_fetched'] = True
+                        # Salva metadata['name'] no cross_data se disponível
+                        self._save_metadata_name_to_cross_data(torrent, metadata)
                 except Exception:
                     pass
     
@@ -631,6 +635,35 @@ class TorrentEnricher:
                         logger.debug(f"[Tracker] Buscando: {log_id} → Salvo no Redis")
                     else:
                         logger.debug(f"[Tracker] Buscando: {log_id} → Scrape realizado (erro ao salvar no Redis)")
+        except Exception:
+            pass
+    
+    def _save_metadata_name_to_cross_data(self, torrent: Dict, metadata: Dict) -> None:
+        # Salva metadata['name'] no cross_data se disponível e mais completo que magnet_processed atual
+        try:
+            info_hash = torrent.get('info_hash', '').lower()
+            if not info_hash or len(info_hash) != 40:
+                return
+            
+            metadata_name = metadata.get('name', '').strip() if metadata else None
+            if not metadata_name or len(metadata_name) < 3:
+                return
+            
+            from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+            from utils.text.storage import _is_metadata_more_complete
+            from utils.text.title_builder import _normalize_metadata_name
+            
+            # Verifica cross_data atual
+            cross_data = get_cross_data_from_redis(info_hash)
+            cross_magnet_processed = None
+            if cross_data and cross_data.get('magnet_processed'):
+                cross_magnet_processed = str(cross_data.get('magnet_processed')).strip()
+            
+            # Se não tem cross_data['magnet_processed'] ou metadata é mais completo, salva
+            if not cross_magnet_processed or not _is_metadata_more_complete(metadata_name, cross_magnet_processed):
+                # Salva metadata_name normalizado no cross_data
+                normalized_metadata = _normalize_metadata_name(metadata_name)
+                save_cross_data_to_redis(info_hash, {'metadata_name': metadata_name, 'magnet_processed': normalized_metadata})
         except Exception:
             pass
 

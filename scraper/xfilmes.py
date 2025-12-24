@@ -655,15 +655,9 @@ class XFilmesScraper(BaseScraper):
                 magnet_original = magnet_data.get('display_name', '') or ''
                 missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
-                # Se ainda está missing_dn, tenta buscar do cross_data
-                release_title_from_cross = False
-                if missing_dn and cross_data and cross_data.get('magnet_processed'):
-                    cross_release = cross_data.get('magnet_processed')
-                    if cross_release and cross_release != 'N/A' and len(str(cross_release).strip()) >= 3:
-                        magnet_original = str(cross_release)
-                        # A limpeza de domínios e formatos será feita em prepare_release_title()
-                        missing_dn = False
-                        release_title_from_cross = True
+                # NOTA: Não busca cross_data aqui para não interferir no fluxo de prepare_release_title()
+                # A busca de fallback (release:title, cross_data, metadata) será feita dentro de prepare_release_title()
+                # quando missing_dn = True, através de get_metadata_name()
                 
                 # Salva magnet_processed no Redis se encontrado
                 if not missing_dn and magnet_original:

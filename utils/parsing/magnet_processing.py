@@ -95,12 +95,9 @@ def process_magnet_links(
             magnet_original = magnet_data.get('display_name', '')
             missing_dn = not magnet_original or len(magnet_original.strip()) < 3
             
-            # Se ainda está missing_dn, tenta buscar do cross_data
-            if missing_dn and cross_data and cross_data.get('magnet_processed'):
-                magnet_original = cross_data['magnet_processed']
-                # A limpeza de domínios e formatos será feita em prepare_release_title()
-                if magnet_original and len(magnet_original.strip()) >= 3:
-                    missing_dn = False
+            # NOTA: Não busca cross_data aqui para não interferir no fluxo de prepare_release_title()
+            # A busca de fallback (release:title, cross_data, metadata) será feita dentro de prepare_release_title()
+            # quando missing_dn = True, através de get_metadata_name()
             
             # Salva magnet_processed no Redis se encontrado
             if not missing_dn and magnet_original:

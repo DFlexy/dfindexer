@@ -19,7 +19,37 @@ from utils.text.title_helpers import (
 )
 
 
-# Normaliza o título original do release antes de gerar o padrão final
+# Normaliza metadata name para formato padronizado (remove tags, normaliza espaços, remove duplicações)
+def _normalize_metadata_name(metadata_name: str) -> str:
+    """Normaliza metadata['name'] para formato padronizado antes de salvar no cross_data"""
+    normalized = metadata_name.strip()
+    normalized = html.unescape(normalized)
+    try:
+        normalized = unquote(normalized)
+    except Exception:
+        pass
+    normalized = normalized.strip()
+    normalized = clean_title(normalized)
+    normalized = re.sub(r'\[[^\]]*\]', '', normalized)
+    normalized = re.sub(r'\(([^)]+)\)', lambda m: m.group(1).replace(' ', '.'), normalized)
+    temp_normalized = re.sub(r'\s+', '.', normalized.strip())
+    temp_normalized = re.sub(r'\.{2,}', '.', temp_normalized)
+    parts = temp_normalized.split('.')
+    cleaned_parts = []
+    prev_part = None
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        part_lower = part.lower()
+        prev_lower = prev_part.lower() if prev_part else None
+        if part_lower != prev_lower:
+            cleaned_parts.append(part)
+            prev_part = part
+    return '.'.join(cleaned_parts).strip('.')
+
+
+# Prepara magnet_processed: normaliza se válido, busca metadata se missing_dn=True, adiciona ano/WEB-DL se necessário
 def prepare_release_title(
     magnet_processed: str,
     fallback_title: str,
@@ -28,14 +58,6 @@ def prepare_release_title(
     info_hash: Optional[str] = None,
     skip_metadata: bool = False
 ) -> str:
-    """
-    Prepara o magnet_processed seguindo o fluxograma correto:
-    1. Se magnet_processed existe e tem >= 3 caracteres: normaliza e usa diretamente (missing_dn permanece False)
-    2. Se magnet_processed está vazio/curto E missing_dn = True: busca metadata, depois fallback
-    3. Se magnet_processed está vazio/curto E missing_dn = False: usa fallback_title
-    4. Adiciona ano apenas se fornecido e não estiver no título
-    5. Adiciona WEB-DL apenas se missing_dn = True após TODO o processamento
-    """
     fallback_title = (fallback_title or '').strip()
     original_release_title = None
     final_missing_dn = missing_dn  # Mantém o estado original de missing_dn
@@ -109,45 +131,7 @@ def prepare_release_title(
                     if metadata_name and len(metadata_name.strip()) >= 3:
                         # Metadata encontrado: normaliza e usa como original_release_title
                         # IMPORTANTE: Preserva FULLHD do metadata
-                        normalized_metadata = metadata_name.strip()
-                        normalized_metadata = html.unescape(normalized_metadata)
-                        try:
-                            normalized_metadata = unquote(normalized_metadata)
-                        except Exception:
-                            pass
-                        normalized_metadata = normalized_metadata.strip()
-                        
-                        # Remove domínios e tags comuns
-                        from utils.text.cleaning import clean_title
-                        normalized_metadata = clean_title(normalized_metadata)
-                        
-                        # Remove tags entre colchetes (ex: [EA], [rich_jc], etc.)
-                        normalized_metadata = re.sub(r'\[[^\]]*\]', '', normalized_metadata)
-                        
-                        # Remove parênteses mas preserva o conteúdo dentro deles (normaliza espaços para pontos)
-                        normalized_metadata = re.sub(r'\(([^)]+)\)', lambda m: m.group(1).replace(' ', '.'), normalized_metadata)
-                        
-                        # Normaliza espaços para pontos para facilitar detecção de duplicações
-                        temp_normalized = re.sub(r'\s+', '.', normalized_metadata.strip())
-                        temp_normalized = re.sub(r'\.{2,}', '.', temp_normalized)
-                        
-                        # Remove duplicações consecutivas de qualquer parte
-                        parts = temp_normalized.split('.')
-                        cleaned_parts = []
-                        prev_part = None
-                        for part in parts:
-                            part = part.strip()
-                            if not part:
-                                continue
-                            # Compara ignorando case e normalizando
-                            part_lower = part.lower()
-                            prev_lower = prev_part.lower() if prev_part else None
-                            # Só adiciona se não for duplicação consecutiva
-                            if part_lower != prev_lower:
-                                cleaned_parts.append(part)
-                                prev_part = part
-                        
-                        original_release_title = '.'.join(cleaned_parts).strip('.')
+                        original_release_title = _normalize_metadata_name(metadata_name)
                         final_missing_dn = False  # Encontrou metadata, não está mais missing
                         # → Ir para etapa 5
                     else:
