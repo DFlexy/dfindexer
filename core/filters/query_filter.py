@@ -16,9 +16,15 @@ class QueryFilter:
             return lambda t: True
         
         def filter_func(torrent: Dict) -> bool:
-            title_processed = torrent.get('title_processed', '')
-            original_title = torrent.get('original_title', '')
-            title_translated = torrent.get('title_translated_processed', '')
+            # Garante que todas as variáveis sejam strings (converte None para string vazia)
+            title_processed = torrent.get('title_processed') or ''
+            original_title = torrent.get('original_title') or ''
+            title_translated = torrent.get('title_translated_processed') or ''
+            
+            # Converte para string caso ainda não seja (proteção adicional)
+            title_processed = str(title_processed) if title_processed is not None else ''
+            original_title = str(original_title) if original_title is not None else ''
+            title_translated = str(title_translated) if title_translated is not None else ''
             
             result = check_query_match(
                 query,

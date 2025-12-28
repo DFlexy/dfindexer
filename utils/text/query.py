@@ -9,6 +9,12 @@ from utils.text.cleaning import remove_accents
 
 # Confere se o resultado corresponde à busca (ignorando stop words)
 def check_query_match(query: str, title: str, title_original_html: str = '', title_translated_html: str = '') -> bool:
+    # Garante que todos os parâmetros sejam strings (converte None para string vazia)
+    query = str(query) if query is not None else ''
+    title = str(title) if title is not None else ''
+    title_original_html = str(title_original_html) if title_original_html is not None else ''
+    title_translated_html = str(title_translated_html) if title_translated_html is not None else ''
+    
     if not query or not query.strip():
         return True  # Query vazia, não filtra
     

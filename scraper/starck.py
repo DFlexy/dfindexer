@@ -137,7 +137,7 @@ class StarckScraper(BaseScraper):
     
     def _search_variations(self, query: str) -> List[str]:
         """
-        Busca com variações da query, mas filtra resultados claramente irrelevantes.
+        Busca com variações da query.
         """
         from urllib.parse import urljoin, quote
         from utils.text.constants import STOP_WORDS
@@ -158,10 +158,6 @@ class StarckScraper(BaseScraper):
             if first_word not in STOP_WORDS:
                 variations.append(query_words[0])
         
-        # Normaliza query para comparação (remove stop words e acentos)
-        query_normalized = ' '.join([w.lower() for w in query.split() if w.lower() not in STOP_WORDS])
-        query_keywords = set([w for w in query_normalized.split() if len(w) > 2])
-        
         for variation in variations:
             search_url = f"{self.base_url}{self.search_url}{quote(variation)}"
             doc = self.get_document(search_url, self.base_url)
@@ -171,27 +167,13 @@ class StarckScraper(BaseScraper):
             # Extrai links usando o método específico do scraper
             page_links = self._extract_search_results(doc)
             
-            # Filtra links claramente irrelevantes antes de adicionar
             for href in page_links:
                 absolute_url = urljoin(self.base_url, href)
                 
-                # Verifica duplicatas
-                if absolute_url in seen_urls:
-                    continue
-                
-                # Filtro básico: verifica se a URL ou título tem palavras-chave da query
-                # Extrai palavras da URL (remove hífens, pontos, etc)
-                url_words = set([w.lower() for w in href.replace('-', ' ').replace('.', ' ').split() if len(w) > 2])
-                
-                # Verifica se há palavras em comum entre a query e a URL
-                common_words = query_keywords.intersection(url_words)
-                
-                # Se não tem palavras em comum relevantes, pula (é claramente irrelevante)
-                if not common_words:
-                    continue
-                
-                links.append(absolute_url)
-                seen_urls.add(absolute_url)
+                # Verifica duplicatas antes de adicionar
+                if absolute_url not in seen_urls:
+                    links.append(absolute_url)
+                    seen_urls.add(absolute_url)
         
         return links
     
