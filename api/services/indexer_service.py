@@ -9,6 +9,7 @@ from scraper import (
     available_scraper_types,
     normalize_scraper_type,
 )
+from cache import cleanup_request_caches
 from core.enrichers.torrent_enricher import TorrentEnricher
 from core.filters.query_filter import QueryFilter
 from core.processors.torrent_processor import TorrentProcessor
@@ -42,46 +43,36 @@ class IndexerService:
     def search(self, scraper_type: str, query: str, use_flaresolverr: bool = False, filter_results: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
-        # IMPORTANTE: Aplica filtro automaticamente quando há query para evitar resultados irrelevantes
-        # Os sites retornam muitos resultados que não correspondem à busca, então o filtro é essencial
-        filter_func = None
-        if query:
-            # Sempre aplica filtro quando há query, independente de filter_results
-            # Isso garante que apenas resultados relevantes sejam retornados
-            filter_func = QueryFilter.create_filter(query)
-        
-        # Busca com filtro se filter_results=True, caso contrário sem filtro
-        torrents = scraper.search(query, filter_func=filter_func)
-        
-        # Calcula estatísticas do filtro - faz cópia imediatamente para evitar race condition
-        # IMPORTANTE: Coleta ANTES de limitar resultados, para ter estatísticas corretas
-        filter_stats = None
-        if hasattr(scraper, '_enricher') and scraper._enricher:
-            if hasattr(scraper._enricher, '_last_filter_stats'):
-                # Faz cópia imediata das estatísticas para evitar que sejam sobrescritas por outras requisições
-                stats = scraper._enricher._last_filter_stats
-                # Verifica se as estatísticas são válidas
-                if stats and isinstance(stats, dict):
-                    # Cria cópia profunda para evitar race condition entre requisições simultâneas
-                    # IMPORTANTE: Coleta ANTES de qualquer outra operação que possa sobrescrever
-                    filter_stats = {
-                        'total': stats.get('total', 0),
-                        'filtered': stats.get('filtered', 0),
-                        'approved': stats.get('approved', 0),
-                        'scraper_name': stats.get('scraper_name', '')
-                    }
-        
-        
-        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
-        # IMPORTANTE: Limita DEPOIS de coletar as estatísticas, para não afetar a contagem
-        if max_results and max_results > 0:
-            torrents = torrents[:max_results]
-        
-        self.processor.sanitize_torrents(torrents)
-        self.processor.remove_internal_fields(torrents)
-        self.processor.sort_by_date(torrents)
-        
-        return torrents, filter_stats
+        try:
+            filter_func = None
+            if query:
+                filter_func = QueryFilter.create_filter(query)
+            
+            torrents = scraper.search(query, filter_func=filter_func)
+            
+            filter_stats = None
+            if hasattr(scraper, '_enricher') and scraper._enricher:
+                if hasattr(scraper._enricher, '_last_filter_stats'):
+                    stats = scraper._enricher._last_filter_stats
+                    if stats and isinstance(stats, dict):
+                        filter_stats = {
+                            'total': stats.get('total', 0),
+                            'filtered': stats.get('filtered', 0),
+                            'approved': stats.get('approved', 0),
+                            'scraper_name': stats.get('scraper_name', '')
+                        }
+            
+            if max_results and max_results > 0:
+                torrents = torrents[:max_results]
+            
+            self.processor.sanitize_torrents(torrents)
+            self.processor.remove_internal_fields(torrents)
+            self.processor.sort_by_date(torrents)
+            
+            return torrents, filter_stats
+        finally:
+            scraper.close()
+            cleanup_request_caches()
     
     # Retorna as estatísticas do último filtro aplicado
     def get_last_filter_stats(self):
@@ -91,39 +82,37 @@ class IndexerService:
     def get_page(self, scraper_type: str, page: str = '1', use_flaresolverr: bool = False, is_test: bool = False, max_results: Optional[int] = None) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
-        max_links = None
-        if is_test:
-            max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
-        
-        # IMPORTANTE: Passa is_test=True para o scraper quando query está vazia
-        # Isso garante que _is_test=True no scraper, fazendo com que o cache HTML não seja usado
-        # Assim, consultas sem query sempre buscam HTML fresco e veem novos links atualizados
-        torrents = scraper.get_page(page, max_items=max_links, is_test=is_test)
-        
-        # Limita ANTES do processamento para economizar processamento de metadata/trackers
-        if max_results and max_results > 0:
-            torrents = torrents[:max_results]
-        
-        # Obtém estatísticas imediatamente após o enriquecimento (evita race condition)
-        filter_stats = None
-        if hasattr(scraper, '_enricher') and hasattr(scraper._enricher, '_last_filter_stats'):
-            # Faz cópia das estatísticas para evitar que sejam sobrescritas por outras requisições
-            stats = scraper._enricher._last_filter_stats
-            if stats:
-                filter_stats = {
-                    'total': stats.get('total', 0),
-                    'filtered': stats.get('filtered', 0),
-                    'approved': stats.get('approved', 0),
-                    'scraper_name': stats.get('scraper_name', '')
-                }
-        
-        self.processor.sanitize_torrents(torrents)
-        self.processor.remove_internal_fields(torrents)
-        
-        if not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
-            self.processor.sort_by_date(torrents)
-        
-        return torrents, filter_stats
+        try:
+            max_links = None
+            if is_test:
+                max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
+            
+            torrents = scraper.get_page(page, max_items=max_links, is_test=is_test)
+            
+            if max_results and max_results > 0:
+                torrents = torrents[:max_results]
+            
+            filter_stats = None
+            if hasattr(scraper, '_enricher') and hasattr(scraper._enricher, '_last_filter_stats'):
+                stats = scraper._enricher._last_filter_stats
+                if stats:
+                    filter_stats = {
+                        'total': stats.get('total', 0),
+                        'filtered': stats.get('filtered', 0),
+                        'approved': stats.get('approved', 0),
+                        'scraper_name': stats.get('scraper_name', '')
+                    }
+            
+            self.processor.sanitize_torrents(torrents)
+            self.processor.remove_internal_fields(torrents)
+            
+            if not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
+                self.processor.sort_by_date(torrents)
+            
+            return torrents, filter_stats
+        finally:
+            scraper.close()
+            cleanup_request_caches()
     
     # Obtém informações dos scrapers disponíveis
     def get_scraper_info(self) -> Dict:

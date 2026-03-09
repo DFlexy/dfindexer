@@ -26,16 +26,28 @@ _request_cache = threading.local()
 # Lock por URL para evitar requisições HTTP duplicadas simultâneas
 _url_locks = {}
 _url_locks_lock = threading.Lock()
-_url_fetching = set()  # Conjunto para rastrear URLs sendo buscadas
-_url_fetching_lock = threading.Lock()  # Lock para o conjunto _url_fetching
+_MAX_URL_LOCKS = 500
+_url_fetching = set()
+_url_fetching_lock = threading.Lock()
 
 
 def _get_url_lock(url: str):
-    # Obtém um lock específico para uma URL, evitando requisições simultâneas
     with _url_locks_lock:
+        if len(_url_locks) > _MAX_URL_LOCKS:
+            keys_to_remove = list(_url_locks.keys())[:len(_url_locks) // 2]
+            for key in keys_to_remove:
+                del _url_locks[key]
         if url not in _url_locks:
             _url_locks[url] = threading.Lock()
         return _url_locks[url]
+
+
+def cleanup_url_state():
+    """Limpa estado global de URLs (locks e fetching set). Chamar entre requisições."""
+    with _url_locks_lock:
+        _url_locks.clear()
+    with _url_fetching_lock:
+        _url_fetching.clear()
 
 
 # Classe base para scrapers
@@ -77,6 +89,7 @@ class BaseScraper(ABC):
         self.tracker_service = get_tracker_service()
         self._skip_metadata = False
         self._is_test = False
+        self._closed = False
         
         # Estatísticas de cache para debug
         self._cache_stats = {
@@ -116,6 +129,21 @@ class BaseScraper(ABC):
                 error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
                 logger.warning(f"[[ FlareSolverr Não Conectado ]] - {error_type}: {error_msg}")
                 self.use_flaresolverr = False
+    
+    def close(self):
+        """Libera recursos do scraper (session HTTP, etc)."""
+        if not self._closed:
+            self._closed = True
+            try:
+                self.session.close()
+            except Exception:
+                pass
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *args):
+        self.close()
     
     def get_document(self, url: str, referer: str = '') -> Optional[BeautifulSoup]:
         # Verifica cache local primeiro (mais rápido que Redis)
@@ -200,14 +228,22 @@ class BaseScraper(ABC):
                             cache_key = html_long_key(url)
                             cached = self.redis.get(cache_key)
                             if cached:
-                                with _url_fetching_lock:
-                                    _url_fetching.discard(url)
                                 self._cache_stats['html']['hits'] += 1
                                 return BeautifulSoup(cached, 'lxml')
                         except Exception:
                             pass
                 # Se não encontrou após esperar, continua a busca (pode ter falhado ou demorado demais)
-            
+        
+        # Safety net: garante que url é removida de _url_fetching mesmo em exceções inesperadas
+        _added_to_fetching = not is_fetching
+        try:
+            return self._fetch_document(url, referer)
+        finally:
+            if _added_to_fetching:
+                with _url_fetching_lock:
+                    _url_fetching.discard(url)
+    
+    def _fetch_document(self, url: str, referer: str = '') -> Optional[BeautifulSoup]:
         self._cache_stats['html']['misses'] += 1
         
         html_content = None
@@ -290,10 +326,7 @@ class BaseScraper(ABC):
                                 except:
                                     pass
                             
-                            result = BeautifulSoup(html_content, 'lxml')
-                            with _url_fetching_lock:
-                                _url_fetching.discard(url)
-                            return result
+                            return BeautifulSoup(html_content, 'lxml')
                     else:
                         # Log removido para reduzir verbosidade - retry será tentado automaticamente
                         from cache.redis_keys import flaresolverr_failure_key
@@ -381,10 +414,7 @@ class BaseScraper(ABC):
                                             except:
                                                 pass
                                         
-                                        result = BeautifulSoup(html_content, 'lxml')
-                                        with _url_fetching_lock:
-                                            _url_fetching.discard(url)
-                                        return result
+                                        return BeautifulSoup(html_content, 'lxml')
                                 else:
                                     # Tenta Redis primeiro
                                     if self.redis and not self._is_test:
@@ -480,10 +510,7 @@ class BaseScraper(ABC):
                                     except:
                                         pass
                                 
-                                result = BeautifulSoup(html_content, 'lxml')
-                                with _url_fetching_lock:
-                                    _url_fetching.discard(url)
-                                return result
+                                return BeautifulSoup(html_content, 'lxml')
                         else:
                             # Marca como falha novamente
                             if self.redis and not self._is_test:
@@ -540,31 +567,20 @@ class BaseScraper(ABC):
                 except:
                     pass
             
-            result = BeautifulSoup(html_content, 'lxml')
-            with _url_fetching_lock:
-                _url_fetching.discard(url)
-            return result
+            return BeautifulSoup(html_content, 'lxml')
         
         except Exception as e:
             error_type = type(e).__name__
             error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
             
-            # Erros HTTP do servidor (500, 502, 503, 520, etc) são esperados e não indicam problema no nosso código
-            # Loga como WARNING em vez de ERROR
-            # A mensagem de erro HTTP já inclui a URL, então não precisamos duplicar
             if error_type == 'HTTPError' and ('500' in error_msg or '502' in error_msg or '503' in error_msg or '520' in error_msg or '521' in error_msg or '522' in error_msg or '523' in error_msg or '524' in error_msg):
                 logger.warning(f"Document error: {error_type} - {error_msg}")
             else:
-                # Para outros erros, adiciona a URL se não estiver na mensagem
                 url_preview = url[:50] if url else 'N/A'
                 if url and url not in error_msg:
                     logger.error(f"Document error: {error_type} - {error_msg} (url: {url_preview}...)")
                 else:
                     logger.error(f"Document error: {error_type} - {error_msg}")
-            
-            # Remove do conjunto de URLs sendo buscadas mesmo em caso de erro
-            with _url_fetching_lock:
-                _url_fetching.discard(url)
             
             return None
     

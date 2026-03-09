@@ -33,24 +33,25 @@ _session_validation_lock = threading.Lock()
 # Locks por base_url para proteger criação de sessão (evita múltiplas threads criando simultaneamente)
 _session_creation_locks = {}
 _session_creation_locks_lock = threading.Lock()
+_MAX_FLARESOLVERR_LOCKS = 50
 
 def _get_session_creation_lock(base_url: str) -> threading.Lock:
-    """Obtém um lock específico para criação de sessão de uma base_url"""
     global _session_creation_locks
     with _session_creation_locks_lock:
+        if len(_session_creation_locks) > _MAX_FLARESOLVERR_LOCKS:
+            _session_creation_locks.clear()
         if base_url not in _session_creation_locks:
             _session_creation_locks[base_url] = threading.Lock()
         return _session_creation_locks[base_url]
 
-# Lock global para serializar requisições ao FlareSolverr (evita race conditions em processamento paralelo)
-# Uma requisição por vez por base_url para garantir que o HTML retornado corresponde à URL solicitada
 _flaresolverr_request_locks = {}
 _flaresolverr_request_locks_lock = threading.Lock()
 
 def _get_flaresolverr_lock(base_url: str) -> threading.Lock:
-    """Obtém um lock específico para serializar requisições ao FlareSolverr de uma base_url"""
     global _flaresolverr_request_locks
     with _flaresolverr_request_locks_lock:
+        if len(_flaresolverr_request_locks) > _MAX_FLARESOLVERR_LOCKS:
+            _flaresolverr_request_locks.clear()
         if base_url not in _flaresolverr_request_locks:
             _flaresolverr_request_locks[base_url] = threading.Lock()
         return _flaresolverr_request_locks[base_url]

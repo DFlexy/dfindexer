@@ -10,6 +10,7 @@ from scraper import (
     available_scraper_types,
     normalize_scraper_type,
 )
+from cache import cleanup_request_caches
 from core.enrichers.torrent_enricher_async import TorrentEnricherAsync
 from core.filters.query_filter import QueryFilter
 from core.processors.torrent_processor import TorrentProcessor
@@ -54,50 +55,42 @@ class IndexerServiceAsync:
         """
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
-        # IMPORTANTE: Aplica filtro automaticamente quando há query para evitar resultados irrelevantes
-        # Os sites retornam muitos resultados que não correspondem à busca, então o filtro é essencial
-        # NOTA: NÃO passa filter_func para scraper.search() aqui porque o filtro será aplicado
-        # no enricher async. Isso evita aplicar o filtro duas vezes (no scraper e no enricher).
-        filter_func = None
-        if query:
-            # Sempre aplica filtro quando há query, independente de filter_results
-            # Isso garante que apenas resultados relevantes sejam retornados
-            filter_func = QueryFilter.create_filter(query)
-        
-        # Busca SEM filtro - o filtro será aplicado no enricher async para evitar duplicação
-        torrents = scraper.search(query, filter_func=None)
-        
-        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
-        if max_results and max_results > 0:
-            torrents = torrents[:max_results]
-        
-        # Enriquece torrents (async) com filtro se necessário
-        # Retorna estatísticas junto para evitar race condition
-        enriched_torrents, filter_stats = await self._enrich_torrents_async(
-            torrents,
-            scraper_type,
-            filter_func  # Aplica filtro no enriquecimento se fornecido
-        )
-        
-        # Fallback: calcula estatísticas manualmente se não foram calculadas pelo enricher
-        if filter_stats is None and filter_func and enriched_torrents:
-            total_before_filter = len(enriched_torrents)
-            filtered_count = sum(1 for t in enriched_torrents if not filter_func(t))
-            approved_count = total_before_filter - filtered_count
+        try:
+            filter_func = None
+            if query:
+                filter_func = QueryFilter.create_filter(query)
             
-            filter_stats = {
-                'total': total_before_filter,
-                'filtered': filtered_count,
-                'approved': approved_count,
-                'scraper_name': scraper.SCRAPER_TYPE if hasattr(scraper, 'SCRAPER_TYPE') else ''
-            }
-        
-        
-        self.processor.sanitize_torrents(enriched_torrents)
-        self.processor.remove_internal_fields(enriched_torrents)
-        self.processor.sort_by_date(enriched_torrents)
-        
-        return enriched_torrents, filter_stats
+            torrents = scraper.search(query, filter_func=None)
+            
+            if max_results and max_results > 0:
+                torrents = torrents[:max_results]
+            
+            enriched_torrents, filter_stats = await self._enrich_torrents_async(
+                torrents,
+                scraper_type,
+                filter_func
+            )
+            
+            if filter_stats is None and filter_func and enriched_torrents:
+                total_before_filter = len(enriched_torrents)
+                filtered_count = sum(1 for t in enriched_torrents if not filter_func(t))
+                approved_count = total_before_filter - filtered_count
+                
+                filter_stats = {
+                    'total': total_before_filter,
+                    'filtered': filtered_count,
+                    'approved': approved_count,
+                    'scraper_name': scraper.SCRAPER_TYPE if hasattr(scraper, 'SCRAPER_TYPE') else ''
+                }
+            
+            self.processor.sanitize_torrents(enriched_torrents)
+            self.processor.remove_internal_fields(enriched_torrents)
+            self.processor.sort_by_date(enriched_torrents)
+            
+            return enriched_torrents, filter_stats
+        finally:
+            scraper.close()
+            cleanup_request_caches()
     
     async def get_page(
         self,
@@ -110,35 +103,33 @@ class IndexerServiceAsync:
         """Obtém torrents de uma página (async)."""
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
         
-        max_links = None
-        if is_test:
-            max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
-        
-        # IMPORTANTE: Passa is_test=True para o scraper quando query está vazia
-        # Isso garante que _is_test=True no scraper, fazendo com que o cache HTML não seja usado
-        # Assim, consultas sem query sempre buscam HTML fresco e veem novos links atualizados
-        torrents = scraper.get_page(page, max_items=max_links, is_test=is_test)
-        
-        # Limita ANTES do enriquecimento para economizar processamento de metadata/trackers
-        if max_results and max_results > 0:
-            torrents = torrents[:max_results]
-        
-        # Enriquece torrents (async)
-        # Retorna estatísticas junto para evitar race condition
-        enriched_torrents, filter_stats = await self._enrich_torrents_async(
-            torrents,
-            scraper_type,
-            None,
-            is_test=is_test
-        )
-        
-        self.processor.sanitize_torrents(enriched_torrents)
-        self.processor.remove_internal_fields(enriched_torrents)
-        
-        if not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
-            self.processor.sort_by_date(enriched_torrents)
-        
-        return enriched_torrents, filter_stats
+        try:
+            max_links = None
+            if is_test:
+                max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
+            
+            torrents = scraper.get_page(page, max_items=max_links, is_test=is_test)
+            
+            if max_results and max_results > 0:
+                torrents = torrents[:max_results]
+            
+            enriched_torrents, filter_stats = await self._enrich_torrents_async(
+                torrents,
+                scraper_type,
+                None,
+                is_test=is_test
+            )
+            
+            self.processor.sanitize_torrents(enriched_torrents)
+            self.processor.remove_internal_fields(enriched_torrents)
+            
+            if not (is_test and Config.EMPTY_QUERY_MAX_LINKS > 0):
+                self.processor.sort_by_date(enriched_torrents)
+            
+            return enriched_torrents, filter_stats
+        finally:
+            scraper.close()
+            cleanup_request_caches()
     
     async def _enrich_torrents_async(
         self,

@@ -31,7 +31,7 @@ _METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
 _METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
 _hash_locks = {}
 _hash_locks_lock = threading.Lock()
-# Rastreia hashes que estão sendo buscados para evitar logs duplicados
+_MAX_HASH_LOCKS = 500
 _hash_fetching = set()
 _hash_fetching_lock = threading.Lock()
 
@@ -325,14 +325,27 @@ def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = No
 
 
 def _get_hash_lock(info_hash: str):
-    """
-    Obtém um lock específico para um hash, evitando requisições simultâneas.
-    """
     info_hash_lower = info_hash.lower()
     with _hash_locks_lock:
+        if len(_hash_locks) > _MAX_HASH_LOCKS:
+            keys_to_remove = list(_hash_locks.keys())[:len(_hash_locks) // 2]
+            for key in keys_to_remove:
+                del _hash_locks[key]
         if info_hash_lower not in _hash_locks:
             _hash_locks[info_hash_lower] = threading.Lock()
         return _hash_locks[info_hash_lower]
+
+
+def cleanup_metadata_state():
+    """Limpa estado global de metadata (locks e fetching set). Chamar entre requisições."""
+    with _hash_locks_lock:
+        _hash_locks.clear()
+    with _hash_fetching_lock:
+        _hash_fetching.clear()
+    with _cache_failure_log_lock:
+        _cache_failure_log_cache.clear()
+    with _circuit_breaker_log_lock:
+        _circuit_breaker_log_cache.clear()
 
 
 def _parse_bencode_size(data: bytes) -> Optional[int]:
