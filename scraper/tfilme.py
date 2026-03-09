@@ -27,7 +27,7 @@ _log_ctx = ScraperLogContext("TFilme", logger)
 # Scraper específico para Torrent dos Filmes
 class TfilmeScraper(BaseScraper):
     SCRAPER_TYPE = "tfilme"
-    DEFAULT_BASE_URL = "https://torrentdosfilmes-v2.xyz/"
+    DEFAULT_BASE_URL = "https://torrentdosfilmes.se/"
     DISPLAY_NAME = "TFilme"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
