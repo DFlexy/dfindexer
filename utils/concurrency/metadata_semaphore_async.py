@@ -15,14 +15,10 @@ _metadata_semaphore: asyncio.Semaphore = None
 _semaphore_lock = asyncio.Lock()
 _current_limit = None
 
-# Coleta de tempos para cálculo da média
+# Coleta de tempos para cálculo da média (limitada para evitar crescimento infinito)
 _times_list = []
 _times_lock = asyncio.Lock()
-
-# Coleta de estatísticas de cache para resumo
-_cache_hits = 0
-_cache_misses = 0
-_cache_stats_lock = asyncio.Lock()
+_MAX_TIMES_LIST = 500
 
 # Coleta de estatísticas de cache para resumo
 _cache_hits = 0
@@ -86,11 +82,17 @@ async def metadata_slot_async(timeout=None):
             semaphore.release()
             elapsed = time.time() - start_time
             
-            # Coleta o tempo para cálculo da média
             async with _times_lock:
+                global _cache_hits, _cache_misses
                 _times_list.append(elapsed)
                 
-                # Quando todos os slots estiverem livres, calcula e mostra a média
+                # Evita crescimento infinito da lista se batches nunca completam
+                if len(_times_list) > _MAX_TIMES_LIST:
+                    _times_list.clear()
+                    _cache_hits = 0
+                    _cache_misses = 0
+                    return
+                
                 available_after = semaphore._value
                 in_use_after = _current_limit - available_after
                 if in_use_after == 0 and len(_times_list) > 0:
@@ -99,13 +101,11 @@ async def metadata_slot_async(timeout=None):
                     max_time = max(_times_list)
                     total_requests = len(_times_list)
                     
-                    # Adiciona estatísticas de cache ao resumo
-                    async with _cache_stats_lock:
-                        cache_info = ""
-                        if _cache_hits > 0 or _cache_misses > 0:
-                            cache_info = f" | Cache: {_cache_hits} HIT / {_cache_misses} MISS"
-                        logger.debug(f"[METADATA ASYNC] Batch concluido: {total_requests} requisicoes | Tempo medio: {avg_time:.2f}s | Min: {min_time:.2f}s | Max: {max_time:.2f}s{cache_info}")
-                        _times_list.clear()  # Limpa para o próximo batch
-                        _cache_hits = 0
-                        _cache_misses = 0
+                    cache_info = ""
+                    if _cache_hits > 0 or _cache_misses > 0:
+                        cache_info = f" | Cache: {_cache_hits} HIT / {_cache_misses} MISS"
+                    logger.debug(f"[METADATA ASYNC] Batch concluido: {total_requests} requisicoes | Tempo medio: {avg_time:.2f}s | Min: {min_time:.2f}s | Max: {max_time:.2f}s{cache_info}")
+                    _times_list.clear()
+                    _cache_hits = 0
+                    _cache_misses = 0
 

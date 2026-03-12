@@ -17,11 +17,11 @@ class HTTPLocalCache:
     Usa TTL configurável e limpeza automática de entradas expiradas.
     """
     
-    def __init__(self, ttl: Optional[int] = None, max_size: int = 1000):
+    def __init__(self, ttl: Optional[int] = None, max_size: int = 200):
         """
         Args:
             ttl: Time to live em segundos (padrão: Config.LOCAL_CACHE_TTL ou 30s)
-            max_size: Tamanho máximo do cache (padrão: 1000 entradas)
+            max_size: Tamanho máximo do cache (padrão: 200 entradas)
         """
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
@@ -29,7 +29,7 @@ class HTTPLocalCache:
         self.max_size = max_size
         self.enabled = Config.LOCAL_CACHE_ENABLED if hasattr(Config, 'LOCAL_CACHE_ENABLED') else True
         self._last_cleanup = time.time()
-        self._cleanup_interval = 60  # Limpeza a cada 60 segundos
+        self._cleanup_interval = 30  # Limpeza a cada 30 segundos
     
     def get(self, key: str) -> Optional[bytes]:
         """
@@ -79,9 +79,11 @@ class HTTPLocalCache:
                 self._cleanup_expired(now)
                 self._last_cleanup = now
             
-            # Se atingiu o tamanho máximo, remove entradas mais antigas
+            # Se atingiu o tamanho máximo, remove expiradas primeiro, depois mais antigas
             if len(self._cache) >= self.max_size:
-                self._evict_oldest()
+                self._cleanup_expired(now)
+                if len(self._cache) >= self.max_size:
+                    self._evict_oldest()
             
             self._cache[key] = {
                 'value': value,
@@ -101,16 +103,17 @@ class HTTPLocalCache:
             del self._cache[key]
     
     def _evict_oldest(self) -> None:
-        """Remove entrada mais antiga (LRU) quando cache está cheio."""
+        """Remove entradas mais antigas (LRU) quando cache está cheio. Remove 25% de uma vez."""
         if not self._cache:
             return
         
-        # Remove entrada com menor last_access (LRU)
-        oldest_key = min(
+        to_remove = max(1, len(self._cache) // 4)
+        sorted_keys = sorted(
             self._cache.keys(),
             key=lambda k: self._cache[k]['last_access']
         )
-        del self._cache[oldest_key]
+        for key in sorted_keys[:to_remove]:
+            del self._cache[key]
     
     def clear(self) -> None:
         """Limpa todo o cache."""

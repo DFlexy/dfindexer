@@ -32,7 +32,7 @@ class TorrentEnricherAsync:
                 connector = proxy_connector
             else:
                 # Se não tem proxy connector, usa TCPConnector normal
-                connector = aiohttp.TCPConnector(limit=100, limit_per_host=20)
+                connector = aiohttp.TCPConnector(limit=30, limit_per_host=10)
             
             self._session = aiohttp.ClientSession(
                 timeout=timeout,
@@ -45,9 +45,11 @@ class TorrentEnricherAsync:
         return self._session
     
     async def close(self):
-        """Fecha a sessão aiohttp."""
-        if self._session and not self._session.closed:
-            await self._session.close()
+        """Fecha a sessão aiohttp e libera referências para o GC."""
+        if self._session is not None:
+            if not self._session.closed:
+                await self._session.close()
+            self._session = None
     
     async def enrich(
         self,
@@ -84,11 +86,10 @@ class TorrentEnricherAsync:
             'scraper_name': scraper_name
         }
         
-        # Mantém _last_filter_stats para compatibilidade, mas não depende dele
         self._last_filter_stats = filter_stats.copy()
         
         if not torrents:
-            return torrents
+            return torrents, filter_stats
         
         if not skip_metadata:
             await self._fetch_metadata_batch(torrents)

@@ -31,6 +31,7 @@ _METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
 _METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
 _hash_locks = {}
 _hash_locks_lock = asyncio.Lock()
+_MAX_HASH_LOCKS_ASYNC = 500
 
 # Circuit breaker log cache
 _circuit_breaker_log_cache = {}
@@ -39,6 +40,14 @@ _CIRCUIT_BREAKER_LOG_COOLDOWN = 30
 _cache_failure_log_cache = {}
 _cache_failure_log_lock = asyncio.Lock()
 _CACHE_FAILURE_LOG_COOLDOWN = 60
+
+
+def cleanup_metadata_async_state():
+    """Limpa estado global do módulo async de metadata. Chamar entre requisições."""
+    global _hash_locks, _circuit_breaker_log_cache, _cache_failure_log_cache
+    _hash_locks.clear()
+    _circuit_breaker_log_cache.clear()
+    _cache_failure_log_cache.clear()
 
 
 def _is_redis_connection_error(error: Exception) -> bool:
@@ -210,6 +219,10 @@ async def _get_hash_lock(info_hash: str):
     """Obtém um lock específico para um hash (async)."""
     info_hash_lower = info_hash.lower()
     async with _hash_locks_lock:
+        if len(_hash_locks) > _MAX_HASH_LOCKS_ASYNC:
+            keys_to_remove = list(_hash_locks.keys())[:len(_hash_locks) // 2]
+            for key in keys_to_remove:
+                del _hash_locks[key]
         if info_hash_lower not in _hash_locks:
             _hash_locks[info_hash_lower] = asyncio.Lock()
         return _hash_locks[info_hash_lower]

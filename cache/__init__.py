@@ -57,7 +57,7 @@ def cleanup_request_caches():
                 except Exception:
                     pass
 
-    # Limpa dicionários globais de locks que crescem
+    # Limpa dicionários globais de locks que crescem (módulos síncronos)
     try:
         from scraper.base import cleanup_url_state
         cleanup_url_state()
@@ -66,6 +66,20 @@ def cleanup_request_caches():
     try:
         from magnet.metadata import cleanup_metadata_state
         cleanup_metadata_state()
+    except Exception:
+        pass
+
+    # Limpa estado global do módulo async de metadata (_hash_locks, log caches)
+    try:
+        from magnet.metadata_async import cleanup_metadata_async_state
+        cleanup_metadata_async_state()
+    except Exception:
+        pass
+
+    # Limpa locks e caches globais do FlareSolverr que crescem entre requisições
+    try:
+        from utils.http.flaresolverr import cleanup_flaresolverr_state
+        cleanup_flaresolverr_state()
     except Exception:
         pass
 

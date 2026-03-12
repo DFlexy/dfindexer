@@ -3,6 +3,7 @@
 
 import logging
 import asyncio
+import threading
 from typing import List, Dict, Optional, Callable
 from app.config import Config
 from scraper import (
@@ -90,6 +91,7 @@ class IndexerServiceAsync:
             return enriched_torrents, filter_stats
         finally:
             scraper.close()
+            await self.enricher.close()
             cleanup_request_caches()
     
     async def get_page(
@@ -129,6 +131,7 @@ class IndexerServiceAsync:
             return enriched_torrents, filter_stats
         finally:
             scraper.close()
+            await self.enricher.close()
             cleanup_request_caches()
     
     async def _enrich_torrents_async(
@@ -203,20 +206,35 @@ class IndexerServiceAsync:
         await self.enricher.close()
 
 
-# Função helper para executar código async em contexto síncrono
+# Event loop persistente em thread dedicada para operações async.
+# Evita criar/destruir event loops a cada requisição (que causa vazamento
+# de sessões aiohttp e conexões TCP órfãs).
+_async_loop: Optional[asyncio.AbstractEventLoop] = None
+_async_loop_thread: Optional[threading.Thread] = None
+_async_loop_lock = threading.Lock()
+
+
+def _get_async_loop() -> asyncio.AbstractEventLoop:
+    """Obtém o event loop persistente, criando-o se necessário."""
+    global _async_loop, _async_loop_thread
+    if _async_loop is not None and not _async_loop.is_closed():
+        return _async_loop
+    with _async_loop_lock:
+        if _async_loop is not None and not _async_loop.is_closed():
+            return _async_loop
+        _async_loop = asyncio.new_event_loop()
+        _async_loop_thread = threading.Thread(
+            target=_async_loop.run_forever,
+            daemon=True,
+            name="async-loop"
+        )
+        _async_loop_thread.start()
+    return _async_loop
+
+
 def run_async(coro):
-    """Executa corrotina em loop de eventos existente ou cria novo."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Se já há um loop rodando, cria task
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-        else:
-            return loop.run_until_complete(coro)
-    except RuntimeError:
-        # Não há loop, cria novo
-        return asyncio.run(coro)
+    """Executa corrotina no event loop persistente (thread-safe)."""
+    loop = _get_async_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
 

@@ -67,11 +67,10 @@ class BaseScraper(ABC):
         self.base_url = resolved_url
         self.redis = get_redis_client()  # Pode ser None se Redis não disponível
         
-        # Configura session com connection pooling otimizado
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=Config.HTTP_POOL_CONNECTIONS if hasattr(Config, 'HTTP_POOL_CONNECTIONS') else 50,
-            pool_maxsize=Config.HTTP_POOL_MAXSIZE if hasattr(Config, 'HTTP_POOL_MAXSIZE') else 100,
+            pool_connections=10,
+            pool_maxsize=20,
             max_retries=3,
             pool_block=False
         )

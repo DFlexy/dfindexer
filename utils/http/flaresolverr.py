@@ -61,6 +61,17 @@ _last_log_cache = {}
 _last_log_lock = threading.Lock()
 
 
+def cleanup_flaresolverr_state():
+    """Limpa estado global do FlareSolverr que cresce entre requisições."""
+    global _session_creation_locks, _flaresolverr_request_locks, _last_log_cache
+    with _session_creation_locks_lock:
+        _session_creation_locks.clear()
+    with _flaresolverr_request_locks_lock:
+        _flaresolverr_request_locks.clear()
+    with _last_log_lock:
+        _last_log_cache.clear()
+
+
 class FlareSolverrClient:
     def __init__(self, address: str):
         self.address = address.rstrip('/')
