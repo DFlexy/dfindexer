@@ -177,8 +177,15 @@ class StarckScraper(BaseScraper):
         if words and ' '.join(words) != query:
             variations.append(' '.join(words))
         
-        # Primeira palavra (apenas se não for stop word e query tiver 2 palavras)
         query_words = query.split()
+
+        # Se a query termina com ano (19xx/20xx), tenta sem ele
+        if len(query_words) >= 2 and query_words[-1].isdigit() and len(query_words[-1]) == 4 and query_words[-1][:2] in ('19', '20'):
+            without_year = ' '.join(query_words[:-1])
+            if without_year not in variations:
+                variations.append(without_year)
+
+        # Primeira palavra apenas para queries de 2 palavras
         if len(query_words) > 1 and len(query_words) < 3:
             first_word = query_words[0].lower()
             if first_word not in STOP_WORDS:
