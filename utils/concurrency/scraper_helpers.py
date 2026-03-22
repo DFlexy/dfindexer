@@ -18,7 +18,7 @@ DEFAULT_MAX_ITEMS_FOR_TEST: int = 0
 
 # Configurações de paralelização
 DEFAULT_MAX_WORKERS = 16  # Máximo de workers simultâneos para processamento paralelo (aumentado de 8 para 16)
-DEFAULT_PAGE_TIMEOUT = 60  # Timeout em segundos por página (aumentado de 45 para 60)
+DEFAULT_PAGE_TIMEOUT = 30  # Timeout em segundos por página
 
 
 # Gera variações de uma query para busca, removendo stop words e usando primeira palavra

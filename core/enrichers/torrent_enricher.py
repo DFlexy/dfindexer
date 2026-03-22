@@ -63,7 +63,7 @@ class TorrentEnricher:
             
             if metadata_future:
                 try:
-                    metadata_future.result(timeout=120)
+                    metadata_future.result(timeout=45)
                 except Exception:
                     pass
                 finally:
@@ -72,7 +72,7 @@ class TorrentEnricher:
             
             if tracker_future:
                 try:
-                    tracker_future.result(timeout=180)
+                    tracker_future.result(timeout=60)
                 except Exception:
                     pass
         
@@ -235,7 +235,7 @@ class TorrentEnricher:
                 
                 for future in as_completed(future_to_torrent):
                     try:
-                        torrent, metadata = future.result(timeout=30)  # Aumentado de 10s para 30s
+                        torrent, metadata = future.result(timeout=10)
                         if metadata:
                             torrent['_metadata'] = metadata
                             torrent['_metadata_fetched'] = True

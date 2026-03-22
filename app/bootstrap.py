@@ -48,7 +48,9 @@ class Bootstrap:
         if Config.FLARESOLVERR_ADDRESS:
             try:
                 import requests
-                test_response = requests.get(f"{Config.FLARESOLVERR_ADDRESS.rstrip('/')}/v1", timeout=2)
+                from utils.http.proxy import get_proxy_dict, is_proxy_local
+                _proxy = get_proxy_dict() if not is_proxy_local() else None
+                test_response = requests.get(f"{Config.FLARESOLVERR_ADDRESS.rstrip('/')}/v1", timeout=2, proxies=_proxy)
                 if test_response.status_code in (200, 404, 405):
                     logger.info("[[ FlareSolverr Conectado ]]")
                 else:

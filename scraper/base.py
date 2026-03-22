@@ -16,7 +16,7 @@ from tracker import get_tracker_service  # type: ignore[import]
 from magnet.parser import MagnetParser
 from utils.text.utils import format_bytes
 from utils.http.flaresolverr import FlareSolverrClient
-from utils.http.proxy import get_proxy_dict
+from utils.http.proxy import get_proxy_dict, is_proxy_local
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +89,8 @@ class BaseScraper(ABC):
         self._skip_metadata = False
         self._is_test = False
         self._closed = False
+        # HTML bruto da última resposta usada em get_document (para regex quando o lxml corrompe atributos)
+        self._last_fetched_html: Optional[str] = None
         
         # Estatísticas de cache para debug
         self._cache_stats = {
@@ -109,10 +111,10 @@ class BaseScraper(ABC):
         if self.use_flaresolverr:
             try:
                 self.flaresolverr_client = FlareSolverrClient(Config.FLARESOLVERR_ADDRESS)
-                # Testa conexão básica (timeout curto para não travar inicialização)
                 try:
-                    test_response = requests.get(f"{Config.FLARESOLVERR_ADDRESS.rstrip('/')}/v1", timeout=2)
-                    if test_response.status_code not in (200, 404, 405):  # 404/405 são OK (API existe)
+                    _fs_proxy = get_proxy_dict() if not is_proxy_local() else None
+                    test_response = requests.get(f"{Config.FLARESOLVERR_ADDRESS.rstrip('/')}/v1", timeout=2, proxies=_fs_proxy)
+                    if test_response.status_code not in (200, 404, 405):
                         raise Exception(f"FlareSolverr retornou status {test_response.status_code}")
                 except requests.exceptions.ConnectionError:
                     raise Exception("Connection refused")
@@ -144,7 +146,18 @@ class BaseScraper(ABC):
     def __exit__(self, *args):
         self.close()
     
+    def _soup_from_html(self, html_content) -> Optional[BeautifulSoup]:
+        """Faz parse com lxml e armazena o HTML em texto para consumo por scrapers (ex.: Starck data-u)."""
+        if html_content is None:
+            return None
+        if isinstance(html_content, bytes):
+            self._last_fetched_html = html_content.decode('utf-8', errors='ignore')
+        else:
+            self._last_fetched_html = str(html_content)
+        return BeautifulSoup(html_content, 'lxml')
+    
     def get_document(self, url: str, referer: str = '') -> Optional[BeautifulSoup]:
+        self._last_fetched_html = None
         # Verifica cache local primeiro (mais rápido que Redis)
         from cache.http_cache import get_http_cache
         http_cache = get_http_cache()
@@ -153,7 +166,7 @@ class BaseScraper(ABC):
             cached_local = http_cache.get(url)
             if cached_local:
                 self._cache_stats['html']['hits'] += 1
-                return BeautifulSoup(cached_local, 'lxml')
+                return self._soup_from_html(cached_local)
         
         # Verifica Redis
         if self.redis and not self._is_test:
@@ -162,7 +175,7 @@ class BaseScraper(ABC):
                 cached = self.redis.get(cache_key)
                 if cached:
                     self._cache_stats['html']['hits'] += 1
-                    return BeautifulSoup(cached, 'lxml')
+                    return self._soup_from_html(cached)
             except (AttributeError, TypeError) as e:
                 # Redis client error ou cache inválido - continua para buscar do site
                 logger.debug(f"Redis cache error (long): {type(e).__name__}")
@@ -176,7 +189,7 @@ class BaseScraper(ABC):
                 cached = self.redis.get(short_cache_key)
                 if cached:
                     self._cache_stats['html']['hits'] += 1
-                    return BeautifulSoup(cached, 'lxml')
+                    return self._soup_from_html(cached)
             except (AttributeError, TypeError) as e:
                 # Redis client error ou cache inválido - continua para buscar do site
                 logger.debug(f"Redis cache error (short): {type(e).__name__}")
@@ -195,7 +208,7 @@ class BaseScraper(ABC):
                     cached = self.redis.get(cache_key)
                     if cached:
                         self._cache_stats['html']['hits'] += 1
-                        return BeautifulSoup(cached, 'lxml')
+                        return self._soup_from_html(cached)
                 except Exception:
                     pass
             
@@ -205,7 +218,7 @@ class BaseScraper(ABC):
                     cached = self.redis.get(short_cache_key)
                     if cached:
                         self._cache_stats['html']['hits'] += 1
-                        return BeautifulSoup(cached, 'lxml')
+                        return self._soup_from_html(cached)
                 except Exception:
                     pass
             
@@ -228,7 +241,7 @@ class BaseScraper(ABC):
                             cached = self.redis.get(cache_key)
                             if cached:
                                 self._cache_stats['html']['hits'] += 1
-                                return BeautifulSoup(cached, 'lxml')
+                                return self._soup_from_html(cached)
                         except Exception:
                             pass
                 # Se não encontrou após esperar, continua a busca (pode ter falhado ou demorado demais)
@@ -325,7 +338,7 @@ class BaseScraper(ABC):
                                 except:
                                     pass
                             
-                            return BeautifulSoup(html_content, 'lxml')
+                            return self._soup_from_html(html_content)
                     else:
                         # Log removido para reduzir verbosidade - retry será tentado automaticamente
                         from cache.redis_keys import flaresolverr_failure_key
@@ -413,7 +426,7 @@ class BaseScraper(ABC):
                                             except:
                                                 pass
                                         
-                                        return BeautifulSoup(html_content, 'lxml')
+                                        return self._soup_from_html(html_content)
                                 else:
                                     # Tenta Redis primeiro
                                     if self.redis and not self._is_test:
@@ -509,7 +522,7 @@ class BaseScraper(ABC):
                                     except:
                                         pass
                                 
-                                return BeautifulSoup(html_content, 'lxml')
+                                return self._soup_from_html(html_content)
                         else:
                             # Marca como falha novamente
                             if self.redis and not self._is_test:
@@ -566,7 +579,7 @@ class BaseScraper(ABC):
                 except:
                     pass
             
-            return BeautifulSoup(html_content, 'lxml')
+            return self._soup_from_html(html_content)
         
         except Exception as e:
             error_type = type(e).__name__

@@ -80,6 +80,7 @@ def get_proxy_dict() -> Optional[dict]:
 def get_aiohttp_proxy_connector():
     """
     Retorna connector de proxy para uso com aiohttp.
+    Usa aiohttp-socks para suporte a SOCKS5/SOCKS5H (aiohttp nativo só suporta HTTP proxy).
     
     Returns:
         ProxyConnector ou None se não configurado
@@ -89,15 +90,18 @@ def get_aiohttp_proxy_connector():
         return None
     
     try:
-        from aiohttp import ProxyConnector
-        # ProxyConnector.from_url() é a forma correta de criar um connector com proxy
-        # O ProxyConnector gerencia automaticamente as conexões através do proxy
+        from aiohttp_socks import ProxyConnector
         connector = ProxyConnector.from_url(proxy_url)
         return connector
     except ImportError:
-        return None
+        # aiohttp-socks não instalado; tenta fallback nativo (só funciona com HTTP proxy)
+        try:
+            from aiohttp import ProxyConnector as NativeProxyConnector
+            connector = NativeProxyConnector.from_url(proxy_url)
+            return connector
+        except Exception:
+            return None
     except Exception as e:
-        # Se houver erro ao criar o connector, retorna None
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"Erro ao criar ProxyConnector: {e}")

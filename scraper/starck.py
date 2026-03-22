@@ -17,14 +17,40 @@ from utils.text.utils import find_year_from_text, find_sizes_from_text
 from utils.text.title_builder import create_standardized_title, prepare_release_title
 from utils.parsing.audio_extraction import add_audio_tag_if_needed, detect_audio_from_html
 from utils.logging import format_error, format_link_preview
+from utils.parsing.link_resolver import decode_data_u
 
 logger = logging.getLogger(__name__)
+
+# data-u com & ou % no atributo quebra parsing XML do lxml; extrair do HTML bruto.
+_RE_STARCK_DATA_U_DQ = re.compile(r'data-u\s*=\s*"([^"]*)"', re.I)
+_RE_STARCK_DATA_U_SQ = re.compile(r"data-u\s*=\s*'([^']*)'", re.I)
+
+
+def _starck_raw_data_u_values(page_html: str) -> List[str]:
+    if not page_html:
+        return []
+    low = page_html.lower()
+    i = low.find('post-buttons')
+    if i < 0:
+        chunk = page_html
+    else:
+        j = low.find('post-content', i + 1)
+        chunk = page_html[i:j] if j > i else page_html[i : i + 900000]
+    out: List[str] = []
+    seen = set()
+    for rx in (_RE_STARCK_DATA_U_DQ, _RE_STARCK_DATA_U_SQ):
+        for m in rx.finditer(chunk):
+            v = m.group(1).strip()
+            if v and v not in seen:
+                seen.add(v)
+                out.append(v)
+    return out
 
 
 # Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v10.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v12.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -310,33 +336,41 @@ class StarckScraper(BaseScraper):
                     if resolved_magnet not in magnet_links:
                         magnet_links.append(resolved_magnet)
         
-        # Busca direta por elementos com data-u (pode estar em botões, divs, etc.)
-        if not magnet_links:
-            from utils.parsing.link_resolver import decode_data_u
-            
-            # Busca primeiro no post
-            data_u_elements = post.select('[data-u]')
-            
-            for elem in data_u_elements:
-                data_u_value = elem.get('data-u', '')
-                if data_u_value:
-                    decoded_magnet = decode_data_u(data_u_value)
-                    if decoded_magnet and decoded_magnet.startswith('magnet:'):
-                        if decoded_magnet not in magnet_links:
-                            magnet_links.append(decoded_magnet)
-            
-            # Se não encontrou no post, busca em todo o documento
-            if not magnet_links:
-                data_u_elements_fallback = doc.select('[data-u]')
-                
-                for elem in data_u_elements_fallback:
-                    data_u_value = elem.get('data-u', '')
-                    if data_u_value:
-                        decoded_magnet = decode_data_u(data_u_value)
-                        if decoded_magnet and decoded_magnet.startswith('magnet:'):
-                            if decoded_magnet not in magnet_links:
-                                magnet_links.append(decoded_magnet)
-        
+        # data-u: HTML bruto primeiro (lxml corrompe atributos com &/% inválidos em episódios 06–10).
+        # Fallback: BeautifulSoup no post e no documento.
+        seen_data_u = set()
+
+        def _append_decoded_magnets_from_data_u_values(values: List[str]) -> None:
+            for data_u_value in values:
+                v = html.unescape(data_u_value.strip())
+                if not v or v in seen_data_u:
+                    continue
+                seen_data_u.add(v)
+                decoded_magnet = decode_data_u(v)
+                if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
+                    magnet_links.append(decoded_magnet)
+
+        raw_html = getattr(self, '_last_fetched_html', None) or ''
+        _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(raw_html))
+
+        for elem in post.select('[data-u]'):
+            data_u_value = (elem.get('data-u') or '').strip()
+            if not data_u_value or data_u_value in seen_data_u:
+                continue
+            seen_data_u.add(data_u_value)
+            decoded_magnet = decode_data_u(data_u_value)
+            if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
+                magnet_links.append(decoded_magnet)
+
+        for elem in doc.select('[data-u]'):
+            data_u_value = (elem.get('data-u') or '').strip()
+            if not data_u_value or data_u_value in seen_data_u:
+                continue
+            seen_data_u.add(data_u_value)
+            decoded_magnet = decode_data_u(data_u_value)
+            if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
+                magnet_links.append(decoded_magnet)
+
         if not magnet_links:
             # Não loga se a página claramente não tem relação com a busca
             # (o filtro vai remover esses resultados mesmo)

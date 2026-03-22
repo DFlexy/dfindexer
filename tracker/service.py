@@ -135,8 +135,7 @@ class TrackerService:
             for info_hash, trackers in todo.items()
         }
 
-        # Timeout evita bloqueio indefinido se _scrape_info_hash travar (ex: trackers lentos, proxy TOR)
-        _PEER_BATCH_TIMEOUT = 180  # segundos para esperar próximo future completar
+        _PEER_BATCH_TIMEOUT = 60
         _seen = set()
         try:
             for future in as_completed(futures, timeout=_PEER_BATCH_TIMEOUT):

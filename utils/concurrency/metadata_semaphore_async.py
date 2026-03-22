@@ -3,7 +3,6 @@
 
 import asyncio
 import logging
-import time
 from contextlib import asynccontextmanager
 from app.config import Config
 
@@ -15,24 +14,14 @@ _metadata_semaphore: asyncio.Semaphore = None
 _semaphore_lock = asyncio.Lock()
 _current_limit = None
 
-# Coleta de tempos para cálculo da média (limitada para evitar crescimento infinito)
-_times_list = []
-_times_lock = asyncio.Lock()
-_MAX_TIMES_LIST = 500
-
-# Coleta de estatísticas de cache para resumo
-_cache_hits = 0
-_cache_misses = 0
-_cache_stats_lock = asyncio.Lock()
-
 
 # Retorna o semáforo async global para requisições de metadata
 # Recria o semáforo se o limite mudou
 async def get_metadata_semaphore_async() -> asyncio.Semaphore:
     global _metadata_semaphore, _current_limit
-    
+
     max_concurrent = Config.METADATA_MAX_CONCURRENT if hasattr(Config, 'METADATA_MAX_CONCURRENT') else 64
-    
+
     # Se o semáforo não existe ou o limite mudou, recria
     if _metadata_semaphore is None or _current_limit != max_concurrent:
         async with _semaphore_lock:
@@ -44,7 +33,7 @@ async def get_metadata_semaphore_async() -> asyncio.Semaphore:
                     logger.info(f"[Semaforo] metadata async criado com limite de {max_concurrent} requisicoes simultaneas")
                 _metadata_semaphore = asyncio.Semaphore(max_concurrent)
                 _current_limit = max_concurrent
-    
+
     return _metadata_semaphore
 
 
@@ -53,10 +42,10 @@ async def get_metadata_semaphore_async() -> asyncio.Semaphore:
 async def metadata_slot_async(timeout=None):
     """
     Context manager async para adquirir e liberar slot de metadata automaticamente.
-    
+
     Args:
         timeout: Timeout em segundos para adquirir o slot (None = sem timeout)
-    
+
     Usage:
         async with metadata_slot_async():
             # código que usa metadata
@@ -64,8 +53,7 @@ async def metadata_slot_async(timeout=None):
     """
     semaphore = await get_metadata_semaphore_async()
     acquired = False
-    start_time = time.time()
-    
+
     try:
         if timeout is not None:
             try:
@@ -80,32 +68,3 @@ async def metadata_slot_async(timeout=None):
     finally:
         if acquired:
             semaphore.release()
-            elapsed = time.time() - start_time
-            
-            async with _times_lock:
-                global _cache_hits, _cache_misses
-                _times_list.append(elapsed)
-                
-                # Evita crescimento infinito da lista se batches nunca completam
-                if len(_times_list) > _MAX_TIMES_LIST:
-                    _times_list.clear()
-                    _cache_hits = 0
-                    _cache_misses = 0
-                    return
-                
-                available_after = semaphore._value
-                in_use_after = _current_limit - available_after
-                if in_use_after == 0 and len(_times_list) > 0:
-                    avg_time = sum(_times_list) / len(_times_list)
-                    min_time = min(_times_list)
-                    max_time = max(_times_list)
-                    total_requests = len(_times_list)
-                    
-                    cache_info = ""
-                    if _cache_hits > 0 or _cache_misses > 0:
-                        cache_info = f" | Cache: {_cache_hits} HIT / {_cache_misses} MISS"
-                    logger.debug(f"[METADATA ASYNC] Batch concluido: {total_requests} requisicoes | Tempo medio: {avg_time:.2f}s | Min: {min_time:.2f}s | Max: {max_time:.2f}s{cache_info}")
-                    _times_list.clear()
-                    _cache_hits = 0
-                    _cache_misses = 0
-

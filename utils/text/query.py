@@ -56,10 +56,8 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
     combined_title = combined_title.replace('.', ' ')
     combined_title = re.sub(r'\s+', ' ', combined_title)
     
-    # Remove acentos para comparação (apenas para texto ASCII)
-    # Para Unicode (coreano, chinês, etc.), mantém como está
-    if combined_title.isascii():
-        combined_title = remove_accents(combined_title)
+    # Remove acentos para comparação normalizada (á→a, ã→a, ç→c, etc.)
+    combined_title = remove_accents(combined_title)
     
     # VALIDAÇÃO DE EPISÓDIO: Se a query contém SxxExx, valida se o título contém o mesmo episódio
     # Extrai padrão SxxExx da query original (antes de normalizar)
@@ -126,12 +124,7 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
                 else:
                     return False
     
-    # Normaliza título uma vez antes do loop (não muda durante o loop)
-    # Para títulos ASCII, remove acentos; para Unicode, usa como está
-    if combined_title.isascii():
-        title_normalized = remove_accents(combined_title)
-    else:
-        title_normalized = combined_title
+    title_normalized = combined_title
     
     # Conta quantas palavras da query estão presentes no título
     matches = 0
@@ -139,11 +132,7 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
     first_title_word_matched = False
     
     for query_word in clean_query_words:
-        # Para palavras ASCII, remove acentos; para Unicode (coreano, etc.), usa como está
-        if query_word.isascii():
-            query_word_normalized = remove_accents(query_word)
-        else:
-            query_word_normalized = query_word
+        query_word_normalized = remove_accents(query_word)
         
         # Verifica match como palavra completa usando regex com word boundaries
         # Usa flag UNICODE para suportar caracteres não-ASCII

@@ -396,13 +396,28 @@ def decode_data_u(data_u_value: str) -> Optional[str]:
     if not data_u_value:
         return None
     try:
-        unshuffled = _unshuffle_string(data_u_value)
-        if not unshuffled:
-            return None
-        if "magnet:" in unshuffled:
-            return unshuffled
-        if unshuffled.lower().startswith(("http://", "https://")):
-            return unshuffled
+        variants = [data_u_value]
+        uq = unquote(data_u_value)
+        if uq not in variants:
+            variants.append(uq)
+        he = html.unescape(data_u_value)
+        if he not in variants:
+            variants.append(he)
+        uq_he = unquote(he)
+        if uq_he not in variants:
+            variants.append(uq_he)
+
+        for raw in variants:
+            unshuffled = _unshuffle_string(raw)
+            if not unshuffled:
+                continue
+            if "magnet:" in unshuffled:
+                m = _RE_MAGNET_FULL.search(unshuffled)
+                if m:
+                    return m.group(0)
+                return unshuffled
+            if unshuffled.lower().startswith(("http://", "https://")):
+                return unshuffled
         return None
     except Exception:
         return None

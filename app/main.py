@@ -25,5 +25,12 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    serve(app, host='0.0.0.0', port=Config.PORT, threads=12)
+    serve(
+        app,
+        host='0.0.0.0',
+        port=Config.PORT,
+        threads=12,
+        channel_timeout=300,
+        recv_bytes=65536,
+    )
 

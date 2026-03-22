@@ -367,17 +367,10 @@ async def fetch_metadata_from_itorrents_async(
     # Verifica cache primeiro
     try:
         from cache.metadata_cache import MetadataCache
-        from utils.concurrency.metadata_semaphore_async import _cache_hits, _cache_misses, _cache_stats_lock
         metadata_cache = MetadataCache()
         data = metadata_cache.get(info_hash_lower)
         if data:
-            # Incrementa contador de HIT para resumo no batch
-            async with _cache_stats_lock:
-                _cache_hits += 1
             return data
-        # Incrementa contador de MISS para resumo no batch
-        async with _cache_stats_lock:
-            _cache_misses += 1
     except Exception:
         pass
     

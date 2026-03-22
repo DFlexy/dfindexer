@@ -59,7 +59,7 @@ class Config:
     SCRAPER_MAX_WORKERS: int = 16  # Workers para processamento paralelo de links
     
     # Timeouts (valores fixos - não configuráveis via ENV)
-    HTTP_REQUEST_TIMEOUT: int = 45  # Timeout padrão em segundos para requisições HTTP de páginas
+    HTTP_REQUEST_TIMEOUT: int = 20  # Timeout padrão em segundos para requisições HTTP de páginas
     
     # Connection Pool (valores fixos - não configuráveis via ENV)
     HTTP_POOL_CONNECTIONS: int = 50  # Número de connection pools
