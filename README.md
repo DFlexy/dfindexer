@@ -46,7 +46,6 @@ O sistema adiciona automaticamente tags de idioma aos títulos quando detecta in
 
 ### 🌐 Sites Suportados
 - ✅ **$†@Я©Ҝ**
-- ✅ **Я€Ð€**
 - ✅ **†₣!£₥€**
 - ✅ **₱ØЯ†@£**
 - ✅ **Ẍ₣!£₥€$**
