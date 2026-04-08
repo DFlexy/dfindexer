@@ -90,3 +90,8 @@ class Config:
     PROXY_USER: Optional[str] = os.getenv('PROXY_USER', None)
     PROXY_PASS: Optional[str] = os.getenv('PROXY_PASS', None)
     
+    # Async bridge (run_async / gather de scrapers)
+    RUN_ASYNC_TIMEOUT: float = float(os.getenv('RUN_ASYNC_TIMEOUT', '600'))  # segundos; alinhar ao pior caso de busca
+    ALL_SCRAPERS_MAX_CONCURRENT: int = max(1, int(os.getenv('ALL_SCRAPERS_MAX_CONCURRENT', '4')))
+    INDEXED_COUNT_CACHE_TTL: float = float(os.getenv('INDEXED_COUNT_CACHE_TTL', '60'))  # cache do SCAN em GET /
+    

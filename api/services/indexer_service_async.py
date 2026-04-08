@@ -4,7 +4,8 @@
 import logging
 import asyncio
 import threading
-from typing import List, Dict, Optional, Callable
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from typing import List, Dict, Optional, Callable, Tuple
 from app.config import Config
 from scraper import (
     create_scraper,
@@ -61,7 +62,9 @@ class IndexerServiceAsync:
             if query:
                 filter_func = QueryFilter.create_filter(query)
             
-            torrents = scraper.search(query, filter_func=None)
+            torrents = await asyncio.to_thread(
+                scraper.search, query, filter_func=filter_func, skip_trackers=True
+            )
             
             if max_results and max_results > 0:
                 torrents = torrents[:max_results]
@@ -91,7 +94,6 @@ class IndexerServiceAsync:
             return enriched_torrents, filter_stats
         finally:
             scraper.close()
-            await self.enricher.close()
             cleanup_request_caches()
     
     async def get_page(
@@ -110,7 +112,9 @@ class IndexerServiceAsync:
             if is_test:
                 max_links = Config.EMPTY_QUERY_MAX_LINKS if Config.EMPTY_QUERY_MAX_LINKS > 0 else None
             
-            torrents = scraper.get_page(page, max_items=max_links, is_test=is_test)
+            torrents = await asyncio.to_thread(
+                scraper.get_page, page, max_items=max_links, is_test=is_test
+            )
             
             if max_results and max_results > 0:
                 torrents = torrents[:max_results]
@@ -131,7 +135,6 @@ class IndexerServiceAsync:
             return enriched_torrents, filter_stats
         finally:
             scraper.close()
-            await self.enricher.close()
             cleanup_request_caches()
     
     async def _enrich_torrents_async(
@@ -236,5 +239,70 @@ def run_async(coro):
     """Executa corrotina no event loop persistente (thread-safe)."""
     loop = _get_async_loop()
     future = asyncio.run_coroutine_threadsafe(coro, loop)
-    return future.result()
+    timeout = getattr(Config, 'RUN_ASYNC_TIMEOUT', None)
+    try:
+        if timeout is not None and timeout > 0:
+            return future.result(timeout=timeout)
+        return future.result()
+    except FuturesTimeoutError:
+        logger.error(
+            'Timeout ao aguardar operação async (RUN_ASYNC_TIMEOUT=%ss)',
+            timeout,
+        )
+        raise
+
+
+async def fetch_all_scrapers_index(
+    scraper_types: List[str],
+    query: str,
+    page: str,
+    use_flaresolverr: bool,
+    filter_results: bool,
+    max_results: Optional[int],
+    page_mode: bool,
+    is_prowlarr_test: bool,
+) -> Tuple[List[Dict], List[Optional[Dict]], List[Tuple[str, List[Dict], Optional[Dict]]]]:
+    """
+    Busca em todos os scrapers em paralelo (com limite de concorrência).
+    Cada tarefa usa IndexerServiceAsync próprio para não compartilhar enricher entre corrotinas.
+    Retorna (lista agregada, stats agregados, linhas por scraper para logging).
+    """
+    types_info = available_scraper_types()
+    max_conc = getattr(Config, 'ALL_SCRAPERS_MAX_CONCURRENT', 4) or 1
+    sem = asyncio.Semaphore(max_conc)
+
+    async def run_one(st: str) -> Tuple[str, List[Dict], Optional[Dict]]:
+        label = types_info.get(st, {}).get('display_name', st)
+        logger.info('[TODOS] Buscando em [%s]...', label)
+        svc = IndexerServiceAsync()
+        try:
+            async with sem:
+                if page_mode:
+                    t, s = await svc.get_page(
+                        st, page, use_flaresolverr, is_prowlarr_test, max_results=max_results
+                    )
+                else:
+                    t, s = await svc.search(
+                        st, query, use_flaresolverr, filter_results, max_results=max_results
+                    )
+        except Exception as e:
+            logger.warning('[TODOS] Erro ao buscar em [%s]: %s', st, e)
+            return (st, [], None)
+        finally:
+            await svc.close()
+        return (st, t or [], s)
+
+    rows: List[Tuple[str, List[Dict], Optional[Dict]]] = list(
+        await asyncio.gather(*[run_one(st) for st in scraper_types])
+    )
+
+    all_torrents: List[Dict] = []
+    all_filter_stats: List[Optional[Dict]] = []
+    for _st, t, s in rows:
+        if t:
+            all_torrents.extend(t)
+        if s:
+            all_filter_stats.append(s)
+
+    return all_torrents, all_filter_stats, rows
 

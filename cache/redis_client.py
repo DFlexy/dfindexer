@@ -60,7 +60,7 @@ def get_redis_client() -> Optional['redis.Redis']:
     if _redis_client is None:
         try:
             init_redis()
-        except:
+        except Exception:
             pass
     return _redis_client
 

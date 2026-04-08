@@ -2,12 +2,16 @@
 """https://github.com/DFlexy"""
 
 import logging
-import asyncio
+import time
 from datetime import datetime
 from flask import jsonify, request
 from app.config import Config
 from api.services.indexer_service import IndexerService, SCRAPER_NUMBER_MAP
-from api.services.indexer_service_async import IndexerServiceAsync, run_async
+from api.services.indexer_service_async import (
+    IndexerServiceAsync,
+    run_async,
+    fetch_all_scrapers_index,
+)
 from scraper import available_scraper_types
 
 logger = logging.getLogger(__name__)
@@ -18,12 +22,19 @@ _indexer_service_async = IndexerServiceAsync()
 # Flag para habilitar async (pode ser controlado por variável de ambiente)
 USE_ASYNC = True  # Habilita async por padrão
 
+_indexed_count_cache = {'value': 0, 'ts': 0.0}
+
 
 def _get_indexed_torrents_count() -> int:
     """
     Obtém a contagem total de torrents indexados no Redis.
     Conta as chaves cross:torrent:* que representam torrents únicos.
     """
+    ttl = float(getattr(Config, 'INDEXED_COUNT_CACHE_TTL', 60.0) or 0.0)
+    now = time.time()
+    if ttl > 0 and (now - _indexed_count_cache['ts']) < ttl:
+        return int(_indexed_count_cache['value'])
+
     try:
         from cache.redis_client import get_redis_client
         
@@ -43,6 +54,8 @@ def _get_indexed_torrents_count() -> int:
             if cursor == 0:
                 break
         
+        _indexed_count_cache['value'] = count
+        _indexed_count_cache['ts'] = now
         return count
     except Exception as e:
         logger.debug(f"Erro ao contar torrents indexados: {type(e).__name__}")
@@ -201,56 +214,78 @@ def indexer_handler(site_name: str = None):
             all_torrents = []
             all_filter_stats = []
             
-            # Busca em cada scraper disponível
-            for scraper_type in available_types:
-                try:
-                    scraper_label = types_info[scraper_type].get('display_name', scraper_type)
-                    logger.info(f"{log_prefix} Buscando em [{scraper_label}]...")
-                    
-                    if USE_ASYNC:
+            if USE_ASYNC:
+                all_torrents, all_filter_stats, rows = run_async(
+                    fetch_all_scrapers_index(
+                        available_types,
+                        query,
+                        page,
+                        use_flaresolverr,
+                        filter_results,
+                        max_results,
+                        page_mode=not bool(query and query.strip()),
+                        is_prowlarr_test=is_prowlarr_test,
+                    )
+                )
+                for scraper_type, scraper_torrents, scraper_stats in rows:
+                    scraper_label = types_info.get(scraper_type, {}).get('display_name', scraper_type)
+                    if not scraper_torrents:
+                        continue
+                    if scraper_stats:
+                        unique_hashes_in_scraper = set()
+                        for torrent in scraper_torrents:
+                            info_hash = torrent.get('info_hash', '')
+                            if info_hash:
+                                unique_hashes_in_scraper.add(info_hash.lower())
+                        total_unique = len(unique_hashes_in_scraper)
+                        if total_unique > 0:
+                            query_display = query if query else ''
+                            filter_status = 'True' if query and query.strip() else 'False'
+                            total_stats = scraper_stats.get('total', total_unique) if scraper_stats else total_unique
+                            filtered_stats = scraper_stats.get('filtered', 0) if scraper_stats else 0
+                            approved_stats = scraper_stats.get('approved', total_unique) if scraper_stats else total_unique
+                            logger.info(
+                                f"{log_prefix} [{scraper_label}]  Query: '{query_display}' | Filter: {filter_status} | "
+                                f"Total: {total_stats} | Rejeitados: {filtered_stats} | Aprovados: {approved_stats}"
+                            )
+                    logger.info(f"{log_prefix} [{scraper_label}] Encontrados: {len(scraper_torrents)} resultados")
+            else:
+                for scraper_type in available_types:
+                    try:
+                        scraper_label = types_info[scraper_type].get('display_name', scraper_type)
+                        logger.info(f"{log_prefix} Buscando em [{scraper_label}]...")
                         if query:
-                            scraper_torrents, scraper_stats = run_async(
-                                _indexer_service_async.search(scraper_type, query, use_flaresolverr, filter_results, max_results=max_results)
+                            scraper_torrents, scraper_stats = _indexer_service.search(
+                                scraper_type, query, use_flaresolverr, filter_results, max_results=max_results
                             )
                         else:
-                            scraper_torrents, scraper_stats = run_async(
-                                _indexer_service_async.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
+                            scraper_torrents, scraper_stats = _indexer_service.get_page(
+                                scraper_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results
                             )
-                    else:
-                        if query:
-                            scraper_torrents, scraper_stats = _indexer_service.search(scraper_type, query, use_flaresolverr, filter_results, max_results=max_results)
-                        else:
-                            scraper_torrents, scraper_stats = _indexer_service.get_page(scraper_type, page, use_flaresolverr, is_prowlarr_test, max_results=max_results)
-                    
-                    if scraper_torrents:
-                        all_torrents.extend(scraper_torrents)
-                        if scraper_stats:
-                            all_filter_stats.append(scraper_stats)
-                            
-                            # Log individual por scraper apenas quando há resultados
-                            # Conta hashes únicos neste scraper (ignora duplicados do mesmo scraper)
-                            unique_hashes_in_scraper = set()
-                            for torrent in scraper_torrents:
-                                info_hash = torrent.get('info_hash', '')
-                                if info_hash:
-                                    unique_hashes_in_scraper.add(info_hash.lower())
-                            
-                            total_unique = len(unique_hashes_in_scraper)
-                            
-                            # Log individual por scraper - mostra apenas únicos (sem duplicados internos)
-                            # Formato: Query: '...' | Filter: True/False | Total: X | Rejeitados: Y | Aprovados: Z
-                            if total_unique > 0:
-                                query_display = query if query else ''
-                                filter_status = 'True' if query and query.strip() else 'False'
-                                total_stats = scraper_stats.get('total', total_unique) if scraper_stats else total_unique
-                                filtered_stats = scraper_stats.get('filtered', 0) if scraper_stats else 0
-                                approved_stats = scraper_stats.get('approved', total_unique) if scraper_stats else total_unique
-                                logger.info(f"{log_prefix} [{scraper_label}]  Query: '{query_display}' | Filter: {filter_status} | Total: {total_stats} | Rejeitados: {filtered_stats} | Aprovados: {approved_stats}")
                         if scraper_torrents:
+                            all_torrents.extend(scraper_torrents)
+                            if scraper_stats:
+                                all_filter_stats.append(scraper_stats)
+                                unique_hashes_in_scraper = set()
+                                for torrent in scraper_torrents:
+                                    info_hash = torrent.get('info_hash', '')
+                                    if info_hash:
+                                        unique_hashes_in_scraper.add(info_hash.lower())
+                                total_unique = len(unique_hashes_in_scraper)
+                                if total_unique > 0:
+                                    query_display = query if query else ''
+                                    filter_status = 'True' if query and query.strip() else 'False'
+                                    total_stats = scraper_stats.get('total', total_unique) if scraper_stats else total_unique
+                                    filtered_stats = scraper_stats.get('filtered', 0) if scraper_stats else 0
+                                    approved_stats = scraper_stats.get('approved', total_unique) if scraper_stats else total_unique
+                                    logger.info(
+                                        f"{log_prefix} [{scraper_label}]  Query: '{query_display}' | Filter: {filter_status} | "
+                                        f"Total: {total_stats} | Rejeitados: {filtered_stats} | Aprovados: {approved_stats}"
+                                    )
                             logger.info(f"{log_prefix} [{scraper_label}] Encontrados: {len(scraper_torrents)} resultados")
-                except Exception as e:
-                    logger.warning(f"{log_prefix} Erro ao buscar em [{scraper_type}]: {e}")
-                    continue
+                    except Exception as e:
+                        logger.warning(f"{log_prefix} Erro ao buscar em [{scraper_type}]: {e}")
+                        continue
             
             # Não remove duplicados - mantém todos os magnets encontrados
             # Ordena por data (mais recente primeiro)

@@ -276,7 +276,7 @@ class TorrentEnricherAsync:
                     cross_size = cross_data.get('size')
                     if cross_size and cross_size.strip() and cross_size != 'N/A':
                         torrent['size'] = cross_size.strip()
-                continue
+                        continue
             
             magnet_data = None
             try:

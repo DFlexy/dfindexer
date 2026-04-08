@@ -597,13 +597,14 @@ class BaseScraper(ABC):
             return None
     
     @abstractmethod
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
         """
         Busca torrents por query
         
         Args:
             query: Query de busca
             filter_func: Função opcional para filtrar torrents antes do enriquecimento
+            skip_trackers: Se True, não busca seeds/leechers via trackers (útil quando o enriquecimento assíncrono cuida disso depois)
         """
         pass
     
@@ -684,7 +685,6 @@ class BaseScraper(ABC):
             return enriched
         finally:
             self._skip_metadata = False
-            self._skip_metadata = False
     
     def _search_variations(self, query: str) -> List[str]:
         """
@@ -753,7 +753,7 @@ class BaseScraper(ABC):
         """
         return []
     
-    def _default_search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+    def _default_search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
         links = self._search_variations(query)
@@ -772,7 +772,7 @@ class BaseScraper(ABC):
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
         
-        return self.enrich_torrents(all_torrents, filter_func=filter_func)
+        return self.enrich_torrents(all_torrents, filter_func=filter_func, skip_trackers=skip_trackers)
     
     @abstractmethod
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
@@ -995,7 +995,7 @@ class BaseScraper(ABC):
                     cross_size = cross_data.get('size')
                     if cross_size and cross_size.strip() and cross_size != 'N/A':
                         torrent['size'] = cross_size.strip()
-                continue
+                        continue
             
             magnet_data = None
             try:
@@ -1066,9 +1066,6 @@ class BaseScraper(ABC):
             if not torrent.get('size') and html_size:
                 torrent['size'] = html_size
                 continue
-            
-            if not torrent.get('size') and html_size:
-                torrent['size'] = html_size
 
     def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         # Aplica fallback para obter data: 1) Metadata API, 2) Campo "Lançamento", 3) Data atual

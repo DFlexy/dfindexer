@@ -27,7 +27,7 @@ _log_ctx = ScraperLogContext("Portal", logger)
 # Scraper específico para Portal Filmes
 class PortalScraper(BaseScraper):
     SCRAPER_TYPE = "portal"
-    DEFAULT_BASE_URL = "https://idopetorrent.com/"
+    DEFAULT_BASE_URL = "https://nerdfilmes.net/"
     DISPLAY_NAME = "Portal"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -36,8 +36,8 @@ class PortalScraper(BaseScraper):
         self.page_pattern = "page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
-        return self._default_search(query, filter_func)
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
+        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
     
     # Extrai links da página inicial (lógica especial para separar filmes e séries)
     # Extrai links da página inicial — somente seção "Últimos Adicionados"

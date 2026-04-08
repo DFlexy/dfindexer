@@ -25,12 +25,11 @@ settings:
     default: "1"
     options:
       "1": Starck
-      "2": Rede
-      "3": XFilmes
-      "4": Tfilme
-      "6": Comando
-      "7": Bludv
-      "8": Portal
+      "2": XFilmes
+      "3": Tfilme
+      "4": Comando
+      "5": Bludv
+      "6": Portal
   
   - name: use_flaresolverr
     type: select

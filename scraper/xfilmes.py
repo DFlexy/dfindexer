@@ -102,7 +102,7 @@ class XFilmesScraper(BaseScraper):
         return list(set(links))  # Remove duplicados
     
     # Busca torrents
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
         # Normaliza query para FlareSolverr
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
@@ -117,7 +117,7 @@ class XFilmesScraper(BaseScraper):
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
         
-        return self.enrich_torrents(all_torrents, filter_func=filter_func)
+        return self.enrich_torrents(all_torrents, filter_func=filter_func, skip_trackers=skip_trackers)
     
     # Extrai links da página inicial - busca apenas "Últimos Filmes e Séries"
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:

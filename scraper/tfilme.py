@@ -36,8 +36,8 @@ class TfilmeScraper(BaseScraper):
         self.page_pattern = "category/dublado/page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
-        return self._default_search(query, filter_func)
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
+        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
     
     # Extrai links da página inicial (lógica especial para separar filmes e séries)
     def _extract_links_from_page(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:

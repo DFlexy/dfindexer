@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Scraper específico para Bludv Filmes
 class BludvScraper(BaseScraper):
     SCRAPER_TYPE = "bludv"
-    DEFAULT_BASE_URL = "https://bludv1.xyz/"
+    DEFAULT_BASE_URL = "https://bludv1.com/"
     DISPLAY_NAME = "Bludv"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -32,8 +32,8 @@ class BludvScraper(BaseScraper):
         self.page_pattern = "page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
-        return self._default_search(query, filter_func)
+    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
+        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
     
     # Extrai links da página inicial
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
