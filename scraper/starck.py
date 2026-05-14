@@ -50,7 +50,7 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
 # Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v12.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v15.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
