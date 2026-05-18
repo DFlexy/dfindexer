@@ -1,7 +1,7 @@
 """Copyright (c) 2025 DFlexy"""
 """https://github.com/DFlexy"""
 
-from typing import Optional
+from typing import Optional, Dict
 
 
 # Busca magnet_processed no Redis por info_hash (chave legado release:title:{hash})
@@ -52,6 +52,29 @@ def save_release_title_to_redis(info_hash: str, release_title: str) -> None:
         redis.setex(key, Config.RELEASE_TITLE_CACHE_TTL, release_title.strip())
     except Exception:
         pass
+
+
+_RELEASE_SOURCE_MARKERS = (
+    'web-dl', 'webrip', 'bluray', 'bdrip', 'brrip', 'dvdrip', 'hdrip', 'hdtv',
+)
+_RESOLUTION_CODEC_MARKERS = (
+    '1080p', '720p', '480p', '2160p', '4k', 'uhd', 'fhd', 'fullhd',
+    'x264', 'x265', 'hevc', 'h.264', 'h.265', 'h264', 'h265', 'avc',
+)
+
+
+def is_release_title_incomplete(title: str) -> bool:
+    """
+    DN/release com fonte (WEB-DL etc.) mas sem resolução nem codec — típico de magnet incompleto.
+    """
+    if not title or len(title.strip()) < 3:
+        return True
+    lower = title.lower()
+    has_source = any(m in lower for m in _RELEASE_SOURCE_MARKERS)
+    has_quality = any(m in lower for m in _RESOLUTION_CODEC_MARKERS)
+    if has_source and not has_quality:
+        return True
+    return False
 
 
 # Verifica se metadata['name'] é mais completo que cross_data['magnet_processed']
@@ -182,4 +205,76 @@ def get_metadata_name(info_hash: str, skip_metadata: bool = False) -> Optional[s
         pass
     
     return None
+
+
+def upgrade_torrent_title_from_metadata(torrent: Dict, metadata: Optional[dict]) -> bool:
+    """
+    Reconstrói title_processed quando metadata['name'] é mais completo que o título atual.
+    Retorna True se o título foi atualizado.
+    """
+    if not metadata:
+        return False
+    metadata_name = (metadata.get('name') or '').strip()
+    if not metadata_name or len(metadata_name) < 3:
+        return False
+    current = (
+        torrent.get('title_processed')
+        or torrent.get('magnet_original')
+        or torrent.get('magnet_processed')
+        or ''
+    )
+    if not _is_metadata_more_complete(metadata_name, current):
+        return False
+
+    from utils.text.title_builder import (
+        prepare_release_title,
+        create_standardized_title,
+    )
+    from utils.parsing.audio_extraction import add_audio_tag_if_needed
+
+    year = str(torrent.get('year') or '')
+    original = torrent.get('original_title') or ''
+    translated = torrent.get('title_translated_processed') or ''
+    magnet_original = torrent.get('magnet_original') or metadata_name
+    base_for_fallback = original or translated or ''
+
+    release = prepare_release_title(
+        metadata_name,
+        base_for_fallback,
+        year,
+        missing_dn=False,
+        info_hash=torrent.get('info_hash'),
+        skip_metadata=True,
+    )
+    standardized = create_standardized_title(
+        original or translated or base_for_fallback,
+        year,
+        release,
+        title_translated_html=translated or None,
+        magnet_original=magnet_original,
+    )
+    torrent['title_processed'] = add_audio_tag_if_needed(
+        standardized,
+        release,
+        info_hash=torrent.get('info_hash'),
+        skip_metadata=True,
+    )
+    torrent['magnet_processed'] = release
+    return True
+
+
+def torrent_needs_metadata_title_upgrade(torrent: Dict) -> bool:
+    """Indica se vale buscar metadata para completar o título antes do filtro/resposta."""
+    if torrent.get('_metadata_fetched'):
+        return False
+    info_hash = torrent.get('info_hash')
+    if not info_hash:
+        return False
+    title = (torrent.get('title_processed') or '').strip()
+    magnet = (torrent.get('magnet_original') or torrent.get('magnet_processed') or '').strip()
+    if not title or len(title) < 10:
+        return True
+    if is_release_title_incomplete(title) or is_release_title_incomplete(magnet):
+        return True
+    return False
 

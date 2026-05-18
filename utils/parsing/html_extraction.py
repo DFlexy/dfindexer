@@ -76,7 +76,10 @@ def extract_magnet_links(
     magnet_links = []
     
     # Seletores para buscar links protegidos também
-    protected_selectors = ['a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], a[href*="get.php"], a[href*="systemads"]']
+    protected_selectors = [
+        'a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], '
+        'a[href*="go.php"], a[href*="get.php"]'
+    ]
     
     # Tenta primeiro nos containers especificados
     for container_selector in container_selectors:

@@ -27,7 +27,7 @@ _log_ctx = ScraperLogContext("TFilme", logger)
 # Scraper específico para Torrent dos Filmes
 class TfilmeScraper(BaseScraper):
     SCRAPER_TYPE = "tfilme"
-    DEFAULT_BASE_URL = "https://torrentdosfilmes.se/"
+    DEFAULT_BASE_URL = "https://torrentdosfilmes-v2.xyz/"
     DISPLAY_NAME = "TFilme"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -36,8 +36,16 @@ class TfilmeScraper(BaseScraper):
         self.page_pattern = "category/dublado/page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
-        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
+    def search(
+        self,
+        query: str,
+        filter_func: Optional[Callable[[Dict], bool]] = None,
+        skip_trackers: bool = False,
+        skip_metadata: bool = False,
+    ) -> List[Dict]:
+        return self._default_search(
+            query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
+        )
     
     # Extrai links da página inicial (lógica especial para separar filmes e séries)
     def _extract_links_from_page(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:

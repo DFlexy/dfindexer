@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Cache em memória por requisição (apenas quando Redis não está disponível)
 _request_cache = threading.local()
+# HTML da última fetch por thread (evita race no processamento paralelo de páginas)
+_thread_fetched_html = threading.local()
 
 # Lock por URL para evitar requisições HTTP duplicadas simultâneas
 _url_locks = {}
@@ -151,13 +153,23 @@ class BaseScraper(ABC):
         if html_content is None:
             return None
         if isinstance(html_content, bytes):
-            self._last_fetched_html = html_content.decode('utf-8', errors='ignore')
+            html_str = html_content.decode('utf-8', errors='ignore')
         else:
-            self._last_fetched_html = str(html_content)
+            html_str = str(html_content)
+        _thread_fetched_html.html = html_str
+        self._last_fetched_html = html_str
         return BeautifulSoup(html_content, 'lxml')
+
+    def _get_fetched_html(self) -> str:
+        """HTML da última get_document nesta thread (seguro com process_links_parallel)."""
+        thread_html = getattr(_thread_fetched_html, 'html', None)
+        if thread_html:
+            return thread_html
+        return self._last_fetched_html or ''
     
     def get_document(self, url: str, referer: str = '') -> Optional[BeautifulSoup]:
         self._last_fetched_html = None
+        _thread_fetched_html.html = None
         # Verifica cache local primeiro (mais rápido que Redis)
         from cache.http_cache import get_http_cache
         http_cache = get_http_cache()
@@ -597,7 +609,13 @@ class BaseScraper(ABC):
             return None
     
     @abstractmethod
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
+    def search(
+        self,
+        query: str,
+        filter_func: Optional[Callable[[Dict], bool]] = None,
+        skip_trackers: bool = False,
+        skip_metadata: bool = False,
+    ) -> List[Dict]:
         """
         Busca torrents por query
         
@@ -605,6 +623,7 @@ class BaseScraper(ABC):
             query: Query de busca
             filter_func: Função opcional para filtrar torrents antes do enriquecimento
             skip_trackers: Se True, não busca seeds/leechers via trackers (útil quando o enriquecimento assíncrono cuida disso depois)
+            skip_metadata: Se True, não busca metadata no enrich do scraper (fluxo async enriquece depois)
         """
         pass
     
@@ -753,13 +772,28 @@ class BaseScraper(ABC):
         """
         return []
     
-    def _default_search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
+    def _default_search(
+        self,
+        query: str,
+        filter_func: Optional[Callable[[Dict], bool]] = None,
+        skip_trackers: bool = False,
+        skip_metadata: bool = False,
+    ) -> List[Dict]:
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
+        from utils.text.query import extract_query_year, filter_urls_by_query_year
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
         links = self._search_variations(query)
-        
+        links_before = len(links)
+        links = filter_urls_by_query_year(query, links)
+
         # Log das páginas encontradas
         scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
+        if links_before != len(links):
+            query_year = extract_query_year(query)
+            logger.debug(
+                f"[{scraper_name}] Filtro por ano ({query_year}): "
+                f"{links_before} → {len(links)} páginas"
+            )
         if links:
             # Mostra todas as páginas encontradas (uma por linha para melhor legibilidade)
             pages_list = '\n'.join([f"  - {link}" for link in links])
@@ -772,7 +806,12 @@ class BaseScraper(ABC):
             torrents = self._get_torrents_from_page(link)
             all_torrents.extend(torrents)
         
-        return self.enrich_torrents(all_torrents, filter_func=filter_func, skip_trackers=skip_trackers)
+        return self.enrich_torrents(
+            all_torrents,
+            filter_func=filter_func,
+            skip_trackers=skip_trackers,
+            skip_metadata=skip_metadata,
+        )
     
     @abstractmethod
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:

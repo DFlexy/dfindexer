@@ -62,8 +62,13 @@ class IndexerServiceAsync:
             if query:
                 filter_func = QueryFilter.create_filter(query)
             
+            # Filtro/metadata só no enricher async (evita QueryFilter 2x e logs DEBUG duplicados)
             torrents = await asyncio.to_thread(
-                scraper.search, query, filter_func=filter_func, skip_trackers=True
+                scraper.search,
+                query,
+                filter_func=None,
+                skip_trackers=True,
+                skip_metadata=True,
             )
             
             if max_results and max_results > 0:

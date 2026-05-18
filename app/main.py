@@ -11,10 +11,11 @@ if ROOT_DIR not in sys.path:
 
 from app.config import Config
 from app.bootstrap import Bootstrap
-from utils.logging.logger import setup_logging
+from utils.logging.logger import setup_logging, print_support_banner
 from waitress import serve
 
 setup_logging(Config.LOG_LEVEL, Config.LOG_FORMAT)
+print_support_banner(Config.LOG_FORMAT)
 
 logger = logging.getLogger(__name__)
 

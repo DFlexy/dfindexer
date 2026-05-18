@@ -142,36 +142,28 @@ class TorrentEnricherAsync:
                 except Exception:
                     pass
             
-            title = torrent.get('title_processed', '')
-            original_title = torrent.get('original_title', '')
-            title_translated = torrent.get('title_translated_processed', '')
-            
-            # OTIMIZAÇÃO: Só busca metadata se:
-            # 1. Título está vazio (< 10 caracteres)
-            # 2. E não temos original_title nem title_translated_processed (necessários para o filtro)
-            # 3. E não foi marcado como já buscado (_metadata_fetched)
-            # Isso evita buscas desnecessárias antes do filtro quando já temos dados suficientes
-            needs_metadata_for_filter = (
-                (not title or len(title.strip()) < 10) and
-                not original_title and
-                not title_translated and
-                not torrent.get('_metadata_fetched')
+            from utils.text.storage import (
+                torrent_needs_metadata_title_upgrade,
+                upgrade_torrent_title_from_metadata,
             )
-            
-            if needs_metadata_for_filter and info_hash:
+
+            if torrent_needs_metadata_title_upgrade(torrent) and info_hash:
                 try:
                     scraper_name = getattr(self, '_current_scraper_name', None)
-                    # Tenta obter título de múltiplas fontes para melhorar o log
-                    title_for_log = (torrent.get('title_processed') or 
-                                    torrent.get('original_title') or 
-                                    torrent.get('title_translated_processed') or
-                                    torrent.get('magnet_processed') or
-                                    None)
-                    metadata = await fetch_metadata_from_itorrents_async(session, info_hash, scraper_name=scraper_name, title=title_for_log)
+                    title_for_log = (
+                        torrent.get('title_processed')
+                        or torrent.get('original_title')
+                        or torrent.get('title_translated_processed')
+                        or torrent.get('magnet_processed')
+                        or None
+                    )
+                    metadata = await fetch_metadata_from_itorrents_async(
+                        session, info_hash, scraper_name=scraper_name, title=title_for_log
+                    )
                     if metadata and metadata.get('name'):
-                        name = metadata.get('name', '').strip()
-                        if name and len(name) >= 3:
-                            torrent['title_processed'] = name
+                        torrent['_metadata'] = metadata
+                        torrent['_metadata_fetched'] = True
+                        upgrade_torrent_title_from_metadata(torrent, metadata)
                 except Exception:
                     pass
     
@@ -253,7 +245,8 @@ class TorrentEnricherAsync:
                 if metadata:
                     torrent['_metadata'] = metadata
                     torrent['_metadata_fetched'] = True
-                    # Salva metadata['name'] no cross_data se disponível
+                    from utils.text.storage import upgrade_torrent_title_from_metadata
+                    upgrade_torrent_title_from_metadata(torrent, metadata)
                     await self._save_metadata_name_to_cross_data(torrent, metadata)
     
     def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:

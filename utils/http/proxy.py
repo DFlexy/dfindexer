@@ -77,6 +77,16 @@ def get_proxy_dict() -> Optional[dict]:
     }
 
 
+def _aiohttp_proxy_url_and_kwargs(proxy_url: str) -> tuple[str, dict]:
+    """
+    Normaliza URL para aiohttp-socks/python-socks (não aceitam esquema socks5h://).
+    socks5h → socks5 com rdns=True (DNS resolvido no proxy).
+    """
+    if proxy_url.startswith('socks5h://'):
+        return 'socks5://' + proxy_url[len('socks5h://'):], {'rdns': True}
+    return proxy_url, {}
+
+
 def get_aiohttp_proxy_connector():
     """
     Retorna connector de proxy para uso com aiohttp.
@@ -88,10 +98,12 @@ def get_aiohttp_proxy_connector():
     proxy_url = get_proxy_url()
     if not proxy_url:
         return None
-    
+
+    aiohttp_url, connector_kwargs = _aiohttp_proxy_url_and_kwargs(proxy_url)
+
     try:
         from aiohttp_socks import ProxyConnector
-        connector = ProxyConnector.from_url(proxy_url)
+        connector = ProxyConnector.from_url(aiohttp_url, **connector_kwargs)
         return connector
     except ImportError:
         # aiohttp-socks não instalado; tenta fallback nativo (só funciona com HTTP proxy)

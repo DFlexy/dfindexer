@@ -1,2 +1,8 @@
+# Scripts locais (não versionar)
 script_*
-Logica_Projeto.xlsx
+
+# Python — bytecode e cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc

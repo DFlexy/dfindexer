@@ -26,6 +26,30 @@ def _get_log_level_from_numeric(level: int) -> int:
     return level_map.get(level, logging.INFO)
 
 
+def print_support_banner(log_format: str = 'console') -> None:
+    """Exibe mensagem de apoio ao projeto no console (uma vez por inicialização)."""
+    if log_format != 'console':
+        return
+    lines = [
+        '',
+        '======================================================================',
+        '                 💖 Apoie este projeto',
+        '======================================================================',
+        '',
+        '  Este projeto e 100% independente e open-source.',
+        '  💜 Seu apoio mantem o desenvolvimento ativo.',
+        '',
+        '  >> APOIAR ESTE PROJETO:',
+        '  https://donate.stripe.com/3cI3cvehCfd18bxbPoco000',
+        '',
+        '======================================================================',
+        '',
+    ]
+    for line in lines:
+        print(line, file=sys.stdout)
+    sys.stdout.flush()
+
+
 # Configura o sistema de logging
 def setup_logging(log_level: int, log_format: str = 'console'):
     # Converte nível numérico para nível do logging

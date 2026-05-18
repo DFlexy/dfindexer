@@ -50,7 +50,7 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
 # Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v12.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v15.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -59,8 +59,16 @@ class StarckScraper(BaseScraper):
         self.page_pattern = "page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
-        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
+    def search(
+        self,
+        query: str,
+        filter_func: Optional[Callable[[Dict], bool]] = None,
+        skip_trackers: bool = False,
+        skip_metadata: bool = False,
+    ) -> List[Dict]:
+        return self._default_search(
+            query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
+        )
     
     # Extrai links da página inicial
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
@@ -317,35 +325,39 @@ class StarckScraper(BaseScraper):
         # Primeiro tenta no container específico (mais rápido)
         all_links = post.select('a[href]')
         
-        magnet_links = []
+        magnet_links: List[str] = []
+        seen_hashes: set = set()
+        seen_data_u: set = set()
+
+        def _add_magnet(magnet: str) -> None:
+            if not magnet or not magnet.startswith('magnet:'):
+                return
+            try:
+                key = MagnetParser.parse(magnet)['info_hash'].lower()
+            except Exception:
+                key = magnet
+            if key in seen_hashes:
+                return
+            seen_hashes.add(key)
+            magnet_links.append(magnet)
+
         for link in all_links:
             href = link.get('href', '')
             if not href:
                 continue
-            
-            # Resolve automaticamente (magnet direto ou protegido)
             resolved_magnet = self._resolve_link(href)
-            if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                if resolved_magnet not in magnet_links:
-                    magnet_links.append(resolved_magnet)
-        
-        # Se não encontrou links no container específico, busca em todo o documento (fallback)
+            if resolved_magnet:
+                _add_magnet(resolved_magnet)
+
+        # Fallback: links no post inteiro (não no documento — evita sidebar/relacionados)
         if not magnet_links:
-            all_links_fallback = doc.select('a[href]')
-            for link in all_links_fallback:
+            for link in post.select('a[href]'):
                 href = link.get('href', '')
                 if not href:
                     continue
-                
-                # Resolve automaticamente (magnet direto ou protegido)
                 resolved_magnet = self._resolve_link(href)
-                if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                    if resolved_magnet not in magnet_links:
-                        magnet_links.append(resolved_magnet)
-        
-        # data-u: HTML bruto primeiro (lxml corrompe atributos com &/% inválidos em episódios 06–10).
-        # Fallback: BeautifulSoup no post e no documento.
-        seen_data_u = set()
+                if resolved_magnet:
+                    _add_magnet(resolved_magnet)
 
         def _append_decoded_magnets_from_data_u_values(values: List[str]) -> None:
             for data_u_value in values:
@@ -354,29 +366,22 @@ class StarckScraper(BaseScraper):
                     continue
                 seen_data_u.add(v)
                 decoded_magnet = decode_data_u(v)
-                if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
-                    magnet_links.append(decoded_magnet)
+                if decoded_magnet:
+                    _add_magnet(decoded_magnet)
 
-        raw_html = getattr(self, '_last_fetched_html', None) or ''
-        _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(raw_html))
+        # data-u: HTML bruto da thread atual (lxml corrompe atributos com &/% inválidos)
+        page_html = self._get_fetched_html()
+        _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(page_html))
 
-        for elem in post.select('[data-u]'):
+        buttons_root = post.select_one('.post-buttons') or post
+        for elem in buttons_root.select('[data-u]'):
             data_u_value = (elem.get('data-u') or '').strip()
             if not data_u_value or data_u_value in seen_data_u:
                 continue
             seen_data_u.add(data_u_value)
             decoded_magnet = decode_data_u(data_u_value)
-            if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
-                magnet_links.append(decoded_magnet)
-
-        for elem in doc.select('[data-u]'):
-            data_u_value = (elem.get('data-u') or '').strip()
-            if not data_u_value or data_u_value in seen_data_u:
-                continue
-            seen_data_u.add(data_u_value)
-            decoded_magnet = decode_data_u(data_u_value)
-            if decoded_magnet and decoded_magnet.startswith('magnet:') and decoded_magnet not in magnet_links:
-                magnet_links.append(decoded_magnet)
+            if decoded_magnet:
+                _add_magnet(decoded_magnet)
 
         if not magnet_links:
             # Não loga se a página claramente não tem relação com a busca

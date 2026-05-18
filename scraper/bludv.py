@@ -32,8 +32,16 @@ class BludvScraper(BaseScraper):
         self.page_pattern = "page/{}/"
     
     # Busca torrents com variações da query
-    def search(self, query: str, filter_func: Optional[Callable[[Dict], bool]] = None, skip_trackers: bool = False) -> List[Dict]:
-        return self._default_search(query, filter_func, skip_trackers=skip_trackers)
+    def search(
+        self,
+        query: str,
+        filter_func: Optional[Callable[[Dict], bool]] = None,
+        skip_trackers: bool = False,
+        skip_metadata: bool = False,
+    ) -> List[Dict]:
+        return self._default_search(
+            query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
+        )
     
     # Extrai links da página inicial
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:

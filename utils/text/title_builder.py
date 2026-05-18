@@ -7,7 +7,11 @@ from typing import Optional
 from urllib.parse import unquote
 
 from utils.text.cleaning import clean_title, remove_accents
-from utils.text.storage import get_metadata_name
+from utils.text.storage import (
+    get_metadata_name,
+    is_release_title_incomplete,
+    _is_metadata_more_complete,
+)
 from utils.text.title_helpers import (
     _extract_base_title_from_release,
     _split_technical_components,
@@ -143,6 +147,14 @@ def prepare_release_title(
                 prev_part = part
         
         original_release_title = '.'.join(cleaned_parts).strip('.')
+        # DN curto/incompleto (ex.: só WEB-DL sem 1080p/x264): tenta metadata mais completo
+        if info_hash and not skip_metadata:
+            if is_release_title_incomplete(original_release_title):
+                metadata_name = get_metadata_name(info_hash, skip_metadata=skip_metadata)
+                if metadata_name and _is_metadata_more_complete(
+                    metadata_name, original_release_title
+                ):
+                    original_release_title = _normalize_metadata_name(metadata_name)
         # IMPORTANTE: Como magnet_processed existe e tem >= 3 caracteres, missing_dn = False
         final_missing_dn = False
         # Preserva pontos - create_standardized_title precisa deles para parsing

@@ -2,9 +2,56 @@
 """https://github.com/DFlexy"""
 
 import re
+from typing import List, Optional
 
 from utils.text.constants import STOP_WORDS
 from utils.text.cleaning import remove_accents
+
+_RE_YEAR = re.compile(r'\b((?:19|20)\d{2})\b')
+
+
+def extract_query_year(query: str) -> Optional[str]:
+    """Extrai ano (19xx/20xx) presente na query, se houver."""
+    if not query or not query.strip():
+        return None
+    for word in query.lower().split():
+        clean = re.sub(r'[^\w]', '', word, flags=re.UNICODE)
+        if clean.isdigit() and len(clean) == 4 and clean.startswith(('19', '20')):
+            return clean
+    return None
+
+
+def extract_years_from_text(text: str) -> set[str]:
+    """Lista anos 19xx/20xx encontrados em URL, título ou texto livre."""
+    if not text:
+        return set()
+    return set(_RE_YEAR.findall(text))
+
+
+def content_matches_query_year(
+    query_year: Optional[str],
+    text: str,
+    *,
+    is_series: bool = False,
+) -> bool:
+    """
+    Se a query tem ano, rejeita textos com ano diferente.
+    Sem ano no texto → mantém (não rejeita).
+    """
+    if not query_year or is_series:
+        return True
+    years = extract_years_from_text(text)
+    if not years:
+        return True
+    return years.issubset({query_year})
+
+
+def filter_urls_by_query_year(query: str, urls: List[str]) -> List[str]:
+    """Remove URLs de busca cujo ano (na slug) difere do ano da query."""
+    query_year = extract_query_year(query)
+    if not query_year:
+        return urls
+    return [url for url in urls if content_matches_query_year(query_year, url)]
 
 
 # Confere se o resultado corresponde à busca (ignorando stop words)
@@ -166,22 +213,21 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
          
     # Verifica se o ano corresponde (importante para filmes)
     # NOTA: Para séries, o ano pode não estar no título, então não é obrigatório
-    year_in_query = None
-    for word in clean_query_words:
-        if word.isdigit() and len(word) == 4 and word.startswith(('19', '20')):
-            year_in_query = word
-            break
-    
+    year_in_query = extract_query_year(query)
+
     year_in_title = False
     # Verifica se é série (tem padrão SxxExx ou Sxx)
     # IMPORTANTE: Verifica no título original (title) que é onde o padrão SxxExx aparece com pontos
     is_series = bool(re.search(r'(?i)s\d{1,2}e\d{1,2}|s\d{1,2}(?:\s|$|\.)', title))
-    
+
     if year_in_query:
-        # Verifica ano no título (aceita pontos ou espaços ao redor, já que pontos foram convertidos para espaços)
         year_pattern = r'\b' + re.escape(year_in_query) + r'\b'
         if re.search(year_pattern, combined_title):
             year_in_title = True
+
+    # Rejeita resultados com ano explícito diferente do da query (mantém se não houver ano)
+    if not content_matches_query_year(year_in_query, combined_title, is_series=is_series):
+        return False
     
     # REGRA CRÍTICA: Se existe uma palavra de título na query, ELA DEVE fazer match
     # Isso evita que apenas ano+temporada passem resultados irrelevantes
