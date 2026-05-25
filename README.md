@@ -49,6 +49,7 @@ O sistema adiciona automaticamente tags de idioma aos títulos quando detecta in
 - ✅ **†₣!£₥€**
 - ✅ **₱ØЯ†@£**
 - ✅ **Ẍ₣!£₥€$**
+- ✅ **Я€Ð€**
 - ✅ **©Ø₥@₦ÐØ** - Necessário selecionar o FlareSolverr
 - ✅ **฿£µÐ√** - Necessário selecionar o FlareSolverr
 
