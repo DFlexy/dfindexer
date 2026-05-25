@@ -25,6 +25,7 @@ settings:
     default: "1"
     options:
       "1": Starck
+      "2": Rede
       "3": XFilmes
       "4": Tfilme
       "6": Comando
