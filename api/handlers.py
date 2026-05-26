@@ -6,7 +6,8 @@ import time
 from datetime import datetime
 from flask import jsonify, request
 from app.config import Config
-from api.services.indexer_service import IndexerService, SCRAPER_NUMBER_MAP
+from api.services.indexer_service import IndexerService
+from api.prowlarr_config import is_removed_legacy_id
 from api.services.indexer_service_async import (
     IndexerServiceAsync,
     run_async,
@@ -129,7 +130,7 @@ def indexer_handler(site_name: str = None):
                 # Verifica se é um ID removido (None no mapeamento)
                 # Para IDs removidos, retorna resposta vazia (200) em vez de 404
                 # Isso evita que o Prowlarr marque o indexer como indisponível
-                if site_name in SCRAPER_NUMBER_MAP and SCRAPER_NUMBER_MAP[site_name] is None:
+                if is_removed_legacy_id(site_name):
                     logger.warning(f"Tentativa de usar scraper ID removido: {site_name}")
                     return jsonify({
                         'results': [],

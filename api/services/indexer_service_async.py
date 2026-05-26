@@ -16,24 +16,7 @@ from cache import cleanup_request_caches
 from core.enrichers.torrent_enricher_async import TorrentEnricherAsync
 from core.filters.query_filter import QueryFilter
 from core.processors.torrent_processor import TorrentProcessor
-
-logger = logging.getLogger(__name__)
-
-SCRAPER_NUMBER_MAP = {
-    "1": "starck",
-    "2": "rede",
-    "3": "xfilmes",
-    "4": "tfilme",
-    "5": None,
-    "6": "comand",
-    "7": "bludv",
-    "8": "portal",
-}
-
-
-def get_valid_scraper_ids() -> Dict[str, str]:
-    """Retorna apenas os IDs válidos do mapeamento."""
-    return {k: v for k, v in SCRAPER_NUMBER_MAP.items() if v is not None}
+from api.prowlarr_config import resolve_legacy_scraper_id
 
 
 class IndexerServiceAsync:
@@ -195,12 +178,11 @@ class IndexerServiceAsync:
     
     def validate_scraper_type(self, scraper_type: str) -> tuple[bool, Optional[str]]:
         """Valida tipo de scraper e retorna tipo normalizado."""
-        if scraper_type in SCRAPER_NUMBER_MAP:
-            mapped_type = SCRAPER_NUMBER_MAP[scraper_type]
-            if mapped_type is None:
-                return False, None
-            scraper_type = mapped_type
-        
+        resolved = resolve_legacy_scraper_id(scraper_type)
+        if resolved is None:
+            return False, None
+        scraper_type = resolved
+
         types_info = available_scraper_types()
         normalized_type = normalize_scraper_type(scraper_type)
         

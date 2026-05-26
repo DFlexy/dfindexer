@@ -21,6 +21,16 @@ DEFAULT_MAX_WORKERS = 16  # Máximo de workers simultâneos para processamento p
 DEFAULT_PAGE_TIMEOUT = 30  # Timeout em segundos por página
 
 
+def format_page_index(current: int) -> str:
+    """Formata índice de página como 01 (zero à esquerda para 1–9)."""
+    return f"{current:02d}"
+
+
+def format_page_progress(current: int, total: int) -> str:
+    """Formata progresso como 01/16 (zero à esquerda para 1–9)."""
+    return f"{format_page_index(current)}/{format_page_index(total)}"
+
+
 # Gera variações de uma query para busca, removendo stop words e usando primeira palavra
 def generate_search_variations(query: str, include_stop_words_removal: bool = True) -> List[str]:
     variations = [query]
@@ -127,14 +137,14 @@ def process_links_parallel(
     if use_flaresolverr:
         logger.debug(f"{scraper_prefix}Processando {total_links} links SEQUENCIALMENTE (FlareSolverr ativo)")
         for idx, link in enumerate(original_order):
-            logger.debug(f"{scraper_prefix}[{idx+1}/{total_links}] {link}")
+            logger.debug(f"{scraper_prefix}[{format_page_index(idx + 1)}] {link}")
             try:
                 torrents = process_func(link)
                 results_by_index[idx] = torrents
             except Exception as e:
                 error_type = type(e).__name__
                 error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
-                logger.warning(f"{scraper_prefix}Page error [{idx+1}]: {error_type} - {error_msg}")
+                logger.warning(f"{scraper_prefix}Page error [{format_page_index(idx + 1)}]: {error_type} - {error_msg}")
                 results_by_index[idx] = []
     else:
         # Processamento PARALELO (sem FlareSolverr)
@@ -147,7 +157,7 @@ def process_links_parallel(
         
         logger.debug(f"{scraper_prefix}Processando {total_links} links em PARALELO")
         for idx, link in enumerate(original_order):
-            logger.debug(f"{scraper_prefix}[{idx+1}] {link}")
+            logger.debug(f"{scraper_prefix}[{format_page_index(idx + 1)}] {link}")
         
         link_to_index = {link: idx for idx, link in enumerate(original_order)}
         actual_max_workers = min(max(1, total_links), max_workers)
@@ -169,7 +179,10 @@ def process_links_parallel(
                     error_type = type(e).__name__
                     error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
                     link_preview = link[:50] if link else 'N/A'
-                    logger.warning(f"{scraper_prefix}Page error [{original_index+1}]: {error_type} - {error_msg} (link: {link_preview}...)")
+                    logger.warning(
+                        f"{scraper_prefix}Page error [{format_page_index(original_index + 1)}]: "
+                        f"{error_type} - {error_msg} (link: {link_preview}...)"
+                    )
                     results_by_index[original_index] = []
     
     # Reordena resultados pela ordem original dos links (garante ordem correta)
@@ -188,7 +201,10 @@ def process_links_parallel(
         if idx in results_by_index:
             link = original_order[idx]
             torrents_count = len(results_by_index[idx])
-            logger.info(f"{scraper_prefix}Página processada [{idx+1}/{total_links}]: {link} - {torrents_count} magnets encontrados")
+            logger.info(
+                f"{scraper_prefix}Página processada [{format_page_progress(idx + 1, total_links)}]: "
+                f"{link} - {torrents_count} magnets encontrados"
+            )
     
     return all_torrents
 

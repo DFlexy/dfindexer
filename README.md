@@ -17,19 +17,11 @@
 Indexador em Python que organiza torrents brasileiros em formato padronizado, pronto para consumo por ferramentas como **Prowlarr**, **Sonarr** e **Radarr**.
 
 ## 🚀 Características
-- ✅ **Múltiplos Scrapers**: Suporte para 7 sites de torrents brasileiros
-- ✅ **Padronização Inteligente**: Títulos padronizados para facilitar matching automático
-- ✅ **Metadata API**: Busca automática de tamanhos, datas e nomes via iTorrents.org
-- ✅ **Tracker Scraping**: Consulta automática de trackers UDP para seeds/leechers
-- ✅ **FlareSolverr**: Suporte opcional para resolver Cloudflare com sessões reutilizáveis e serialização de requisições paralelas
-- ✅ **Cache Multi-Camadas**: Cache Redis + Cache HTTP local em memória (30s) para máxima performance
-- ✅ **Sistema Cross-Data**: Compartilhamento de dados entre scrapers via Redis (reduz consultas desnecessárias)
-- ✅ **Circuit Breakers**: Proteção contra sobrecarga de serviços externos
-- ✅ **Paralelização 100%**: Processamento 100% paralelo de links para máxima velocidade
-- ✅ **Connection Pooling**: Pool de conexões HTTP otimizado (50 pools, 100 maxsize) para reduzir latência
-- ✅ **Rate Limiting Otimizado**: Rate limiter de metadata otimizado (6-7 req/s) para 5-10x mais rápido
-- ✅ **Semáforo de Metadata**: 128 requisições simultâneas de metadata para alta concorrência
-- ✅ **Otimizações**: Filtragem antes de enriquecimento pesado para melhor performance
+- ✅ Vários scrapers de torrents brasileiros, com títulos padronizados para Sonarr/Radarr
+- ✅ Metadata (iTorrents.org), trackers UDP (seeds/leechers) e tags de idioma automáticas
+- ✅ FlareSolverr opcional para sites com Cloudflare
+- ✅ Cache Redis + memória, cross-data entre scrapers e circuit breakers
+- ✅ Processamento paralelo de links, com filtro antes do enriquecimento pesado
 
 ### 📝 Padronização de Títulos
 Todos os títulos são padronizados no formato:
@@ -39,13 +31,14 @@ Todos os títulos são padronizados no formato:
 - **Filmes**: `Title.2025.1080p.BluRay`
 
 ### 🎬 Tags de Idioma
-O sistema adiciona automaticamente tags de idioma aos títulos quando detecta informações de áudio:
-- **[Brazilian]**: Fonte Principal: HTML (`audio_info: 'português'`), Fallback 1: Magnet (`dual/dublado/nacional/portugues`), Fallback 2: Metadata, Fallback 3: Cross Data
-- **[Eng]**: Fonte Principal: HTML (`audio_info: 'Inglês'`), Fallback 1: Magnet (`dual/legendado/legenda/leg`), Fallback 2: Metadata, Fallback 3: Cross Data
-- **[Jap]**: Fonte Principal: HTML (`audio_info: 'japonês'`), Fallback 1: Magnet (`japonês/japones/japanese/jap`), Fallback 2: Metadata, Fallback 3: Cross Data
+Tags adicionadas ao título conforme áudio detectado (HTML → magnet → metadata → cache):
+- **[Brazilian]** — português / dublado / nacional
+- **[Eng]** — inglês / legendado
+- **[Jap]** — japonês
 
 ### 🌐 Sites Suportados
 - ✅ **$†@Я©Ҝ**
+- ✅ **Я€Ð€**
 - ✅ **†₣!£₥€**
 - ✅ **₱ØЯ†@£**
 - ✅ **Ẍ₣!£₥€$**
@@ -55,84 +48,89 @@ O sistema adiciona automaticamente tags de idioma aos títulos quando detecta in
 
 ## 🐳 Docker
 
-### Docker  - Opção 1: Docker Compose (Recomendado - Se encontra nos arquivos acima)
-A forma mais simples de executar o projeto é usando Docker Compose, que já configura o Redis automaticamente:
+Os exemplos abaixo usam **`network_mode: host`**: os containers compartilham a rede do host (sem rede bridge customizada). 
+Serviços ficam em `localhost` nas portas padrão — Redis `6379`, FlareSolverr `8191`, API `7006`, Prowlarr `9696`.
+
+> **Requisito:** `host` funciona nativamente no **Linux**. No Docker Desktop (Windows/macOS) o comportamento pode ser limitado; prefira Linux ou VM para produção.
+
+### Docker — Opção 1: Docker Compose (recomendado)
+
+O `docker-compose.yml` do repositório já define Redis, FlareSolverr, indexer e Prowlarr em modo host:
 
 ```bash
-# Construir e iniciar os serviços
-docker-compose up -d
+# Iniciar os serviços
+docker compose up -d
 
 # Ver logs
-docker-compose logs -f
+docker compose logs -f
 
 # Parar os serviços
-docker-compose down
+docker compose down
 
-# Parar e remover volumes (limpa dados do Redis)
-docker-compose down -v
+# Parar e remover volumes (limpa dados do Redis em ./redis_data)
+docker compose down -v
 ```
 
-O Docker Compose irá:
-- ✅ Iniciar o serviço Redis automaticamente
-- ✅ Iniciar o serviço FlareSolverr automaticamente (opcional, para resolver Cloudflare)
-- ✅ Configurar a rede entre os containers
-- ✅ Persistir dados do Redis em volume nomeado
+O Compose irá:
+- ✅ Subir Redis, FlareSolverr, DF Indexer e Prowlarr com **`network_mode: host`**
+- ✅ Persistir dados do Redis em `./redis_data`
+- ✅ Configurar `REDIS_HOST` e `FLARESOLVERR_ADDRESS` apontando para `localhost`
 - ✅ Configurar restart automático
 
-### Docker - Opção 2: Docker Run CLI (Avançado - Se preferir executar manualmente) 
+**API:** `http://localhost:7006/` · **Prowlarr:** `http://localhost:9696/`
+
+O `prowlarr.yml` usa `http://localhost:7006/` como URL base — compatível com essa stack em host.
+
+### Docker — Opção 2: Docker Run (manual)
 
 ```bash
-# Primeiro, crie a rede customizada (opcional, mas recomendado)
-docker network create --subnet=172.50.0.0/24 --gateway=172.50.0.1 net-dfindexer
-
-# Inicie o Redis (dados salvos em ./redis_data)
+# Redis (porta 6379 no host)
 docker run -d \
   --name=redis \
   --restart=unless-stopped \
-  --network=net-dfindexer \
-  --ip=172.50.0.100 \
-  -v $(pwd)/redis_data:/data \
+  --network=host \
+  -v "$(pwd)/redis_data:/data" \
   redis:7-alpine \
   redis-server --appendonly yes
 
-# Opcional: Inicie o FlareSolverr (para resolver Cloudflare)
+# FlareSolverr (porta 8191 no host)
 docker run -d \
   --name=flaresolverr \
   --restart=unless-stopped \
-  --network=net-dfindexer \
-  --ip=172.50.0.101 \
+  --network=host \
   -e LOG_LEVEL=info \
   -e TZ=America/Sao_Paulo \
   ghcr.io/flaresolverr/flaresolverr:latest
 
-# Depois, inicie o indexer
+# DF Indexer (porta 7006 no host)
 docker run -d \
   --name=dfindexer \
   --restart=unless-stopped \
-  --network=net-dfindexer \
-  --ip=172.50.0.102 \
-  -e REDIS_HOST=redis \
+  --network=host \
+  -e REDIS_HOST=localhost \
   -e REDIS_PORT=6379 \
-  -e FLARESOLVERR_ADDRESS=http://flaresolverr:8191 \
+  -e FLARESOLVERR_ADDRESS=http://localhost:8191 \
   -e PORT=7006 \
   -e LOG_LEVEL=1 \
   -e LOG_FORMAT=console \
-  -p 7006:7006 \
   ghcr.io/dflexy/dfindexer:latest
 ```
-### ⚙️ Docker - Variáveis de Ambiente
+
+Com `--network=host` não é necessário `-p` para publicar portas: o processo escuta diretamente no host.
+
+### ⚙️ Docker — Variáveis de ambiente
 | Variável                                | Descrição                                                                | Padrão             |
 |-----------------------------------------|--------------------------------------------------------------------------|--------------------|
 | `PORT`                                  | Porta da API                                                             | `7006`             |
 | `METRICS_PORT`                          | Porta do servidor de métricas (reservada, ainda não utilizada)           | `8081`             |
-| `REDIS_HOST`                            | Host do Redis (opcional)                                                 | `localhost`        |
+| `REDIS_HOST`                            | Host do Redis (com Docker host: use `localhost`)                         | `localhost`        |
 | `REDIS_PORT`                            | Porta do Redis                                                           | `6379`             |
 | `REDIS_DB`                              | Banco lógico do Redis                                                    | `0`                |
 | `HTML_CACHE_TTL_SHORT`                  | TTL do cache curto de HTML (páginas)                                     | `10m`              |
 | `HTML_CACHE_TTL_LONG`                   | TTL do cache longo de HTML (páginas)                                     | `12h`              |
 | `FLARESOLVERR_SESSION_TTL`              | TTL das sessões FlareSolverr                                              | `4h`               |
 | `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `16`             |
-| `FLARESOLVERR_ADDRESS`                  | Endereço do servidor FlareSolverr (ex: http://flaresolverr:8191)         | `None` (opcional)  |
+| `FLARESOLVERR_ADDRESS`                  | Endereço do FlareSolverr (Docker host: `http://localhost:8191`)          | `None` (opcional)  |
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
 | `LOG_FORMAT`                            | `console` ou `json`                                                      | `console`          |
 | `PROXY_TYPE`                            | Tipo de proxy: `http`, `https`, `socks5`, `socks5h` (opcional)           | `http`             |
@@ -171,7 +169,7 @@ docker run -d \
 Para adicionar vários sites, deve ser feita a clonagem do primeiro indexer no Prowlarr:
 <img width="489" height="274" alt="image" src="https://github.com/user-attachments/assets/ea24dfee-fe1e-45a7-a55f-0bb4aab66c36" />
 
-1. No indexer clonado, selecione outro site
+1. No indexer clonado, selecione outro site no campo **Scraper** (valores por: `starck`, `rede`, `comand`, etc.)
 2. Com isso você consegue criar vários indexadores e usar todos
 
 ### Prowlarr - Selecionar FlareSolverr para Cloudflare
@@ -234,8 +232,6 @@ O comportamento varia conforme o tipo de requisição:
 - **10:30** - Busca com query → Usa cache antigo → ❌ Não vê novos links
 - **16:01** - Busca com query → Cache expirou → Busca fresco → ✅ Vê novos links
 
-## 🔍 API
-
 ### 🔍 API WEB
 http://localhost:7006/api
 
@@ -244,39 +240,6 @@ http://localhost:7006/api
 ** Principamente com os sites que usam Cloudflare
 
 <img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
-
-### 🔍 API Endpoints
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/` | Informações básicas da API |
-| GET | `/indexer` | Usa scraper padrão |
-| GET | `/indexer?q=foo` | Busca na fonte padrão |
-| GET | `/indexer?page=2` | Paginação |
-| GET | `/indexer?q=foo&filter_results=true` | Busca com filtro |
-| GET | `/indexer?q=foo&use_flaresolverr=true` | Busca com FlareSolverr |
-| GET | `/indexers/<tipo>?q=foo` | Usa scraper específico |
-
-### Formato de Resposta
-
-```json
-{
-  "results": [
-    {
-      "title_processed": "Pluribus.S01.2025.WEB-DL",
-      "original_title": "Pluribus",
-      "details": "https://...",
-      "year": "2025",
-      "magnet_link": "magnet:?xt=urn:btih:...",
-      "info_hash": "...",
-      "size": "2.45 GB",
-      "date": "2025-07-10T18:30:00",
-      "seed_count": 10,
-      "leech_count": 2
-    }
-  ],
-  "count": 1
-}
-```
 
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.

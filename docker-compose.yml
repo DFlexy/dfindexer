@@ -5,10 +5,8 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
+    network_mode: host
     command: redis-server --appendonly yes
-    networks:
-      net-dfindexer:
-        ipv4_address: 172.50.0.100
     volumes:
       - ./redis_data:/data
 
@@ -16,9 +14,7 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
     restart: unless-stopped
-    networks:
-      net-dfindexer:
-        ipv4_address: 172.50.0.101
+    network_mode: host
     environment:
       - LOG_LEVEL=info
       - TZ=America/Sao_Paulo
@@ -27,13 +23,11 @@ services:
     image: ghcr.io/dflexy/dfindexer:latest
     container_name: dfindexer
     restart: unless-stopped
-    networks:
-      net-dfindexer:
-        ipv4_address: 172.50.0.102
+    network_mode: host
     environment:
-      - REDIS_HOST=redis
+      - REDIS_HOST=localhost
       - REDIS_PORT=6379
-      - FLARESOLVERR_ADDRESS=http://flaresolverr:8191
+      - FLARESOLVERR_ADDRESS=http://localhost:8191
       - PORT=7006
       - LOG_LEVEL=1
       - LOG_FORMAT=console
@@ -45,23 +39,8 @@ services:
     image: ghcr.io/hotio/prowlarr:latest
     container_name: prowlarr
     restart: unless-stopped
-    networks:
-      net-dfindexer:
-        ipv4_address: 172.50.0.103
+    network_mode: host
     environment:
-      - TZ=America_Sao_Paulo
-    ports:
-      - "9696:9696"
+      - TZ=America/Sao_Paulo
     volumes:
       - ./prowlarr:/config
-
-# ========================
-# Rede customizada
-# ========================
-networks:
-  net-dfindexer:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.50.0.0/24
-          gateway: 172.50.0.1

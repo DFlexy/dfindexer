@@ -1,8 +1,11 @@
-# Scripts locais (não versionar)
 script_*
-
-# Python — bytecode e cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+*.xlsx
+*.xls
+*.xlsm
+*.ods
+~$*.xlsx
+~$*.xls
