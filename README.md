@@ -4,8 +4,6 @@
 **Este projeto é 100% independente e open-source.**  
 💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.
 
-** Projeto baseado no projeto em GO do colega https://github.com/felipemarinho97/torrent-indexer
-
 ** Observação o projeto foi todo criado em python do zero
 
 <a href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank">
