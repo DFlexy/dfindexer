@@ -10,11 +10,9 @@ if str(ROOT) not in sys.path:
 
 from api.prowlarr_config import PROWLARR_SCRAPER_OPTIONS  # noqa: E402
 
-
 def main() -> None:
     for slug, label in PROWLARR_SCRAPER_OPTIONS.items():
         print(f"      {slug}: {label}")
-
 
 if __name__ == "__main__":
     main()

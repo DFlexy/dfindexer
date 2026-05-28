@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import re
@@ -15,25 +14,23 @@ from utils.concurrency.metadata_semaphore_async import metadata_slot_async
 
 logger = logging.getLogger(__name__)
 
-# Rate limiter async
 _rate_limiter_lock = asyncio.Lock()
 _rate_limiter_last_request = 0.0
-_rate_limiter_min_interval = 0.15  # Sincronizado com metadata.py (~6-7 req/s)
-_rate_limiter_burst_tokens = 10  # Sincronizado com metadata.py
+_rate_limiter_min_interval = 0.15
+_rate_limiter_burst_tokens = 10
 _CIRCUIT_BREAKER_KEY = circuit_metadata_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3
 _CIRCUIT_BREAKER_503_THRESHOLD = 5
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60
-_CIRCUIT_BREAKER_COUNTER_TTL = 60  # TTL para contadores do circuit breaker (timeouts, 503s)
-# TTLs para cache de falha por hash (não são do circuit breaker, são do cache de falha)
-_METADATA_FAILURE_CACHE_TTL = 60  # TTL para cache de falhas genéricas por hash
-_METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
-_METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
+_CIRCUIT_BREAKER_COUNTER_TTL = 60
+# TTL de falha por hash (fora do circuit breaker)
+_METADATA_FAILURE_CACHE_TTL = 60
+_METADATA_503_CACHE_TTL = 300
+_METADATA_NOT_FOUND_CACHE_TTL = 120
 _hash_locks = {}
 _hash_locks_lock = asyncio.Lock()
 _MAX_HASH_LOCKS_ASYNC = 500
 
-# Circuit breaker log cache
 _circuit_breaker_log_cache = {}
 _circuit_breaker_log_lock = asyncio.Lock()
 _CIRCUIT_BREAKER_LOG_COOLDOWN = 30
@@ -41,14 +38,12 @@ _cache_failure_log_cache = {}
 _cache_failure_log_lock = asyncio.Lock()
 _CACHE_FAILURE_LOG_COOLDOWN = 60
 
-
 def cleanup_metadata_async_state():
     """Limpa estado global do módulo async de metadata. Chamar entre requisições."""
     global _hash_locks, _circuit_breaker_log_cache, _cache_failure_log_cache
     _hash_locks.clear()
     _circuit_breaker_log_cache.clear()
     _cache_failure_log_cache.clear()
-
 
 def _is_redis_connection_error(error: Exception) -> bool:
     """Verifica se o erro é de conexão com Redis."""
@@ -64,7 +59,6 @@ def _is_redis_connection_error(error: Exception) -> bool:
         "name or service not known",
     ]
     return any(err in error_str for err in connection_errors)
-
 
 async def _rate_limit():
     """Rate limiting async."""
@@ -91,7 +85,6 @@ async def _rate_limit():
         _rate_limiter_burst_tokens -= 1
         _rate_limiter_last_request = now
 
-
 async def _is_circuit_breaker_open() -> bool:
     """Verifica se o circuit breaker está aberto (async)."""
     redis = get_redis_client()
@@ -110,7 +103,6 @@ async def _is_circuit_breaker_open() -> bool:
     
     return False
 
-
 async def _record_timeout():
     """Registra um timeout (async)."""
     redis = get_redis_client()
@@ -118,13 +110,11 @@ async def _record_timeout():
     if redis:
         try:
             timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
-            # Expira hash com TTL do contador (garante que não expire antes do disabled)
             redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
-                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
@@ -134,7 +124,6 @@ async def _record_timeout():
         except Exception:
             pass
 
-
 async def _record_503():
     """Registra um erro 503 (async)."""
     redis = get_redis_client()
@@ -142,13 +131,11 @@ async def _record_503():
     if redis:
         try:
             error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
-            # Expira hash com TTL do contador (garante que não expire antes do disabled)
             redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
             if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
-                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
@@ -158,23 +145,16 @@ async def _record_503():
         except Exception:
             pass
 
-
 async def _record_success():
-    """
-    Registra uma requisição bem-sucedida, resetando os contadores de erros (async).
-    Se o circuit breaker estiver aberto, fecha (half-open state).
-    """
+    """Registra uma requisição bem-sucedida, resetando os contadores de erros (async)"""
     redis = get_redis_client()
     
     if redis:
         try:
-            # Reseta contadores no Hash
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
-            # Fecha circuit breaker se estiver aberto (half-open state - permite tentar novamente)
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception:
             pass
-
 
 async def _is_failure_cached(info_hash: str) -> bool:
     """Verifica se uma falha recente está em cache (async)."""
@@ -187,36 +167,23 @@ async def _is_failure_cached(info_hash: str) -> bool:
     except Exception:
         return False
 
-
 async def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = None):
-    """
-    Cacheia uma falha para evitar tentativas repetidas (async).
-    Parte do sistema de circuit breaker.
-    
-    Args:
-        info_hash: Hash do torrent
-        is_503: Se True, cacheia por mais tempo (5 minutos) no Redis, pois é erro de serviço indisponível
-        ttl: TTL customizado (opcional). Se não fornecido, usa TTL padrão baseado em is_503
-    """
     info_hash_lower = info_hash.lower()
     
     try:
         from cache.metadata_cache import MetadataCache
         metadata_cache = MetadataCache()
         if ttl is not None:
-            # TTL customizado (ex: para "não encontrado" - 2 minutos)
+
             metadata_cache.set_failure(info_hash_lower, ttl)
         elif is_503:
-            # Erros 503 são cacheados por mais tempo
             metadata_cache.set_failure(info_hash_lower, _METADATA_503_CACHE_TTL)
         else:
             metadata_cache.set_failure(info_hash_lower, _METADATA_FAILURE_CACHE_TTL)
     except Exception:
         pass
 
-
 async def _get_hash_lock(info_hash: str):
-    """Obtém um lock específico para um hash (async)."""
     info_hash_lower = info_hash.lower()
     async with _hash_locks_lock:
         if len(_hash_locks) > _MAX_HASH_LOCKS_ASYNC:
@@ -226,7 +193,6 @@ async def _get_hash_lock(info_hash: str):
         if info_hash_lower not in _hash_locks:
             _hash_locks[info_hash_lower] = asyncio.Lock()
         return _hash_locks[info_hash_lower]
-
 
 def _parse_bencode_size(data: bytes) -> Optional[int]:
     """Parseia bencode parcial para extrair tamanho do torrent."""
@@ -263,18 +229,12 @@ def _parse_bencode_size(data: bytes) -> Optional[int]:
     except Exception:
         return None
 
-
 async def _fetch_torrent_header_async(
     session: aiohttp.ClientSession,
     info_hash: str,
     use_lowercase: bool = False
 ) -> Tuple[Optional[bytes], bool, bool]:
-    """
-    Baixa apenas o header do arquivo .torrent do iTorrents (async).
-    
-    Returns:
-        Tupla (dados, foi_timeout, foi_503)
-    """
+    """Baixa apenas o header do arquivo .torrent do iTorrents (async)"""
     info_hash_hex = info_hash.lower() if use_lowercase else info_hash.upper()
     url = f"https://itorrents.org/torrent/{info_hash_hex}.torrent"
     
@@ -345,26 +305,14 @@ async def _fetch_torrent_header_async(
     except Exception:
         return None, False, False
 
-
 async def fetch_metadata_from_itorrents_async(
     session: aiohttp.ClientSession,
     info_hash: str,
     scraper_name: Optional[str] = None,
     title: Optional[str] = None
 ) -> Optional[Dict[str, any]]:
-    """
-    Busca metadados do torrent via iTorrents.org (async).
-    
-    Args:
-        session: Sessão aiohttp para reutilização de conexões
-        info_hash: Info hash do torrent (hex, 40 caracteres)
-        
-    Returns:
-        Dict com metadados extraídos ou None
-    """
     info_hash_lower = info_hash.lower()
     
-    # Verifica cache primeiro
     try:
         from cache.metadata_cache import MetadataCache
         metadata_cache = MetadataCache()
@@ -374,18 +322,14 @@ async def fetch_metadata_from_itorrents_async(
     except Exception:
         pass
     
-    # Verifica circuit breaker
     if await _is_circuit_breaker_open():
         return None
     
-    # Verifica se há falha recente em cache
     if await _is_failure_cached(info_hash):
         return None
     
-    # Usa lock por hash para evitar requisições simultâneas
     hash_lock = await _get_hash_lock(info_hash)
     async with hash_lock:
-        # Verifica cache novamente após adquirir lock
         try:
             from cache.metadata_cache import MetadataCache
             metadata_cache = MetadataCache()
@@ -395,8 +339,6 @@ async def fetch_metadata_from_itorrents_async(
         except Exception:
             pass
         
-        # Busca do iTorrents
-        # Monta identificação para o log
         log_parts = []
         if scraper_name:
             log_parts.append(f"[{scraper_name}]")
@@ -417,20 +359,15 @@ async def fetch_metadata_from_itorrents_async(
             )
         
         if not torrent_data:
-            # Torrent não encontrado - cacheia falha para evitar tentativas repetidas
             await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
-            # Logs de erro removidos para reduzir verbosidade
             return None
         
-        # Extrai tamanho do bencode
         size = _parse_bencode_size(torrent_data)
         
         if not size:
-            # Tamanho não encontrado - cacheia falha para evitar tentativas repetidas
             await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
             return None
         
-        # Tenta extrair nome
         name = None
         try:
             name_pattern = rb'4:name(\d+):'
@@ -450,7 +387,6 @@ async def fetch_metadata_from_itorrents_async(
         if name:
             result['name'] = name
         
-        # Tenta extrair data de criação
         try:
             creation_date_pattern = rb'13:creation datei(\d+)e'
             creation_match = re.search(creation_date_pattern, torrent_data)
@@ -461,7 +397,6 @@ async def fetch_metadata_from_itorrents_async(
         except Exception:
             pass
         
-        # Tenta extrair IMDB
         try:
             imdb_patterns = [
                 rb'4:imdb(\d+):',
@@ -488,7 +423,6 @@ async def fetch_metadata_from_itorrents_async(
         except Exception:
             pass
         
-        # Cacheia resultado
         try:
             from cache.metadata_cache import MetadataCache
             metadata_cache = MetadataCache()

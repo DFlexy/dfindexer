@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import json
@@ -7,12 +6,7 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-
 def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
-    """
-    Busca dados cruzados no Redis por info_hash.
-    Retorna todas as variáveis salvas no Redis, sem filtros ou organização.
-    """
     if not info_hash or len(info_hash) != 40:
         return None
     
@@ -24,27 +18,22 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
         if not redis:
             return None
         
-        # Normaliza info_hash para lowercase (consistência com outras partes do código)
         info_hash_lower = info_hash.lower()
         key = torrent_cross_data_key(info_hash_lower)
-        # Busca todos os campos do hash
         data = redis.hgetall(key)
         if not data:
             return None
         
-        # Converte bytes para strings
         result = {}
         for field, value in data.items():
             field_str = field.decode('utf-8')
             value_str = value.decode('utf-8')
             
-            # Converte tipos específicos
             if field_str == 'missing_dn':
                 result[field_str] = value_str.lower() == 'true'
             elif field_str == 'has_legenda':
                 result[field_str] = value_str.lower() == 'true'
             elif field_str in ('tracker_seed', 'tracker_leech'):
-                # Converte para inteiro
                 try:
                     result[field_str] = int(value_str) if value_str and value_str != 'N/A' else 0
                 except (ValueError, TypeError):
@@ -59,12 +48,7 @@ def get_cross_data_from_redis(info_hash: str) -> Optional[Dict[str, Any]]:
     
     return None
 
-
 def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
-    """
-    Salva dados cruzados no Redis por info_hash.
-    Salva todas as variáveis do projeto diretamente, sem filtros ou organização.
-    """
     if not info_hash or len(info_hash) != 40:
         return
     
@@ -79,29 +63,23 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         if not redis:
             return
         
-        # Normaliza info_hash para lowercase (consistência com outras partes do código)
         info_hash_lower = info_hash.lower()
         key = torrent_cross_data_key(info_hash_lower)
         
-        # Prepara dados para salvar - usa todas as variáveis do projeto diretamente, sem filtros
         to_save = {}
         for field, value in data.items():
             if value is None:
                 continue
             
-            # Para campos de tracker, aceita 0 também (para evitar consultas futuras)
             if field in ('tracker_seed', 'tracker_leech'):
                 if value != '' and value != 'N/A':
-                    # Aceita int (incluindo 0) ou string que representa número
                     if isinstance(value, int):
-                        to_save[field] = str(value)  # Salva mesmo se for 0
+                        to_save[field] = str(value)
                     elif isinstance(value, str) and value.strip().isdigit():
-                        to_save[field] = value.strip()  # Salva string numérica
+                        to_save[field] = value.strip()
             else:
-                # Converte boolean para string
                 if isinstance(value, bool):
                     to_save[field] = 'true' if value else 'false'
-                # Converte inteiros para string
                 elif isinstance(value, int):
                     to_save[field] = str(value)
                 else:
@@ -112,34 +90,24 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         if not to_save:
             return
         
-        # Salva no hash Redis
         redis.hset(key, mapping=to_save)
         
-        # Define TTL: se contém dados de tracker, usa TTL menor (24h), senão usa 7 dias
         has_tracker_data = 'tracker_seed' in to_save or 'tracker_leech' in to_save
         
-        # Verifica se a chave já existe e qual TTL atual
         current_ttl = redis.ttl(key)
         
         if has_tracker_data:
-            # TTL de 24h para dados de tracker (mudam frequentemente)
-            # Se já existe e tem TTL maior, reduz para 24h
+
             if current_ttl == -1 or current_ttl > 24 * 3600:
                 redis.expire(key, 24 * 3600)
         else:
-            # TTL de 30 dias para outros campos (mais estáveis)
-            # Só define se a chave não existe ou está expirando em menos de 30 dias
+
             if current_ttl == -1 or current_ttl < 30 * 24 * 3600:
                 redis.expire(key, 30 * 24 * 3600)
     except Exception:
         pass
 
-
 def get_field_from_cross_data(info_hash: str, field: str) -> Optional[str]:
-    """
-    Busca um campo específico dos dados cruzados no Redis.
-    Retorna o valor do campo ou None se não encontrado.
-    """
     cross_data = get_cross_data_from_redis(info_hash)
     if cross_data:
         value = cross_data.get(field)

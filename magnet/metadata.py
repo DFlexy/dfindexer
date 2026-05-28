@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import re
@@ -18,27 +17,25 @@ logger = logging.getLogger(__name__)
 _request_cache = threading.local()
 _rate_limiter_lock = threading.Lock()
 _rate_limiter_last_request = 0.0
-_rate_limiter_min_interval = 0.15  # Otimizado para 0.15s (~6-7 requisições/segundo) - reduzido de 0.5s
-_rate_limiter_burst_tokens = 10  # Aumentado de 4 para 10 tokens para permitir rajadas maiores
+_rate_limiter_min_interval = 0.15
+_rate_limiter_burst_tokens = 10
 _CIRCUIT_BREAKER_KEY = circuit_metadata_key()
 _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3
 _CIRCUIT_BREAKER_503_THRESHOLD = 5
 _CIRCUIT_BREAKER_DISABLE_DURATION = 60
-_CIRCUIT_BREAKER_COUNTER_TTL = 60  # TTL para contadores do circuit breaker (timeouts, 503s)
-# TTLs para cache de falha por hash (não são do circuit breaker, são do cache de falha)
-_METADATA_FAILURE_CACHE_TTL = 60  # TTL para cache de falhas genéricas por hash
-_METADATA_503_CACHE_TTL = 300  # TTL para cache de falhas 503 por hash
-_METADATA_NOT_FOUND_CACHE_TTL = 120  # TTL para cache de "não encontrado" por hash
+_CIRCUIT_BREAKER_COUNTER_TTL = 60
+# TTL de falha por hash (fora do circuit breaker)
+_METADATA_FAILURE_CACHE_TTL = 60
+_METADATA_503_CACHE_TTL = 300
+_METADATA_NOT_FOUND_CACHE_TTL = 120
 _hash_locks = {}
 _hash_locks_lock = threading.Lock()
 _MAX_HASH_LOCKS = 500
 _hash_fetching = set()
 _hash_fetching_lock = threading.Lock()
 
-# Sessão HTTP global reutilizada entre chamadas (evita overhead de TLS handshake repetido)
 _http_session = None
 _http_session_lock = threading.Lock()
-
 
 def _get_http_session() -> requests.Session:
     global _http_session
@@ -61,10 +58,7 @@ def _get_http_session() -> requests.Session:
                 _http_session = s
     return _http_session
 
-
 def _is_redis_connection_error(error: Exception) -> bool:
-    # Verifica se o erro é de conexão com Redis (Redis desabilitado/indisponível)
-    # Retorna True se for erro de conexão, False caso contrário
     error_str = str(error).lower()
     connection_errors = [
         "connection refused",
@@ -78,16 +72,11 @@ def _is_redis_connection_error(error: Exception) -> bool:
     ]
     return any(err in error_str for err in connection_errors)
 
-
 def _log_redis_error(operation: str, error: Exception, log_once: bool = True) -> None:
-    # Loga erros do Redis de forma mais amigável
-    # Se for erro de conexão (Redis desabilitado), mostra mensagem informativa
-    # Se for outro erro, mostra detalhes técnicos apenas em DEBUG
     if _is_redis_connection_error(error):
         logger.debug(f"Redis fallback: {operation}")
     else:
         logger.debug(f"Redis error: {operation}")
-
 
 def _rate_limit():
     global _rate_limiter_last_request, _rate_limiter_burst_tokens
@@ -113,7 +102,6 @@ def _rate_limit():
         _rate_limiter_burst_tokens -= 1
         _rate_limiter_last_request = now
 
-
 _circuit_breaker_log_cache = {}
 _circuit_breaker_log_lock = threading.Lock()
 _CIRCUIT_BREAKER_LOG_COOLDOWN = 30
@@ -122,12 +110,8 @@ _cache_failure_log_lock = threading.Lock()
 _CACHE_FAILURE_LOG_COOLDOWN = 60
 
 def _is_circuit_breaker_open() -> bool:
-    # Verifica se o circuit breaker está aberto (desabilitado)
-    # Retorna True se deve evitar consultas por um período
-    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
-    # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
             disabled_until_str = redis.hget(_CIRCUIT_BREAKER_KEY, 'disabled')
@@ -135,7 +119,6 @@ def _is_circuit_breaker_open() -> bool:
                 disabled_until_float = float(disabled_until_str)
                 now = time.time()
                 if now < disabled_until_float:
-                    # Throttling de logs - só loga uma vez por minuto
                     log_key = "circuit_breaker_open"
                     should_log = False
                     with _circuit_breaker_log_lock:
@@ -145,12 +128,10 @@ def _is_circuit_breaker_open() -> bool:
                             should_log = True
                     
                     return True
-                # Período expirou, limpa o campo
                 redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception as e:
             _log_redis_error("verificar circuit breaker", e)
     
-    # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
         _request_cache.circuit_breaker = {
             'disabled': False,
@@ -163,37 +144,28 @@ def _is_circuit_breaker_open() -> bool:
     
     return _request_cache.circuit_breaker['disabled']
 
-
 def _record_timeout():
-    # Registra um timeout e abre o circuit breaker se houver muitos timeouts consecutivos
-    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
-    # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            # Usa Redis Hash para armazenar contadores
             timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
-            # Expira hash com TTL do contador (garante que não expire antes do disabled)
             redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
-            # Se atingiu o limite, abre o circuit breaker
+
             if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
-                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
-                # Reseta contador
                 redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts')
             return
         except Exception as e:
             _log_redis_error("registrar timeout", e)
     
-    # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
         _request_cache.circuit_breaker = {
             'disabled': False,
@@ -203,42 +175,33 @@ def _record_timeout():
     
     _request_cache.circuit_breaker['timeout_count'] += 1
     
-    # Se atingiu o limite, abre o circuit breaker apenas para esta query
+
     if _request_cache.circuit_breaker['timeout_count'] >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
         _request_cache.circuit_breaker['disabled'] = True
         logger.debug(f"Circuit breaker: {_request_cache.circuit_breaker['timeout_count']} timeouts (query atual)")
 
-
 def _record_503():
-    # Registra um erro 503 e abre o circuit breaker se houver muitos 503s consecutivos
-    # Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query)
     redis = get_redis_client()
     
-    # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            # Usa Redis Hash para armazenar contadores
             error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
-            # Expira hash com TTL do contador (garante que não expire antes do disabled)
             redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
             
-            # Se atingiu o limite, abre o circuit breaker
+
             if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
-                # Expira hash com duração do disable (garante que disabled não expire antes do tempo)
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
                 logger.warning(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
-                # Reseta contador
                 redis.hdel(_CIRCUIT_BREAKER_KEY, '503s')
             return
         except Exception as e:
             _log_redis_error("registrar 503", e)
     
-    # Fallback: usa cache por requisição (apenas durante a query atual)
     if not hasattr(_request_cache, 'circuit_breaker'):
         _request_cache.circuit_breaker = {
             'disabled': False,
@@ -248,42 +211,29 @@ def _record_503():
     
     _request_cache.circuit_breaker['503_count'] += 1
     
-    # Se atingiu o limite, abre o circuit breaker apenas para esta query
+
     if _request_cache.circuit_breaker['503_count'] >= _CIRCUIT_BREAKER_503_THRESHOLD:
         _request_cache.circuit_breaker['disabled'] = True
         logger.debug(f"Circuit breaker: {_request_cache.circuit_breaker['503_count']} erros 503 (query atual)")
 
-
 def _record_success():
-    """
-    Registra uma requisição bem-sucedida, resetando os contadores de erros.
-    Se o circuit breaker estiver aberto, fecha (half-open state).
-    Usa Redis se disponível (global), senão usa cache por requisição (apenas durante a query).
-    """
+    """Registra uma requisição bem-sucedida, resetando os contadores de erros"""
     redis = get_redis_client()
     
-    # Tenta usar Redis primeiro (circuit breaker global)
     if redis:
         try:
-            # Reseta contadores no Hash
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
-            # Fecha circuit breaker se estiver aberto (half-open state - permite tentar novamente)
             redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
         except Exception:
             pass
     
-    # Fallback: reseta contadores por requisição (apenas durante a query atual)
     if hasattr(_request_cache, 'circuit_breaker'):
         _request_cache.circuit_breaker['timeout_count'] = 0
         _request_cache.circuit_breaker['503_count'] = 0
         _request_cache.circuit_breaker['disabled'] = False
 
-
 def _is_failure_cached(info_hash: str) -> bool:
-    """
-    Verifica se uma falha recente está em cache para evitar tentativas repetidas.
-    Usa Redis primeiro, memória apenas se Redis não disponível.
-    """
+    """Verifica se uma falha recente está em cache para evitar tentativas repetidas"""
     info_hash_lower = info_hash.lower()
     
     try:
@@ -293,36 +243,21 @@ def _is_failure_cached(info_hash: str) -> bool:
     except Exception:
         return False
 
-
-
-
 def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = None):
-    """
-    Cacheia uma falha para evitar tentativas repetidas.
-    Usa Redis primeiro, memória apenas se Redis não disponível.
-    Parte do sistema de circuit breaker.
-    
-    Args:
-        info_hash: Hash do torrent
-        is_503: Se True, cacheia por mais tempo (5 minutos) no Redis, pois é erro de serviço indisponível
-        ttl: TTL customizado (opcional). Se não fornecido, usa TTL padrão baseado em is_503
-    """
     info_hash_lower = info_hash.lower()
     
     try:
         from cache.metadata_cache import MetadataCache
         metadata_cache = MetadataCache()
         if ttl is not None:
-            # TTL customizado (ex: para "não encontrado" - 2 minutos)
+
             metadata_cache.set_failure(info_hash_lower, ttl)
         elif is_503:
-            # Erros 503 são cacheados por mais tempo
             metadata_cache.set_failure(info_hash_lower, _METADATA_503_CACHE_TTL)
         else:
             metadata_cache.set_failure(info_hash_lower, _METADATA_FAILURE_CACHE_TTL)
     except Exception:
         pass
-
 
 def _get_hash_lock(info_hash: str):
     info_hash_lower = info_hash.lower()
@@ -335,7 +270,6 @@ def _get_hash_lock(info_hash: str):
             _hash_locks[info_hash_lower] = threading.Lock()
         return _hash_locks[info_hash_lower]
 
-
 def cleanup_metadata_state():
     """Limpa estado global de metadata (locks e fetching set). Chamar entre requisições."""
     with _hash_locks_lock:
@@ -347,52 +281,36 @@ def cleanup_metadata_state():
     with _circuit_breaker_log_lock:
         _circuit_breaker_log_cache.clear()
 
-
 def _parse_bencode_size(data: bytes) -> Optional[int]:
-    """
-    Parseia bencode parcial para extrair tamanho do torrent.
-    Procura por 'length' no campo 'info'.
-    """
+    """Parseia bencode parcial para extrair tamanho do torrent"""
     try:
-        # Procura por padrão "length" seguido de número
-        # Formato bencode: "6:length" seguido de "i123456e" (número)
         pattern = rb'lengthi(\d+)e'
         match = re.search(pattern, data)
         if match:
             return int(match.group(1))
         
-        # Tenta encontrar "length" e depois o número em formato bencode
-        # Para single file: "6:lengthi{size}e"
-        # Para multi-file: "5:filesl" seguido de múltiplos "d6:lengthi{size}e"
         length_patterns = [
-            rb'6:lengthi(\d+)e',  # Single file
-            rb'6:lengthi(\d+)e',   # Multi-file (cada arquivo)
+            rb'6:lengthi(\d+)e',
+            rb'6:lengthi(\d+)e',
         ]
         
         for pattern in length_patterns:
             matches = re.findall(pattern, data)
             if matches:
-                # Se múltiplos matches, soma (multi-file)
                 total = sum(int(m) for m in matches)
                 if total > 0:
                     return total
         
-        # Fallback: procura por números grandes que podem ser tamanhos
-        # Procura por padrão "i" seguido de 6-15 dígitos seguido de "e"
         large_number_pattern = rb'i(\d{6,15})e'
         matches = re.findall(large_number_pattern, data)
         if matches:
-            # Filtra números que podem ser tamanhos (entre 1MB e 1PB)
             sizes = []
             for num_str in matches:
                 num = int(num_str)
-                # Entre 1MB (1048576) e 1PB (1125899906842624)
                 if 1048576 <= num <= 1125899906842624:
                     sizes.append(num)
             
             if sizes:
-                # Se há múltiplos tamanhos válidos, pode ser multi-file
-                # Retorna a soma (tamanho total)
                 return sum(sizes)
         
         return None
@@ -400,21 +318,14 @@ def _parse_bencode_size(data: bytes) -> Optional[int]:
         logger.debug(f"Bencode parse error: {type(e).__name__}")
         return None
 
-
 def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Tuple[Optional[bytes], bool, bool]:
-    """
-    Baixa header do .torrent do iTorrents em um único request (Range 0-512KB).
-    Usa sessão HTTP global para reusar conexão TCP/TLS.
-    
-    Returns:
-        Tupla (dados, foi_timeout, foi_503)
-    """
+    """Baixa header do .torrent do iTorrents em um único request (Range 0-512KB)"""
     info_hash_hex = info_hash.lower() if use_lowercase else info_hash.upper()
     url = f"https://itorrents.org/torrent/{info_hash_hex}.torrent"
     
     session = _get_http_session()
-    timeout_config = (3, 4)  # (connect, read)
-    max_bytes = 512 * 1024  # 512KB
+    timeout_config = (3, 4)
+    max_bytes = 512 * 1024
     
     _rate_limit()
     
@@ -458,32 +369,13 @@ def _fetch_torrent_header(info_hash: str, use_lowercase: bool = False) -> Tuple[
     except Exception:
         return None, False, False
 
-
 def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = None, title: Optional[str] = None) -> Optional[Dict[str, any]]:
-    """
-    Busca metadados do torrent via iTorrents.org.
-    
-    Args:
-        info_hash: Info hash do torrent (hex, 40 caracteres)
-        scraper_name: Nome do scraper (opcional, para logs)
-        title: Título do torrent (opcional, para logs)
-        
-    Returns:
-        Dict com metadados extraídos:
-        - 'size' (int): Tamanho total em bytes (obrigatório)
-        - 'name' (str, opcional): Nome do torrent
-        - 'creation_date' (int, opcional): Timestamp Unix da criação do torrent
-        
-        Retorna None se não conseguir extrair pelo menos o tamanho.
-    """
     info_hash_lower = info_hash.lower()
     
     redis = get_redis_client()
     
-    # Usa lock por hash para evitar requisições simultâneas ao mesmo hash
     hash_lock = _get_hash_lock(info_hash)
     with hash_lock:
-        # Verifica cache primeiro (dentro do lock para evitar verificações duplicadas)
         try:
             from cache.metadata_cache import MetadataCache
             metadata_cache = MetadataCache()
@@ -493,9 +385,7 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         except Exception as e:
             _log_redis_error("verificar cache de metadata", e)
         
-        # Verifica circuit breaker
         if _is_circuit_breaker_open():
-            # Throttling de logs - só loga uma vez a cada 30 segundos
             now = time.time()
             log_key = "circuit_breaker_skip_metadata"
             should_log = False
@@ -507,9 +397,7 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             
             return None
         
-        # Verifica se há falha recente em cache (inclui "não encontrado" e outras falhas)
         if _is_failure_cached(info_hash):
-            # Throttling de logs - só loga uma vez a cada 60 segundos por hash
             now = time.time()
             log_key = f"cache_failure_{info_hash_lower}"
             should_log = False
@@ -521,86 +409,65 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
             
             return None
         
-        # Verifica se já está sendo buscado por outra thread (evita logs duplicados)
-        # Usa verificação atômica: verifica e adiciona em uma única operação
         will_fetch = False
         with _hash_fetching_lock:
             if info_hash_lower not in _hash_fetching:
                 _hash_fetching.add(info_hash_lower)
-                will_fetch = True  # Esta thread será a responsável pela busca
+                will_fetch = True
         
-        # Se já está sendo buscado, espera um pouco e verifica cache novamente
         if not will_fetch:
             import time
-            # Espera até 2 segundos verificando cache periodicamente
             for _ in range(20):
-                time.sleep(0.1)  # Espera 100ms
+                time.sleep(0.1)
                 try:
                     from cache.metadata_cache import MetadataCache
                     metadata_cache = MetadataCache()
                     data = metadata_cache.get(info_hash_lower)
                     if data:
-                        # Outra thread já buscou e salvou no cache
                         return data
                 except Exception:
                     pass
-            # Se não encontrou após esperar, outra thread está buscando
-            # Remove do conjunto e retorna None para evitar busca duplicada
             with _hash_fetching_lock:
                 _hash_fetching.discard(info_hash_lower)
             return None
         
-        # Busca do iTorrents (não estava em cache e esta thread será a responsável)
-        # Log apenas quando realmente vai buscar (não está em cache e não está sendo buscado)
-        # Monta identificação para o log
         log_parts = []
         if scraper_name:
             log_parts.append(f"[{scraper_name}]")
         if title:
             title_preview = title[:120] if len(title) > 120 else title
             log_parts.append(title_preview)
-        # Sempre inclui o hash completo para identificação
         log_parts.append(f"(hash: {info_hash_lower})")
         log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash_lower}"
         
         try:
-            # Tenta com lowercase primeiro (mais comum)
             torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=True)
             
-            # Se falhou mas não foi timeout nem 503, tenta com uppercase (menos comum)
-            # Se foi timeout ou 503, não tenta novamente para evitar esperas longas
             if not torrent_data and not was_timeout and not was_503:
                 torrent_data, was_timeout, was_503 = _fetch_torrent_header(info_hash, use_lowercase=False)
             
             if not torrent_data:
-                # Timeouts não devem cachear falha - podem ser temporários (rede lenta, servidor ocupado)
-                # Apenas cacheia se foi erro HTTP específico (já foi cacheado dentro de _fetch_torrent_header)
-                # Cacheia "não encontrado" usando circuit breaker (TTL de 2 minutos para permitir novas tentativas)
+
                 _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
-                # Logs de erro removidos para reduzir verbosidade
-                # Remove do conjunto de hashes sendo buscados mesmo em caso de falha
                 logger.debug(f"[Metadata] Buscando: {log_id} → Não encontrado")
                 with _hash_fetching_lock:
                     _hash_fetching.discard(info_hash_lower)
                 return None
         except Exception as e:
-            # Em caso de erro, remove do conjunto
             with _hash_fetching_lock:
                 _hash_fetching.discard(info_hash_lower)
             raise
         
-        # Extrai tamanho do bencode
         size = _parse_bencode_size(torrent_data)
         
         if not size:
-            # Cacheia "não encontrado" usando circuit breaker (TTL de 2 minutos)
+
             _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
             logger.debug(f"[Metadata] Buscando: {log_id} → Não encontrado (sem size)")
             with _hash_fetching_lock:
                 _hash_fetching.discard(info_hash_lower)
             return None
         
-        # Tenta extrair nome também (opcional)
         name = None
         try:
             name_pattern = rb'4:name(\d+):'
@@ -611,7 +478,6 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
                 if start_pos + name_len <= len(torrent_data):
                     name_bytes = torrent_data[start_pos:start_pos + name_len]
                     name = name_bytes.decode('utf-8', errors='ignore')
-                    # Log removido - nome será usado apenas internamente
         except Exception:
             pass
         
@@ -619,28 +485,22 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         if name:
             result['name'] = name
         
-        # Tenta extrair data de criação (opcional) - para usar como date
         try:
-            # Formato: "13:creation date" seguido de "i{timestamp}e"
             creation_date_pattern = rb'13:creation datei(\d+)e'
             creation_match = re.search(creation_date_pattern, torrent_data)
             if creation_match:
                 timestamp = int(creation_match.group(1))
-                # Timestamps válidos estão entre 2000 e 2100
-                if 946684800 <= timestamp <= 4102444800:  # 2000-01-01 a 2100-01-01
+                if 946684800 <= timestamp <= 4102444800:
                     result['creation_date'] = timestamp
         except Exception:
             pass
         
-        # Tenta extrair campos customizados que possam conter IMDB
-        # Alguns trackers adicionam campos como "imdb", "imdb_id", "imdb-id", etc.
         try:
-            # Padrões comuns para campos IMDB no bencode
             imdb_patterns = [
-                rb'4:imdb(\d+):',           # Campo "imdb"
-                rb'7:imdb_id(\d+):',       # Campo "imdb_id"
-                rb'8:imdb-id(\d+):',       # Campo "imdb-id"
-                rb'9:imdb\.com(\d+):',     # Campo "imdb.com"
+                rb'4:imdb(\d+):',
+                rb'7:imdb_id(\d+):',
+                rb'8:imdb-id(\d+):',
+                rb'9:imdb\.com(\d+):',
             ]
             
             for pattern in imdb_patterns:
@@ -651,11 +511,9 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
                     if start_pos + imdb_len <= len(torrent_data):
                         imdb_bytes = torrent_data[start_pos:start_pos + imdb_len]
                         imdb_value = imdb_bytes.decode('utf-8', errors='ignore').strip()
-                        # Verifica se é um formato válido de IMDB ID (tt1234567)
                         if re.match(r'^tt\d+$', imdb_value):
                             result['imdb'] = imdb_value
                             break
-                        # Ou pode ser uma URL completa, extrai o ID
                         url_match = re.search(r'imdb\.com/title/(tt\d+)', imdb_value)
                         if url_match:
                             result['imdb'] = url_match.group(1)
@@ -663,7 +521,6 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         except Exception:
             pass
         
-        # Cacheia resultado (Redis primeiro, memória apenas se Redis não disponível)
         saved_to_redis = False
         try:
             from cache.metadata_cache import MetadataCache
@@ -673,45 +530,30 @@ def fetch_metadata_from_itorrents(info_hash: str, scraper_name: Optional[str] = 
         except Exception:
             pass
         
-        # Log com resultado da busca e salvamento
         if saved_to_redis:
             logger.debug(f"[Metadata] Buscando: {log_id} → Salvo no Redis")
         else:
             logger.debug(f"[Metadata] Buscando: {log_id} → Encontrado (não salvo no Redis)")
         
-        # Remove do conjunto de hashes sendo buscados após salvar no cache com sucesso
         with _hash_fetching_lock:
             _hash_fetching.discard(info_hash_lower)
         
         return result
 
-
 def get_torrent_size(magnet_link: str, info_hash: Optional[str] = None) -> Optional[str]:
-    """
-    Obtém tamanho do torrent em formato legível (ex: "1.5 GB").
-    
-    Args:
-        magnet_link: Link magnet completo
-        info_hash: Info hash (opcional, será extraído do magnet se não fornecido)
-        
-    Returns:
-        String com tamanho formatado (ex: "1.5 GB") ou None
-    """
+    """Obtém tamanho do torrent em formato legível (ex: "1.5 GB")"""
     from magnet.parser import MagnetParser
     from utils.text.utils import format_bytes
     
     try:
-        # Extrai info_hash do magnet se não fornecido
         if not info_hash:
             parsed = MagnetParser.parse(magnet_link)
             info_hash = parsed['info_hash']
         
-        # Busca metadados
         metadata = fetch_metadata_from_itorrents(info_hash)
         if not metadata or 'size' not in metadata:
             return None
         
-        # Formata tamanho
         size_bytes = metadata['size']
         return format_bytes(size_bytes)
     

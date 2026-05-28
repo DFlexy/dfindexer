@@ -1,11 +1,8 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import re
 from typing import List
 
-
-# Procura ano em texto auxiliar ou no próprio título
 def find_year_from_text(text: str, title: str) -> str:
     year_match = re.search(r'(?:Lançamento|Year):\s*.*?(\d{4})', text)
     if year_match:
@@ -17,14 +14,10 @@ def find_year_from_text(text: str, title: str) -> str:
     
     return ''
 
-
-# Captura tamanhos (GB/MB) exibidos em texto livre
 def find_sizes_from_text(text: str) -> List[str]:
     sizes = re.findall(r'(\d+[\.,]?\d+)\s*(GB|MB)', text)
     return [f"{size[0]} {size[1]}" for size in sizes]
 
-
-# Converte bytes em string legível (KB/MB/GB…)
 def format_bytes(size: int) -> str:
     try:
         size = int(size)

@@ -1,4 +1,3 @@
-# Ferramentas utilitárias para descoberta e criação dinâmica de scrapers
 
 from __future__ import annotations
 
@@ -12,12 +11,9 @@ from .base import BaseScraper
 _SCRAPER_REGISTRY: Dict[str, Type[BaseScraper]] = {}
 _SCRAPER_METADATA: Dict[str, Dict[str, Any]] = {}
 
-
 def _normalize_scraper_type(scraper_type: str) -> str:
     return scraper_type.strip().lower().replace('-', '_')
 
-
-# Carrega dinamicamente todas as classes que herdam de BaseScraper
 def _discover_scrapers() -> None:
     if _SCRAPER_REGISTRY:
         return
@@ -58,19 +54,13 @@ def _discover_scrapers() -> None:
                     "display_name": display_name,
                 }
 
-
-# Normaliza o nome do scraper para comparações
 def normalize_scraper_type(scraper_type: str) -> str:
     return _normalize_scraper_type(scraper_type)
 
-
-# Retorna metadados dos scrapers disponíveis
 def available_scraper_types() -> Dict[str, Dict[str, Any]]:
     _discover_scrapers()
     return {scraper_type: dict(metadata) for scraper_type, metadata in _SCRAPER_METADATA.items()}
 
-
-# Retorna a URL padrão associada a um scraper
 def get_scraper_default_url(scraper_type: str) -> Optional[str]:
     _discover_scrapers()
     normalized = _normalize_scraper_type(scraper_type)
@@ -82,8 +72,6 @@ def get_scraper_default_url(scraper_type: str) -> Optional[str]:
         return default_url
     return None
 
-
-# Cria uma instância do scraper solicitado
 def create_scraper(scraper_type: str, base_url: Optional[str] = None, use_flaresolverr: bool = False) -> BaseScraper:
     _discover_scrapers()
     normalized = _normalize_scraper_type(scraper_type)
@@ -92,7 +80,6 @@ def create_scraper(scraper_type: str, base_url: Optional[str] = None, use_flares
         available = ", ".join(sorted(_SCRAPER_REGISTRY.keys())) or "nenhum"
         raise ValueError(f"Scraper '{scraper_type}' não encontrado. Disponíveis: {available}")
     return scraper_class(base_url=base_url, use_flaresolverr=use_flaresolverr)
-
 
 __all__ = [
     "BaseScraper",

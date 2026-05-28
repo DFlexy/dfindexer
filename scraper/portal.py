@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import html
 import re
@@ -20,11 +19,8 @@ from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
 
-# Contexto de logging centralizado para este scraper
 _log_ctx = ScraperLogContext("Portal", logger)
 
-
-# Scraper específico para Portal Filmes
 class PortalScraper(BaseScraper):
     SCRAPER_TYPE = "portal"
     DEFAULT_BASE_URL = "https://nerdfilmes.net/"
@@ -35,7 +31,6 @@ class PortalScraper(BaseScraper):
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
     
-    # Busca torrents com variações da query
     def search(
         self,
         query: str,
@@ -47,11 +42,9 @@ class PortalScraper(BaseScraper):
             query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
         )
     
-    # Extrai links da página inicial (lógica especial para separar filmes e séries)
-    # Extrai links da página inicial — somente seção "Últimos Adicionados"
     def _extract_links_from_page(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:
         filmes_links = []
-        series_links = []  # não usado; mantido pela assinatura (filmes, series)
+        series_links = []
 
         for h2 in doc.find_all('h2', class_='block-title'):
             if 'Últimos Adicionados' in (h2.get_text() or ''):
@@ -81,13 +74,10 @@ class PortalScraper(BaseScraper):
 
         return (filmes_links, series_links)
     
-    # Obtém torrents de uma página específica (usa helper padrão com extração customizada)
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
-        # Prepara flags de teste/metadata/trackers (centralizado no BaseScraper)
         is_using_default_limit, skip_metadata, skip_trackers = self._prepare_page_flags(max_items, is_test=is_test)
         
         try:
-            # Constrói URL da página usando função utilitária
             from utils.concurrency.scraper_helpers import (
                 build_page_url, get_effective_max_items, limit_list,
                 process_links_parallel
@@ -98,57 +88,46 @@ class PortalScraper(BaseScraper):
             if not doc:
                 return []
             
-            # Extrai links usando método específico do scraper (retorna tupla separada)
             filmes_links, series_links = self._extract_links_from_page(doc)
             
-            # Obtém limite efetivo usando função utilitária
             effective_max = get_effective_max_items(max_items)
 
-            # Aplica limite somente à lista de links (seção Últimos Adicionados)
             if effective_max > 0:
                 filmes_links = limit_list(filmes_links, effective_max)
                 _log_ctx.info(f"Limite configurado: {effective_max} - Coletando {len(filmes_links)} itens")
             links = filmes_links
             
-            # Usa processamento paralelo centralizado (mantém ordem original automaticamente)
-            # NÃO passa limite de torrents - o limite já foi aplicado nos links acima
             all_torrents = process_links_parallel(
                 links,
                 self._get_torrents_from_page,
-                None,  # Sem limite de torrents - processa todos os links limitados
+                None,
                 scraper_name=self.SCRAPER_TYPE if hasattr(self, 'SCRAPER_TYPE') else None,
                 use_flaresolverr=self.use_flaresolverr
             )
             
-            # Enriquece torrents (usa flags preparadas pelo BaseScraper)
             enriched = self.enrich_torrents(
                 all_torrents,
                 skip_metadata=skip_metadata,
                 skip_trackers=skip_trackers
             )
-            # Retorna todos os magnets encontrados (sem limite nos resultados finais)
             return enriched
         finally:
             self._skip_metadata = False
             self._is_test = False
     
-    # Extrai links dos resultados de busca (usa implementação base de _search_variations)
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        # Tenta primeiro os seletores específicos do site (estrutura da nova página)
         for item in doc.select('.movies-list article.col .item .image a, .movies-list article.col .item .title a'):
             href = item.get('href')
             if href:
                 links.append(href)
         
-        # Se não encontrou com seletor específico, tenta alternativos
         if not links:
             for item in doc.select('div.movies-list div.item a'):
                 href = item.get('href')
                 if href:
                     links.append(href)
         
-        # Fallback: tenta seletores WordPress comuns
         if not links:
             for article in doc.select('article.post'):
                 link_elem = article.select_one('h2.entry-title a, h1.entry-title a, header.entry-header a')
@@ -158,21 +137,17 @@ class PortalScraper(BaseScraper):
                         links.append(href)
         return links
     
-    # Extrai torrents de uma página
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
-        # Garante que o link seja absoluto para o campo details
         absolute_link = urljoin(self.base_url, link) if link and not link.startswith('http') else link
         doc = self.get_document(absolute_link, self.base_url)
         if not doc:
             return []
         
-        # Extrai data da página (tenta URL, meta tags, etc.)
         from utils.parsing.date_extraction import extract_date_from_page
         date = extract_date_from_page(doc, absolute_link, self.SCRAPER_TYPE)
         
         torrents = []
         
-        # Tenta encontrar o conteúdo principal
         content_div = None
         content_selectors = [
             'article',
@@ -191,7 +166,6 @@ class PortalScraper(BaseScraper):
         if not content_div:
             return []
         
-        # Extrai título da página
         page_title = ''
         title_selectors = [
             'h1.entry-title',
@@ -208,24 +182,19 @@ class PortalScraper(BaseScraper):
                 page_title = title_elem.get_text(strip=True)
                 break
         
-        # Extrai título original
         original_title = ''
         
-        # PRIMEIRO: Busca em #page-heading span.tempo (estrutura nova do site)
         page_heading = doc.select_one('#page-heading')
         if page_heading:
             tempo_span = page_heading.select_one('span.tempo')
             if tempo_span:
                 tempo_text = tempo_span.get_text(strip=True)
                 tempo_html = str(tempo_span)
-                # Busca padrão "Título original: The Pitt"
                 if re.search(r'(?i)T[íi]tulo\s+original\s*:?', tempo_text):
-                    # Extrai do texto - pega tudo após "Título original:" até o fim ou próximo campo
                     text_match = re.search(r'(?i)T[íi]tulo\s+original\s*:?\s*(.+?)(?:\s*$)', tempo_text, re.DOTALL)
                     if text_match:
                         original_title = text_match.group(1).strip()
                     else:
-                        # Tenta do HTML - pega tudo após "Título original:" até </span>
                         html_match = re.search(r'(?i)T[íi]tulo\s+original\s*:?\s*(.*?)(?:</span|$)', tempo_html, re.DOTALL)
                         if html_match:
                             html_text = html_match.group(1)
@@ -234,14 +203,9 @@ class PortalScraper(BaseScraper):
                             if html_text:
                                 original_title = html_text
         
-        # SEGUNDO: Busca no HTML completo do content_div (para pegar casos onde está em tags quebradas)
         if not original_title:
             content_html = str(content_div)
             if re.search(r'(?i)T[íi]tulo\s+Original\s*:?', content_html):
-                # Busca no HTML completo primeiro (mais confiável para tags quebradas)
-                # Tenta padrão com </b> ou </strong>, com : dentro ou fora
-                # Ex: <strong>Título Original</strong>: Valor
-                # Ex: <b>Título Original:</b> Valor
                 html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(?:</b>|</strong>)?\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|</b>|$)', content_html, re.DOTALL)
                 
                 if html_match:
@@ -251,7 +215,6 @@ class PortalScraper(BaseScraper):
                     if html_text:
                         original_title = html_text
         
-        # TERCEIRO: Se não encontrou no HTML completo, busca elemento por elemento no content_div
         if not original_title:
             for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
                 elem_html = str(elem)
@@ -262,7 +225,6 @@ class PortalScraper(BaseScraper):
                     if len(text_parts) > 1:
                         original_title = text_parts[1].strip()
                     
-                    # Tenta extrair do HTML do elemento
                     html_match = re.search(r'(?i)T[íi]tulo\s+Original\s*:?\s*(?:</b>|</strong>)?\s*:?\s*(.*?)(?:<br\s*/?>|</span|</p|</div|</strong|</b>|$)', elem_html, re.DOTALL)
                     
                     if html_match:
@@ -275,7 +237,6 @@ class PortalScraper(BaseScraper):
                     if original_title:
                         break
         
-        # Processa o título original encontrado
         if original_title:
             original_title = html.unescape(original_title)
             original_title = re.sub(r'\s+', ' ', original_title).strip()
@@ -284,56 +245,43 @@ class PortalScraper(BaseScraper):
                     original_title = original_title.split(stop)[0].strip()
                     break
         
-        # Extrai título traduzido de "Baixar Título:" ou "Baixar Filme:"
-        # Primeiro tenta buscar no elemento poster-info (mais específico)
         title_translated_processed = ''
         poster_info = doc.select_one('.poster-info')
         if poster_info:
             poster_html = str(poster_info)
             poster_text = poster_info.get_text(' ', strip=True)
             
-            # Busca por "Baixar Título:" ou "Baixar Filme:"
             if re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?', poster_html):
-                # Tenta extrair do HTML primeiro (mais preciso)
-                # Para antes de tags HTML ou campos como "Titulo Original:", "IMDb:", etc.
                 html_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.*?)(?:<br|</span|</p|</div|</b|T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', poster_html, re.DOTALL)
                 if html_match:
                     html_text = html_match.group(1)
                     html_text = re.sub(r'<[^>]+>', '', html_text)
-                    # Remove campos que podem ter sido capturados
                     html_text = re.sub(r'(?i).*?T[íi]tulo\s+Original:.*$', '', html_text)
                     html_text = re.sub(r'(?i).*?IMDb:.*$', '', html_text)
                     html_text = html_text.strip()
                     if html_text:
                         title_translated_processed = html_text
                 else:
-                    # Fallback: extrai do texto, para antes de "Titulo Original:", "IMDb:", etc.
                     text_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', poster_text)
                     if text_match:
                         title_translated_processed = text_match.group(1).strip()
         
-        # Se não encontrou no poster-info, busca em todos os elementos do content_div
         if not title_translated_processed:
             for elem in content_div.find_all(['p', 'span', 'div', 'strong', 'em', 'li']):
                 elem_html = str(elem)
                 elem_text = elem.get_text(' ', strip=True)
                 
-                # Busca por "Baixar Título:" ou "Baixar Filme:"
                 if re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?', elem_html):
-                    # Tenta extrair do HTML primeiro (mais preciso)
-                    # Para antes de tags HTML ou campos como "Titulo Original:", "IMDb:", etc.
                     html_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.*?)(?:<br|</span|</p|</div|</b|T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', elem_html, re.DOTALL)
                     if html_match:
                         html_text = html_match.group(1)
                         html_text = re.sub(r'<[^>]+>', '', html_text)
-                        # Remove campos que podem ter sido capturados
                         html_text = re.sub(r'(?i).*?T[íi]tulo\s+Original:.*$', '', html_text)
                         html_text = re.sub(r'(?i).*?IMDb:.*$', '', html_text)
                         html_text = html_text.strip()
                         if html_text:
                             title_translated_processed = html_text
                     else:
-                        # Fallback: extrai do texto, para antes de "Titulo Original:", "IMDb:", etc.
                         text_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+T[íi]tulo\s+Original:|IMDb:|Lançamento:|Gênero:|Duração:|$)', elem_text)
                         if text_match:
                             title_translated_processed = text_match.group(1).strip()
@@ -341,28 +289,21 @@ class PortalScraper(BaseScraper):
                     if title_translated_processed:
                         break
         
-        # Fallback: busca na meta tag og:description
         if not title_translated_processed:
             og_description = doc.find('meta', property='og:description')
             if og_description:
                 og_content = og_description.get('content', '')
                 if og_content:
-                    # Busca por "Baixar Título:" na meta description
-                    # Extrai tudo até "Título Original:" ou fim da string
                     meta_match = re.search(r'(?i)Baixar\s+(?:T[íi]tulo|Filme)\s*:?\s*(.+?)(?:\s+Título Original|$)', og_content)
                     if meta_match:
                         title_translated_processed = meta_match.group(1).strip()
         
-        # Fallback adicional: busca na meta tag og:title
         if not title_translated_processed:
             og_title = doc.find('meta', property='og:title')
             if og_title:
                 og_title_content = og_title.get('content', '')
                 if og_title_content:
-                    # Extrai o título da og:title (ex: "ZENSHU (2025) Torrent Dual Áudio Download")
-                    # Remove ano, "Torrent", "Dual Áudio", "Download" e outras informações
                     og_title_clean = og_title_content.strip()
-                    # Remove padrões comuns: (2025), Torrent, Dual Áudio, Download
                     og_title_clean = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*', ' ', og_title_clean)
                     og_title_clean = re.sub(r'\s+Torrent\s+.*$', '', og_title_clean, flags=re.IGNORECASE)
                     og_title_clean = re.sub(r'\s+Dual\s+Áudio\s+Download\s*$', '', og_title_clean, flags=re.IGNORECASE)
@@ -372,20 +313,14 @@ class PortalScraper(BaseScraper):
                     if og_title_clean:
                         title_translated_processed = og_title_clean
         
-        # Processa o título traduzido encontrado
         if title_translated_processed:
-            # Remove "Torrent" do final
             title_translated_processed = re.sub(r'\s+Torrent\s*$', '', title_translated_processed, flags=re.IGNORECASE)
-            # Remove ano entre parênteses (ex: (2025))
             title_translated_processed = re.sub(r'\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', title_translated_processed)
-            # Remove outros padrões comuns
             title_translated_processed = re.sub(r'\s*Torrent\s*\([0-9]{4}(?:-[0-9]{4})?\)\s*$', '', title_translated_processed, flags=re.IGNORECASE)
             
             title_translated_processed = html.unescape(title_translated_processed)
             title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
             
-            # Para antes de outros campos (Gênero, Duração, etc.)
-            # Usa regex para encontrar qualquer variação (com ou sem acento, com ou sem espaço antes)
             stop_patterns = [
                 r'\n',
                 r'Gênero:',
@@ -405,31 +340,25 @@ class PortalScraper(BaseScraper):
                 from utils.text.cleaning import clean_title_translated_processed
                 title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
-        # Fallback: usa título da página se não encontrou título original
         if not original_title:
             original_title = page_title
         
-        # Extrai ano, tamanhos, áudio e IMDB
         year = ''
         sizes = []
         imdb = ''
-        audio_info = None  # Para detectar "Áudio: Português", "Multi-Áudio", "Inglês"
-        audio_html_content = ''  # Armazena HTML completo para verificação adicional
-        all_paragraphs_html = []  # Coleta HTML de todos os parágrafos
+        audio_info = None
+        audio_html_content = ''
+        all_paragraphs_html = []
         
-        # Extrai informações de idioma do HTML
-        # Busca em content_div primeiro (estrutura padrão do portal)
         content_html = str(content_div)
         idioma = ''
         
-        # Extrai Idioma
         idioma_match = re.search(r'(?i)<b>Idioma:</b>\s*([^<]+?)(?:<br|</div|</p|$)', content_html)
         if idioma_match:
             idioma = idioma_match.group(1).strip()
             idioma = html.unescape(idioma)
             idioma = re.sub(r'<[^>]+>', '', idioma).strip()
         
-        # Se não encontrou com <b>, tenta sem tag bold
         if not idioma:
             idioma_match = re.search(r'(?i)Idioma\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', content_html)
             if idioma_match:
@@ -437,29 +366,21 @@ class PortalScraper(BaseScraper):
                 idioma = html.unescape(idioma)
                 idioma = re.sub(r'<[^>]+>', '', idioma).strip()
         
-        # Determina audio_info baseado apenas em Idioma (legenda será tratada separadamente)
         if idioma:
             idioma_lower = idioma.lower()
             
-            # Verifica se tem português no idioma (áudio)
             has_portugues_audio = 'português' in idioma_lower or 'portugues' in idioma_lower
-            # Verifica se tem Inglês no idioma
             has_ingles = 'inglês' in idioma_lower or 'ingles' in idioma_lower or 'english' in idioma_lower
             
-            # Lógica simplificada:
-            # Prioridade: Idioma com português primeiro (gera [Brazilian])
             if has_portugues_audio:
-                # Idioma tem português → gera [Brazilian]
                 audio_info = 'português'
             elif has_ingles:
-                # Idioma tem Inglês → pode gerar [Eng]
                 audio_info = 'inglês'
         
-        # Se não encontrou em content, busca em parágrafos individuais
         for p in content_div.select('p, span, div'):
             text = p.get_text()
             html_content = str(p)
-            all_paragraphs_html.append(html_content)  # Coleta HTML de todos os parágrafos
+            all_paragraphs_html.append(html_content)
             
             y = find_year_from_text(text, original_title or page_title)
             if y:
@@ -467,11 +388,9 @@ class PortalScraper(BaseScraper):
             
             sizes.extend(find_sizes_from_text(html_content))
             
-            # Extrai informação de áudio usando função utilitária (fallback)
             if not audio_info:
                 audio_info = detect_audio_from_html(html_content)
             
-            # Extrai IMDB
             if not imdb:
                 imdb_em = p.find('em', string=re.compile(r'IMDb:', re.I))
                 if imdb_em:
@@ -506,51 +425,38 @@ class PortalScraper(BaseScraper):
                                 break
                             continue
         
-        # Concatena HTML de todos os parágrafos para verificação independente de inglês e legenda
         if all_paragraphs_html:
             audio_html_content = ' '.join(all_paragraphs_html)
         elif content_html:
             audio_html_content = content_html
         
-        # Extrai links magnet - busca TODOS os links <a> no documento
-        # A função _resolve_link automaticamente identifica e resolve links protegidos
         all_links = doc.select('a[href]')
         
-        # Armazena tuplas (magnet_link, link_text) para poder usar o texto do link como fallback
         magnet_links_with_text = []
         for link in all_links:
             href = link.get('href', '')
             if not href:
                 continue
             
-            # Resolve automaticamente (magnet direto ou protegido)
             resolved_magnet = self._resolve_link(href)
             if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                # Extrai o texto do link para usar como fallback quando dn não estiver presente
                 link_text = link.get_text(strip=True)
-                # Remove emoji (🧲) e espaços do início, mantém apenas o texto útil
-                # Usa replace para remover o emoji específico e regex para espaços
                 link_text = link_text.replace('🧲', '').strip()
                 link_text = re.sub(r'^\s+', '', link_text)
                 
-                # Verifica se este magnet já foi adicionado (evita duplicados)
                 if not any(m[0] == resolved_magnet for m in magnet_links_with_text):
                     magnet_links_with_text.append((resolved_magnet, link_text))
         
         if not magnet_links_with_text:
             return []
         
-        # Remove duplicados de tamanhos
         sizes = list(dict.fromkeys(sizes))
         
-        # Processa cada magnet
-        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, (magnet_link, link_text) in enumerate(magnet_links_with_text):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
-                # Busca dados cruzados no Redis por info_hash (fallback principal)
                 cross_data = None
                 try:
                     from utils.text.cross_data import get_cross_data_from_redis
@@ -558,7 +464,6 @@ class PortalScraper(BaseScraper):
                 except Exception:
                     pass
                 
-                # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
                     if not original_title and cross_data.get('title_original_html'):
                         original_title = cross_data['title_original_html']
@@ -569,39 +474,25 @@ class PortalScraper(BaseScraper):
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai magnet_original diretamente do display_name do magnet resolvido
-                # NÃO modificar antes de passar para create_standardized_title
                 magnet_original = magnet_data.get('display_name', '')
                 
-                # Se o magnet não tem dn=, verifica se o texto do link é útil
-                # Textos genéricos como "1080p | EPISÓDIO 01 | Dual Áudio" não são bons como magnet_original
-                # Deixa missing_dn=True para usar fallbacks (metadata, cross_data, etc.)
+
                 if not magnet_original or len(magnet_original.strip()) < 3:
                     if link_text and len(link_text.strip()) >= 3:
-                        # Limpa o texto do link
                         cleaned_link_text = link_text.strip()
                         cleaned_link_text = cleaned_link_text.replace('🧲', '').strip()
                         cleaned_link_text = re.sub(r'^[\s\-|]+', '', cleaned_link_text)
                         cleaned_link_text = cleaned_link_text.strip()
                         
-                        # Verifica se o texto do link parece ser um título válido (não apenas qualidade/episódio)
-                        # Se contém apenas padrões como "1080p | EPISÓDIO 01", não usa como magnet_original
-                        # Deixa missing_dn=True para usar fallbacks
+
                         is_generic = bool(re.search(r'^(?:\d+p\s*\|?\s*)?(?:EPIS[ÓO]DIO|EP\.?)\s*\d+', cleaned_link_text, re.IGNORECASE))
                         is_generic = is_generic or bool(re.search(r'^\d+p\s*\|?\s*Dual\s+Áudio', cleaned_link_text, re.IGNORECASE))
                         
                         if not is_generic and len(cleaned_link_text) >= 5:
-                            # Texto parece ser um título válido, usa como magnet_original
                             magnet_original = cleaned_link_text
-                        # Se for genérico, mantém magnet_original vazio para usar fallbacks
                 
                 missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
-                # NOTA: Não busca cross_data aqui para não interferir no fluxo de prepare_release_title()
-                # A busca de fallback (release:title, cross_data, metadata) será feita dentro de prepare_release_title()
-                # quando missing_dn = True, através de get_metadata_name()
-                
-                # Salva magnet_processed no Redis se encontrado (para reutilização por outros scrapers)
                 if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
@@ -623,8 +514,6 @@ class PortalScraper(BaseScraper):
                     original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original=magnet_original
                 )
                 
-                # Adiciona [Brazilian], [Eng] conforme detectado
-                # NÃO adiciona DUAL/PORTUGUES/LEGENDADO ao release_title - apenas passa audio_info para a função de tags
                 final_title = add_audio_tag_if_needed(
                     standardized_title, 
                     original_release_title, 
@@ -634,7 +523,6 @@ class PortalScraper(BaseScraper):
                     audio_html_content=audio_html_content
                 )
                 
-                # Determina origem_audio_tag
                 origem_audio_tag = 'N/A'
                 if audio_info:
                     origem_audio_tag = f'HTML da página (detect_audio_from_html)'
@@ -643,14 +531,11 @@ class PortalScraper(BaseScraper):
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
-                # Extrai legenda do HTML usando função dedicada
                 from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
                 legenda = extract_legenda_from_page(doc, scraper_type='portal')
                 
-                # Determina legend_info baseado na legenda extraída
                 legend_info = determine_legend_info(legenda) if legenda else None
                 
-                # Determina presença de legenda seguindo ordem de fallbacks
                 from utils.parsing.legend_extraction import determine_legend_presence
                 has_legenda = determine_legend_presence(
                     legend_info_from_html=legend_info,
@@ -660,12 +545,10 @@ class PortalScraper(BaseScraper):
                     skip_metadata=self._skip_metadata
                 )
                 
-                # Extrai tamanho do magnet se disponível
                 size = ''
                 if sizes and idx < len(sizes):
                     size = sizes[idx]
                 
-                # Salva dados cruzados no Redis para reutilização por outros scrapers
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {

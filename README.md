@@ -128,7 +128,7 @@ Com `--network=host` não é necessário `-p` para publicar portas: o processo e
 | `REDIS_DB`                              | Banco lógico do Redis                                                    | `0`                |
 | `HTML_CACHE_TTL_SHORT`                  | TTL do cache curto de HTML (páginas)                                     | `10m`              |
 | `HTML_CACHE_TTL_LONG`                   | TTL do cache longo de HTML (páginas)                                     | `12h`              |
-| `FLARESOLVERR_SESSION_TTL`              | TTL das sessões FlareSolverr                                              | `4h`               |
+| `FLARESOLVERR_SESSION_TTL`              | TTL das sessões FlareSolverr                                              | `8h`               |
 | `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `16`             |
 | `FLARESOLVERR_ADDRESS`                  | Endereço do FlareSolverr (Docker host: `http://localhost:8191`)          | `None` (opcional)  |
 | `LOG_LEVEL`                             | `0` (debug), `1` (info), `2` (warn), `3` (error)                         | `1`                |
@@ -189,7 +189,7 @@ O sistema gerencia sessões do FlareSolverr de forma inteligente:
 
 **Com Redis disponível:**
 - Sessões são armazenadas no Redis e compartilhadas entre todas as threads/processos
-- TTL configurável via `FLARESOLVERR_SESSION_TTL` (padrão: 4 horas)
+- TTL configurável via `FLARESOLVERR_SESSION_TTL` (padrão: 8 horas)
 - Reutilização automática de sessões válidas
 - Invalidação automática quando sessão expira ou fica inválida
 

@@ -1,7 +1,5 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
-# Módulo de cache (Redis e memória)
 import threading
 
 from cache.redis_client import init_redis, get_redis_client
@@ -9,13 +7,8 @@ from cache.html_cache import HTMLCache
 from cache.metadata_cache import MetadataCache
 from cache.tracker_cache import TrackerCache
 
-
 def cleanup_request_caches():
-    """
-    Limpa caches em threading.local e estado global acumulado entre requisições.
-    Chamar após cada busca de scraper para evitar acúmulo de memória.
-    """
-    # Limpa threading.local de todos os módulos que usam _request_cache
+    """Limpa caches em threading.local e estado global acumulado entre requisições"""
     _modules_with_request_cache = []
     try:
         from cache import metadata_cache as _mc
@@ -57,7 +50,6 @@ def cleanup_request_caches():
                 except Exception:
                     pass
 
-    # Limpa dicionários globais de locks que crescem (módulos síncronos)
     try:
         from scraper.base import cleanup_url_state
         cleanup_url_state()
@@ -69,20 +61,17 @@ def cleanup_request_caches():
     except Exception:
         pass
 
-    # Limpa estado global do módulo async de metadata (_hash_locks, log caches)
     try:
         from magnet.metadata_async import cleanup_metadata_async_state
         cleanup_metadata_async_state()
     except Exception:
         pass
 
-    # Limpa locks e caches globais do FlareSolverr que crescem entre requisições
     try:
         from utils.http.flaresolverr import cleanup_flaresolverr_state
         cleanup_flaresolverr_state()
     except Exception:
         pass
-
 
 __all__ = [
     'init_redis',

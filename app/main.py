@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import os
@@ -19,10 +18,8 @@ print_support_banner(Config.LOG_FORMAT)
 
 logger = logging.getLogger(__name__)
 
-
 def create_app():
     return Bootstrap.create_app()
-
 
 if __name__ == '__main__':
     app = create_app()

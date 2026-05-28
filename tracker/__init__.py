@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 """
 Serviços relacionados a trackers BitTorrent (scrape de peers).
@@ -10,15 +9,12 @@ from .service import TrackerService
 
 _tracker_service = TrackerService(
     redis_client=get_redis_client(),
-    scrape_timeout=1.5,  # Timeout por requisição UDP (aumentado de 0.5s para mais respostas)
-    scrape_retries=3,  # Tentativas por tracker (aumentado de 2 para 3)
-    max_trackers=10,  # 5 HTTP + 5 UDP por infohash (evita travar com dezenas de trackers)
-    cache_ttl=24 * 3600,  # TTL do cache de seeds/leechers (24 horas)
+    scrape_timeout=1.5,
+    scrape_retries=3,
+    max_trackers=10,
+    cache_ttl=24 * 3600,
 )
 
-
-# Retorna instância singleton do serviço de trackers
 def get_tracker_service() -> TrackerService:
     return _tracker_service
-
 

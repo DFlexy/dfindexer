@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import html
 import re
@@ -21,10 +20,8 @@ from utils.parsing.link_resolver import decode_data_u
 
 logger = logging.getLogger(__name__)
 
-# data-u com & ou % no atributo quebra parsing XML do lxml; extrair do HTML bruto.
 _RE_STARCK_DATA_U_DQ = re.compile(r'data-u\s*=\s*"([^"]*)"', re.I)
 _RE_STARCK_DATA_U_SQ = re.compile(r"data-u\s*=\s*'([^']*)'", re.I)
-
 
 def _starck_raw_data_u_values(page_html: str) -> List[str]:
     if not page_html:
@@ -46,11 +43,9 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
                 out.append(v)
     return out
 
-
-# Scraper específico para Starck Filmes
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v15.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v16.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -58,7 +53,6 @@ class StarckScraper(BaseScraper):
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
     
-    # Busca torrents com variações da query
     def search(
         self,
         query: str,
@@ -70,36 +64,26 @@ class StarckScraper(BaseScraper):
             query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
         )
     
-    # Extrai links da página inicial
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        seen_hrefs = set()  # Para evitar duplicatas
+        seen_hrefs = set()
         
-        # Busca especificamente dentro de div.post-catalog (ou div.home.post-catalog)
         catalog_div = doc.select_one('div.post-catalog, div.home.post-catalog')
         if not catalog_div:
-            # Fallback: busca em todo o documento
             catalog_div = doc
         
-        # Itera sobre cada item dentro do catalog na ordem que aparecem
         items = catalog_div.select('.item')
         
         for item in items:
-            # Busca o primeiro link <a> diretamente dentro de div.sub-item que tem atributo 'title'
-            # (ignora o link dentro de h3 que tem apenas 'tabindex')
+
             sub_item = item.select_one('div.sub-item')
             if not sub_item:
                 continue
             
-            # Pega o primeiro link <a> diretamente filho de div.sub-item (não dentro de h3)
-            # Este link tem o atributo 'title'
-            # Usa find_all e pega o primeiro que tem title (não o que está dentro de h3)
             all_links = sub_item.find_all('a', href=lambda h: h and 'catalog' in h)
             link_elem = None
             
             for link in all_links:
-                # Verifica se é o link direto (não está dentro de h3)
-                # O link correto é o primeiro que tem title e não está dentro de h3
                 parent_h3 = link.find_parent('h3')
                 title_attr = link.get('title')
                 
@@ -111,13 +95,10 @@ class StarckScraper(BaseScraper):
                 href = link_elem.get('href')
                 title_attr = link_elem.get('title')
                 
-                # Verifica se tem title válido
                 if href and title_attr and title_attr.strip():
-                    # Normaliza href para absoluto ANTES de verificar duplicatas
                     if not href.startswith('http'):
                         href = urljoin(self.base_url, href)
                     
-                    # Verifica duplicatas e adiciona
                     if href not in seen_hrefs:
                         links.append(href)
                         seen_hrefs.add(href)
@@ -125,44 +106,33 @@ class StarckScraper(BaseScraper):
         logger.debug(f"[Starck] Encontrados {len(items)} itens na página e extraídos {len(links)} links únicos")
         return links
     
-    # Obtém torrents de uma página específica
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
         return self._default_get_page(page, max_items, is_test=is_test)
     
-    # Extrai links dos resultados de busca (usa implementação base de _search_variations)
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         links = []
-        seen_hrefs = set()  # Para evitar duplicatas
+        seen_hrefs = set()
         
-        # Busca especificamente dentro de div.post-catalog (ou div.home.post-catalog)
         catalog_div = doc.select_one('div.post-catalog, div.home.post-catalog')
         if not catalog_div:
-            # Fallback: busca em todo o documento
             catalog_div = doc
         
-        # Itera sobre cada item dentro do catalog
         for item in catalog_div.select('.item'):
-            # Busca o primeiro link <a> diretamente dentro de div.sub-item que tem atributo 'title'
-            # (ignora o link dentro de h3 que tem apenas 'tabindex')
+
             sub_item = item.select_one('div.sub-item')
             if not sub_item:
                 continue
             
-            # Pega o primeiro link <a> diretamente filho de div.sub-item (não dentro de h3)
-            # Este link tem o atributo 'title'
             link_elem = sub_item.find('a', href=lambda h: h and 'catalog' in h, title=lambda t: t and t.strip())
             
             if link_elem:
                 href = link_elem.get('href')
                 title_attr = link_elem.get('title')
                 
-                # Verifica se tem title válido
                 if href and title_attr and title_attr.strip():
-                    # Normaliza href para absoluto ANTES de verificar duplicatas
                     if not href.startswith('http'):
                         href = urljoin(self.base_url, href)
                     
-                    # Verifica duplicatas e adiciona
                     if href not in seen_hrefs:
                         links.append(href)
                         seen_hrefs.add(href)
@@ -170,9 +140,6 @@ class StarckScraper(BaseScraper):
         return links
     
     def _search_variations(self, query: str) -> List[str]:
-        """
-        Busca com variações da query.
-        """
         from urllib.parse import urljoin, quote
         from utils.text.constants import STOP_WORDS
         
@@ -180,20 +147,17 @@ class StarckScraper(BaseScraper):
         seen_urls = set()
         variations = [query]
         
-        # Remove stop words
         words = [w for w in query.split() if w.lower() not in STOP_WORDS]
         if words and ' '.join(words) != query:
             variations.append(' '.join(words))
         
         query_words = query.split()
 
-        # Se a query termina com ano (19xx/20xx), tenta sem ele
         if len(query_words) >= 2 and query_words[-1].isdigit() and len(query_words[-1]) == 4 and query_words[-1][:2] in ('19', '20'):
             without_year = ' '.join(query_words[:-1])
             if without_year not in variations:
                 variations.append(without_year)
 
-        # Primeira palavra apenas para queries de 2 palavras
         if len(query_words) > 1 and len(query_words) < 3:
             first_word = query_words[0].lower()
             if first_word not in STOP_WORDS:
@@ -205,28 +169,23 @@ class StarckScraper(BaseScraper):
             if not doc:
                 continue
             
-            # Extrai links usando o método específico do scraper
             page_links = self._extract_search_results(doc)
             
             for href in page_links:
                 absolute_url = urljoin(self.base_url, href)
                 
-                # Verifica duplicatas antes de adicionar
                 if absolute_url not in seen_urls:
                     links.append(absolute_url)
                     seen_urls.add(absolute_url)
         
         return links
     
-    # Extrai torrents de uma página
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
-        # Garante que o link seja absoluto para o campo details
         absolute_link = urljoin(self.base_url, link) if link and not link.startswith('http') else link
         doc = self.get_document(absolute_link, self.base_url)
         if not doc:
             return []
         
-        # Extrai data da página (tenta URL, meta tags, etc.)
         from utils.parsing.date_extraction import extract_date_from_page
         date = extract_date_from_page(doc, absolute_link, self.SCRAPER_TYPE)
         
@@ -239,13 +198,11 @@ class StarckScraper(BaseScraper):
         if not capa:
             return []
         
-        # Extrai título da página
         page_title = ''
         title_elem = capa.select_one('.post-description > h2')
         if title_elem:
             page_title = title_elem.get_text(strip=True)
         
-        # Extrai título original
         original_title = ''
         for p in capa.select('.post-description p'):
             spans = p.find_all('span')
@@ -254,75 +211,56 @@ class StarckScraper(BaseScraper):
                     original_title = spans[1].get_text(strip=True)
                     break
         
-        # Extrai título traduzido
         title_translated_processed = ''
         for p in capa.select('.post-description p'):
             spans = p.find_all('span')
             if len(spans) >= 2:
                 span_text = spans[0].get_text()
                 if 'Título Traduzido:' in span_text or 'Titulo Traduzido:' in span_text:
-                    # Pega o texto do segundo span, removendo qualquer HTML interno
                     span2 = spans[1]
-                    # Remove todas as tags HTML internas antes de pegar o texto
                     for tag in span2.find_all(['strong', 'em', 'b', 'i']):
-                        tag.unwrap()  # Remove a tag mas mantém o conteúdo
+                        tag.unwrap()
                     title_translated_processed = span2.get_text(strip=True)
-                    # Remove entidades HTML
                     title_translated_processed = html.unescape(title_translated_processed)
                     from utils.text.cleaning import clean_title_translated_processed
                     title_translated_processed = clean_title_translated_processed(title_translated_processed)
                     break
         
-        # Fallback: se não encontrou "Título Traduzido", usa o título do post (h2.post-title)
-        # sempre usa como fallback (não precisa verificar não-latinos)
         if not title_translated_processed:
             post_title_elem = capa.select_one('h2.post-title')
             if post_title_elem:
-                # Remove tags HTML e pega apenas o texto
                 title_translated_processed = post_title_elem.get_text(strip=True)
-                # Remove entidades HTML
                 title_translated_processed = html.unescape(title_translated_processed)
-                # Limpa o título traduzido
                 from utils.text.cleaning import clean_title_translated_processed
                 title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
-        # Garante que não há HTML restante (remove qualquer tag que possa ter sobrado)
         if title_translated_processed:
-            # Remove todas as tags HTML que possam ter sobrado
             title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
-            # Remove entidades HTML novamente (caso tenha sobrado)
             title_translated_processed = html.unescape(title_translated_processed)
-            # Aplica limpeza final
             from utils.text.cleaning import clean_title_translated_processed
             title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
-        # Extrai ano, tamanhos, áudio e IMDB
         year = ''
         sizes = []
         imdb = ''
-        audio_info = ''  # Para detectar "Idioma: Inglês", "Legenda: PT-BR"
-        audio_html_content = ''  # Armazena HTML completo de TODOS os parágrafos para verificação adicional
-        all_paragraphs_html = []  # Coleta HTML de todos os parágrafos
+        audio_info = ''
+        audio_html_content = ''
+        all_paragraphs_html = []
         for p in capa.select('.post-description p'):
             text = ' '.join(span.get_text() for span in p.find_all('span'))
             html_content = str(p)
-            all_paragraphs_html.append(html_content)  # Coleta HTML de todos os parágrafos
+            all_paragraphs_html.append(html_content)
             y = find_year_from_text(text, page_title)
             if y:
                 year = y
             sizes.extend(find_sizes_from_text(text))
             
-            # Extrai informação de áudio/legenda usando função utilitária
             if not audio_info:
                 audio_info = detect_audio_from_html(html_content)
         
-        # Concatena HTML de todos os parágrafos para verificação independente de inglês e legenda
         if all_paragraphs_html:
             audio_html_content = ' '.join(all_paragraphs_html)
         
-        # Extrai links magnet - busca TODOS os links <a> no post
-        # A função _resolve_link automaticamente identifica e resolve links protegidos
-        # Primeiro tenta no container específico (mais rápido)
         all_links = post.select('a[href]')
         
         magnet_links: List[str] = []
@@ -349,7 +287,6 @@ class StarckScraper(BaseScraper):
             if resolved_magnet:
                 _add_magnet(resolved_magnet)
 
-        # Fallback: links no post inteiro (não no documento — evita sidebar/relacionados)
         if not magnet_links:
             for link in post.select('a[href]'):
                 href = link.get('href', '')
@@ -369,7 +306,6 @@ class StarckScraper(BaseScraper):
                 if decoded_magnet:
                     _add_magnet(decoded_magnet)
 
-        # data-u: HTML bruto da thread atual (lxml corrompe atributos com &/% inválidos)
         page_html = self._get_fetched_html()
         _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(page_html))
 
@@ -384,20 +320,14 @@ class StarckScraper(BaseScraper):
                 _add_magnet(decoded_magnet)
 
         if not magnet_links:
-            # Não loga se a página claramente não tem relação com a busca
-            # (o filtro vai remover esses resultados mesmo)
-            # Só loga se for uma página que DEVERIA ter magnets mas não tem
-            # Para identificar problemas reais de extração
+
             return []
         
-        # Processa cada magnet
-        # IMPORTANTE: magnet_link já é o magnet resolvido (links protegidos foram resolvidos antes)
         for idx, magnet_link in enumerate(magnet_links):
             try:
                 magnet_data = MagnetParser.parse(magnet_link)
                 info_hash = magnet_data['info_hash']
                 
-                # Busca dados cruzados no Redis por info_hash (fallback principal)
                 cross_data = None
                 try:
                     from utils.text.cross_data import get_cross_data_from_redis
@@ -405,7 +335,6 @@ class StarckScraper(BaseScraper):
                 except Exception:
                     pass
                 
-                # Preenche campos faltantes com dados cruzados do Redis
                 if cross_data:
                     if not original_title and cross_data.get('title_original_html'):
                         original_title = cross_data['title_original_html']
@@ -416,16 +345,9 @@ class StarckScraper(BaseScraper):
                     if not imdb and cross_data.get('imdb'):
                         imdb = cross_data['imdb']
                 
-                # Extrai magnet_original diretamente do display_name do magnet resolvido
-                # NÃO modificar antes de passar para create_standardized_title
                 magnet_original = magnet_data.get('display_name', '')
                 missing_dn = not magnet_original or len(magnet_original.strip()) < 3
                 
-                # NOTA: Não busca cross_data aqui para não interferir no fluxo de prepare_release_title()
-                # A busca de fallback (release:title, cross_data, metadata) será feita dentro de prepare_release_title()
-                # quando missing_dn = True, através de get_metadata_name()
-                
-                # Salva magnet_processed no Redis se encontrado (para reutilização por outros scrapers)
                 if not missing_dn and magnet_original:
                     try:
                         from utils.text.storage import save_release_title_to_redis
@@ -447,14 +369,8 @@ class StarckScraper(BaseScraper):
                     original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original=magnet_original
                 )
                 
-                # Adiciona [Brazilian], [Eng] conforme detectado
-                # NÃO adiciona DUAL/PORTUGUES/LEGENDADO ao release_title - apenas passa audio_info para a função de tags
-                # Passa também o HTML para verificação independente de inglês
-                # As tags são independentes: se tem "Idioma: Inglês" → [Eng]
-                # SEMPRE passa o HTML se existir, mesmo que audio_info não tenha sido detectado
                 final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata, audio_info_from_html=audio_info, audio_html_content=audio_html_content if audio_html_content else None)
                 
-                # Determina origem_audio_tag
                 origem_audio_tag = 'N/A'
                 if audio_info:
                     origem_audio_tag = f'HTML da página (detect_audio_from_html)'
@@ -463,14 +379,11 @@ class StarckScraper(BaseScraper):
                 elif missing_dn and info_hash:
                     origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
                 
-                # Extrai legenda do HTML usando função dedicada
                 from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
                 legenda = extract_legenda_from_page(doc, scraper_type='starck')
                 
-                # Determina legend_info baseado na legenda extraída
                 legend_info = determine_legend_info(legenda) if legenda else None
                 
-                # Determina presença de legenda seguindo ordem de fallbacks
                 from utils.parsing.legend_extraction import determine_legend_presence
                 has_legenda = determine_legend_presence(
                     legend_info_from_html=legend_info,
@@ -480,12 +393,10 @@ class StarckScraper(BaseScraper):
                     skip_metadata=self._skip_metadata
                 )
                 
-                # Extrai tamanho do magnet se disponível
                 size = ''
                 if sizes and idx < len(sizes):
                     size = sizes[idx]
                 
-                # Salva dados cruzados no Redis para reutilização por outros scrapers
                 try:
                     from utils.text.cross_data import save_cross_data_to_redis
                     cross_data_to_save = {
@@ -506,7 +417,7 @@ class StarckScraper(BaseScraper):
                 
                 torrent = {
                     'title_processed': final_title,
-                    'original_title': original_title if original_title else page_title,  # Usa nome original se disponível
+                    'original_title': original_title if original_title else page_title,
                     'title_translated_processed': title_translated_processed if title_translated_processed else None,
                     'details': absolute_link,
                     'year': year,

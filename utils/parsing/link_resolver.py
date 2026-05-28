@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import codecs
 import hashlib
@@ -20,10 +19,6 @@ from cache.redis_keys import protlink_key
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constantes e configuração
-# ---------------------------------------------------------------------------
-
 _request_cache = threading.local()
 
 _LOCK = threading.Lock()
@@ -43,10 +38,6 @@ _DEFAULT_HEADERS = {
 }
 
 _BASE64_CHARS = set(string.ascii_letters + string.digits + '+/=')
-
-# ---------------------------------------------------------------------------
-# Regex pré-compilados
-# ---------------------------------------------------------------------------
 
 _RE_MAGNET_FULL = re.compile(r'magnet:\?[^"\'\s<>]+')
 _RE_MAGNET_QUOTED = re.compile(r'magnet:\?[^"\'\s\)]+')
@@ -95,15 +86,9 @@ _SKIP_REDIRECT_PATTERNS = [
     re.compile(r'/[^/?]+\.html?$'),
 ]
 
-
-# ---------------------------------------------------------------------------
-# Helpers internos
-# ---------------------------------------------------------------------------
-
 def _pad_b64(s: str) -> str:
     mod = len(s) % 4
     return s + '=' * (4 - mod) if mod else s
-
 
 def _try_b64_decode_magnet(value: str) -> Optional[str]:
     for candidate in [value, value.replace('-', '+').replace('_', '/')]:
@@ -115,7 +100,6 @@ def _try_b64_decode_magnet(value: str) -> Optional[str]:
             continue
     return None
 
-
 def _cache_result(redis_client, protlink_url: str, magnet: str):
     if redis_client:
         try:
@@ -126,7 +110,6 @@ def _cache_result(redis_client, protlink_url: str, magnet: str):
         if not hasattr(_request_cache, 'protlink_cache'):
             _request_cache.protlink_cache = {}
         _request_cache.protlink_cache[protlink_url] = magnet
-
 
 def _get_cached(redis_client, protlink_url: str) -> Optional[str]:
     if redis_client:
@@ -141,14 +124,12 @@ def _get_cached(redis_client, protlink_url: str) -> Optional[str]:
             return _request_cache.protlink_cache.get(protlink_url)
     return None
 
-
 def _rate_limit(domain: str):
     with _LOCK:
         last_time = _LAST_REQUEST_TIME.get(domain, 0)
         now = time.time()
         delay = max(0, _MIN_DELAY_BETWEEN_REQUESTS - (now - last_time))
         _LAST_REQUEST_TIME[domain] = now + delay
-        # Evita crescimento indefinido do dicionário
         if len(_LAST_REQUEST_TIME) > _MAX_DOMAIN_ENTRIES:
             oldest = min(_LAST_REQUEST_TIME, key=_LAST_REQUEST_TIME.get)
             del _LAST_REQUEST_TIME[oldest]
@@ -156,27 +137,18 @@ def _rate_limit(domain: str):
     if delay > 0:
         time.sleep(delay)
 
-
 def _unescape_js_string(s: str) -> str:
     return s.replace('\\/', '/').replace('\\"', '"').replace("\\'", "'").replace('\\\\', '\\')
-
 
 def _make_headers(referer: str) -> dict:
     return {**_DEFAULT_HEADERS, 'Referer': referer}
 
-
-# ---------------------------------------------------------------------------
-# Extração de magnet do HTML (unificado)
-# ---------------------------------------------------------------------------
-
 def _extract_magnet_from_html(doc: BeautifulSoup, html_content: str) -> Optional[str]:
-    # 1. Links <a> com href magnet
     for a in doc.select('a[href^="magnet:"], a[href*="magnet:"]'):
         href = a.get('href', '')
         if href.startswith('magnet:'):
             return href
 
-    # 2. Meta refresh com magnet
     for meta in doc.select('meta[http-equiv="refresh"]'):
         content = meta.get('content', '')
         if 'magnet:' in content:
@@ -188,7 +160,6 @@ def _extract_magnet_from_html(doc: BeautifulSoup, html_content: str) -> Optional
                     magnet = extended.group(0)
                 return magnet
 
-    # 3. JavaScript patterns em <script> + busca raw de magnet (passada única)
     for script in doc.select('script'):
         script_text = script.string or ''
         if not script_text:
@@ -211,13 +182,11 @@ def _extract_magnet_from_html(doc: BeautifulSoup, html_content: str) -> Optional
             if matches:
                 return max(matches, key=len)
 
-    # 4. JavaScript raw patterns no HTML completo
     for pattern in _JS_RAW_MAGNET_PATTERNS:
         matches = pattern.findall(html_content)
         if matches:
             return max(matches, key=len)
 
-    # 5. Atributos data-* (data-u, data-download, etc)
     for elem in doc.select('[data-download], [data-link], [data-magnet], [data-url], [data-u]'):
         for attr in ('data-download', 'data-link', 'data-magnet', 'data-url', 'data-u'):
             value = elem.get(attr, '')
@@ -234,33 +203,24 @@ def _extract_magnet_from_html(doc: BeautifulSoup, html_content: str) -> Optional
                 if decoded:
                     return decoded
 
-    # 6. Busca direta por regex no HTML
     match = _RE_MAGNET_FULL.search(html_content)
     if match:
         return match.group(0)
 
     return None
 
-
-# ---------------------------------------------------------------------------
-# Busca de redirect links no HTML
-# ---------------------------------------------------------------------------
-
 def _find_redirect_in_html(doc: BeautifulSoup, html_content: str, current_url: str) -> Optional[str]:
-    # Links de redirect explícitos
     for a in doc.select('a[id*="redirect"], a[id*="Redirect"], a[href*="receber.php"], a[href*="redirecionando"]'):
         href = a.get('href', '')
         if href and ('receber.php' in href or 'redirecionando' in href.lower() or 'recebi.php' in href):
             return href
 
-    # Meta refresh
     for meta in doc.select('meta[http-equiv="refresh"], meta[http-equiv="Refresh"]'):
         content = meta.get('content', '')
         match = _RE_META_REFRESH_URL.search(content)
         if match:
             return match.group(1).strip()
 
-    # JavaScript redirects em <script> tags
     for script in doc.select('script'):
         script_text = script.string or ''
         if not script_text:
@@ -270,17 +230,14 @@ def _find_redirect_in_html(doc: BeautifulSoup, html_content: str, current_url: s
             if match:
                 return _unescape_js_string(match.group(1))
 
-    # JavaScript redirect no HTML raw (fallback)
     match = _RE_LOCATION_REPLACE_HTML.search(html_content)
     if match:
         return _unescape_js_string(match.group(1))
 
-    # Links para receber/recebi/link.php
     match = _RE_HREF_RECEBER_PHP.search(html_content)
     if match:
         return match.group(1)
 
-    # Fallback para páginas tipo systemads / go.php
     is_systemads_page = (
         is_go_php_link(current_url) or 'get.php' in current_url or 'seuvideo.xyz' in current_url
     )
@@ -304,11 +261,6 @@ def _find_redirect_in_html(doc: BeautifulSoup, html_content: str, current_url: s
 
     return None
 
-
-# ============================================================================
-# GRUPO 1: VERIFICAÇÃO DE LINKS PROTEGIDOS
-# ============================================================================
-
 def is_go_php_link(href: str) -> bool:
     """Detecta systemads (e similares) pelo path go.php — independente do domínio."""
     if not href:
@@ -320,14 +272,12 @@ def is_go_php_link(href: str) -> bool:
     except Exception:
         return 'go.php' in href.lower()
 
-
 def is_redirect_chain_link(href: str) -> bool:
     """redirectad.net / enviar.php — id usa reverse+base64 (sem seguir redirects)."""
     if not href:
         return False
     lower = href.lower()
     return any(x in lower for x in ('redirectad.net', 'enviar.php', 'receber.php', 'recebi.php'))
-
 
 def is_offline_decodable_link(href: str) -> bool:
     """Links cujo magnet está no parâmetro id (decodificação local, sem HTTP)."""
@@ -337,7 +287,6 @@ def is_offline_decodable_link(href: str) -> bool:
         return False
     lower = href.lower()
     return 'get.php' in lower and 'id=' in lower
-
 
 def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None) -> bool:
     if not href:
@@ -357,11 +306,6 @@ def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None)
         ]
     return any(pattern in href.lower() for pattern in protected_patterns)
 
-
-# ============================================================================
-# GRUPO 2: DECODIFICAÇÃO OFFLINE (go.php / get.php — systemads)
-# ============================================================================
-
 def _pkcs7_unpad(data: bytes) -> bytes:
     if not data:
         return data
@@ -371,7 +315,6 @@ def _pkcs7_unpad(data: bytes) -> bytes:
     if data[-pad:] != bytes([pad]) * pad:
         return data
     return data[:-pad]
-
 
 def _bytes_to_magnet(data: bytes) -> Optional[str]:
     if not data:
@@ -385,7 +328,6 @@ def _bytes_to_magnet(data: bytes) -> Optional[str]:
             continue
     match = _RE_MAGNET_FULL.search(data.decode('utf-8', errors='ignore'))
     return match.group(0) if match else None
-
 
 def _try_aes_decrypt_magnet(ciphertext: bytes, key_source: str) -> Optional[str]:
     if not ciphertext or not key_source:
@@ -405,7 +347,6 @@ def _try_aes_decrypt_magnet(ciphertext: bytes, key_source: str) -> Optional[str]
     for key in key_candidates:
         if len(key) not in (16, 24, 32):
             continue
-        # CBC: IV nos primeiros 16 bytes
         if len(ciphertext) > 16:
             iv, ct = ciphertext[:16], ciphertext[16:]
             try:
@@ -417,7 +358,6 @@ def _try_aes_decrypt_magnet(ciphertext: bytes, key_source: str) -> Optional[str]
                     return result
             except Exception:
                 pass
-        # ECB
         try:
             cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
             decryptor = cipher.decryptor()
@@ -428,7 +368,6 @@ def _try_aes_decrypt_magnet(ciphertext: bytes, key_source: str) -> Optional[str]
         except Exception:
             pass
     return None
-
 
 def _decode_id_param(id_param: str, rastrear: Optional[str] = None) -> Optional[str]:
     if not id_param:
@@ -482,11 +421,8 @@ def _decode_id_param(id_param: str, rastrear: Optional[str] = None) -> Optional[
 
     return None
 
-
 def decode_redirect_chain_id(url: str) -> Optional[str]:
-    """
-    Decodifica id de redirectad.net / enviar.php: reverse(string) + base64 → magnet.
-    """
+    """Decodifica id de redirectad.net / enviar.php: reverse(string) + base64 → magnet"""
     if not url:
         return None
     try:
@@ -502,7 +438,6 @@ def decode_redirect_chain_id(url: str) -> Optional[str]:
     except Exception:
         return None
 
-
 def _extract_go_php_redirect_url(html_content: str) -> Optional[str]:
     if not html_content:
         return None
@@ -511,23 +446,18 @@ def _extract_go_php_redirect_url(html_content: str) -> Optional[str]:
         return None
     return html.unescape(match.group(1).strip())
 
-
 def resolve_go_php_link(
     go_url: str,
     session: requests.Session,
     base_url: str = '',
     redis=None,
 ) -> Optional[str]:
-    """
-    Resolve go.php: uma única GET na página (sem seguir Location), lê const redirect
-    no HTML e decodifica o id da URL embutida (reverse+base64). Não segue redirect HTTP.
-    """
+    """Resolve go.php: uma única GET na página (sem seguir Location), lê const redirect"""
     redis_client = redis or get_redis_client()
     cached = _get_cached(redis_client, go_url)
     if cached:
         return cached
 
-    # get.php legado: id direto na query
     if 'get.php' in go_url.lower():
         decoded = decode_ad_link(go_url)
         if decoded:
@@ -577,12 +507,8 @@ def resolve_go_php_link(
 
     return None
 
-
 def decode_ad_link(ad_link: str) -> Optional[str]:
-    """
-    Decodifica magnet de go.php/get.php (systemads) a partir do parâmetro id.
-    Sem requisição HTTP — apenas descriptografia local.
-    """
+    """Decodifica magnet de go.php/get.php (systemads) a partir do parâmetro id"""
     if not ad_link:
         return None
     try:
@@ -603,13 +529,7 @@ def decode_ad_link(ad_link: str) -> Optional[str]:
     except Exception:
         return None
 
-
-# ============================================================================
-# GRUPO 3: RESOLVER DE DATA-U
-# ============================================================================
-
 def _unshuffle_string(shuffled: str) -> Optional[str]:
-    # Replica a função unshuffleString do JavaScript do Starck Filmes (step=3)
     try:
         length = len(shuffled)
         original = [''] * length
@@ -627,7 +547,6 @@ def _unshuffle_string(shuffled: str) -> Optional[str]:
         return ''.join(original)
     except Exception:
         return None
-
 
 def decode_data_u(data_u_value: str) -> Optional[str]:
     if not data_u_value:
@@ -659,11 +578,6 @@ def decode_data_u(data_u_value: str) -> Optional[str]:
     except Exception:
         return None
 
-
-# ============================================================================
-# GRUPO 4: RESOLVER PRINCIPAL DE LINKS PROTEGIDOS
-# ============================================================================
-
 def resolve_protected_link(protlink_url: str, session: requests.Session, base_url: str = '', redis=None) -> Optional[str]:
     redis_client = redis or get_redis_client()
 
@@ -671,11 +585,9 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
     if cached:
         return cached
 
-    # go.php: 1 GET na página, extrai redirect embutido e decodifica (sem seguir Location)
     if is_go_php_link(protlink_url):
         return resolve_go_php_link(protlink_url, session, base_url, redis_client)
 
-    # redirectad / enviar.php direto na página
     if is_redirect_chain_link(protlink_url):
         decoded_magnet = decode_redirect_chain_id(protlink_url)
         if decoded_magnet:
@@ -683,7 +595,6 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
             return decoded_magnet
         return None
 
-    # get.php legado: decodificação local do id (reverse+base64)
     if is_offline_decodable_link(protlink_url):
         decoded_magnet = decode_ad_link(protlink_url)
         if decoded_magnet:
@@ -734,7 +645,6 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                 except requests.exceptions.RequestException:
                     break
 
-                # Redirect HTTP (301/302/303/307/308)
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get('Location', '')
                     if location.startswith('magnet:'):
@@ -750,7 +660,6 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                     logger.warning(f"Status code não esperado: {response.status_code}")
                     break
 
-                # Processa resposta HTML
                 try:
                     html_content = response.text
                     doc = BeautifulSoup(html_content, 'lxml')
@@ -758,13 +667,11 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
                     logger.error(f"Erro ao processar resposta HTML: {e}")
                     break
 
-                # Extrai magnet (todas as estratégias unificadas)
                 magnet = _extract_magnet_from_html(doc, html_content)
                 if magnet:
                     _cache_result(redis_client, protlink_url, magnet)
                     return magnet
 
-                # Busca redirect no HTML para seguir
                 redirect_link = _find_redirect_in_html(doc, html_content, current_url)
                 if redirect_link:
                     redirect_lower = redirect_link.lower()

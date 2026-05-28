@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import threading
@@ -10,42 +9,25 @@ from cache.http_cache import get_http_cache
 
 logger = logging.getLogger(__name__)
 
-
 class CacheInvalidationManager:
-    """
-    Gerenciador de invalidação inteligente de cache.
-    Monitora padrões de acesso e invalida cache quando necessário.
-    """
+    """Gerenciador de invalidação inteligente de cache"""
     
     def __init__(self):
         self.redis = get_redis_client()
         self.http_cache = get_http_cache()
         self._lock = threading.Lock()
-        self._invalidation_log: Dict[str, float] = {}  # URL -> timestamp última invalidação
-        self._min_invalidation_interval = 300  # 5 minutos mínimo entre invalidações da mesma URL
+        self._invalidation_log: Dict[str, float] = {}
+        self._min_invalidation_interval = 300
     
     def invalidate_url(self, url: str, reason: str = "manual") -> bool:
-        """
-        Invalida cache de uma URL específica em todas as camadas.
-        
-        Args:
-            url: URL para invalidar
-            reason: Razão da invalidação (para logging)
-            
-        Returns:
-            True se invalidou, False se não foi necessário (recente)
-        """
         with self._lock:
             now = time.time()
             last_invalidation = self._invalidation_log.get(url, 0)
             
-            # Evita invalidações muito frequentes da mesma URL
             if now - last_invalidation < self._min_invalidation_interval:
                 return False
             
-            # Invalida cache local
             try:
-                # HTTP cache usa dict interno, precisamos remover manualmente
                 with self.http_cache._lock:
                     if url in self.http_cache._cache:
                         del self.http_cache._cache[url]
@@ -53,7 +35,6 @@ class CacheInvalidationManager:
             except Exception as e:
                 logger.debug(f"Erro ao invalidar cache local: {type(e).__name__}")
             
-            # Invalida Redis
             if self.redis:
                 try:
                     from cache.redis_keys import html_long_key, html_short_key
@@ -73,10 +54,8 @@ class CacheInvalidationManager:
                 except Exception as e:
                     logger.debug(f"Erro ao invalidar cache Redis: {type(e).__name__}")
             
-            # Registra invalidação
             self._invalidation_log[url] = now
             
-            # Limpa log antigo (mais de 1 hora)
             old_urls = [u for u, t in self._invalidation_log.items() if now - t > 3600]
             for old_url in old_urls:
                 del self._invalidation_log[old_url]
@@ -84,19 +63,8 @@ class CacheInvalidationManager:
             return True
     
     def invalidate_pattern(self, base_url: str, pattern: str = "*") -> int:
-        """
-        Invalida cache de URLs que correspondem a um padrão.
-        
-        Args:
-            base_url: URL base do site (ex: 'https://example.com/')
-            pattern: Padrão para matching (suporta * wildcard)
-            
-        Returns:
-            Número de URLs invalidadas
-        """
         invalidated = 0
         
-        # Invalida cache local
         with self.http_cache._lock:
             urls_to_remove = []
             for url in list(self.http_cache._cache.keys()):
@@ -114,19 +82,12 @@ class CacheInvalidationManager:
         return invalidated
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """
-        Retorna estatísticas consolidadas de todas as camadas de cache.
-        
-        Returns:
-            Dict com estatísticas
-        """
         stats = {
             'http_cache': self.http_cache.stats() if self.http_cache else {},
             'redis_available': self.redis is not None,
             'invalidations_logged': len(self._invalidation_log)
         }
         
-        # Estatísticas do Redis (se disponível)
         if self.redis:
             try:
                 info = self.redis.info('memory')
@@ -140,26 +101,14 @@ class CacheInvalidationManager:
         return stats
     
     def warm_cache(self, urls: List[str], fetch_func) -> int:
-        """
-        Pre-aquece o cache com uma lista de URLs.
-        Útil para preparar o cache antes de uma carga pesada.
-        
-        Args:
-            urls: Lista de URLs para pre-aquecer
-            fetch_func: Função para buscar conteúdo (recebe URL, retorna bytes)
-            
-        Returns:
-            Número de URLs cacheadas com sucesso
-        """
+        """Pre-aquece o cache com uma lista de URLs"""
         cached = 0
         
         for url in urls:
             try:
-                # Verifica se já está em cache
                 if self.http_cache.get(url):
                     continue
                 
-                # Busca e cacheia
                 content = fetch_func(url)
                 if content:
                     self.http_cache.set(url, content)
@@ -172,20 +121,10 @@ class CacheInvalidationManager:
         
         return cached
 
-
-# Singleton global
 _cache_manager = None
 _cache_manager_lock = threading.Lock()
 
-
 def get_cache_manager() -> CacheInvalidationManager:
-    """
-    Obtém instância global do gerenciador de cache.
-    Thread-safe singleton pattern.
-    
-    Returns:
-        Instância de CacheInvalidationManager
-    """
     global _cache_manager
     
     if _cache_manager is None:

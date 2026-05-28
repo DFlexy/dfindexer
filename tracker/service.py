@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import json
 import logging
@@ -18,7 +17,6 @@ from .http_scraper import HTTPScraper
 
 logger = logging.getLogger(__name__)
 
-
 def _is_redis_connection_error(error: Exception) -> bool:
     error_str = str(error).lower()
     connection_errors = [
@@ -33,13 +31,11 @@ def _is_redis_connection_error(error: Exception) -> bool:
     ]
     return any(err in error_str for err in connection_errors)
 
-
 def _log_redis_error(operation: str, error: Exception) -> None:
     if _is_redis_connection_error(error):
         logger.debug(f"Redis fallback: {operation}")
     else:
         logger.debug(f"Redis error: {operation}")
-
 
 def _sanitize_tracker(url: str) -> Optional[str]:
     if not url:
@@ -52,7 +48,6 @@ def _sanitize_tracker(url: str) -> Optional[str]:
             normalized = normalized.replace(token, "/announce")
     return normalized
 
-
 def _stable_unique(values: Iterable[str]) -> List[str]:
     seen = set()
     output = []
@@ -63,7 +58,6 @@ def _stable_unique(values: Iterable[str]) -> List[str]:
         output.append(value)
     return output
 
-
 def _filter_udp(trackers: Iterable[str]) -> List[str]:
     return [
         tracker
@@ -71,14 +65,12 @@ def _filter_udp(trackers: Iterable[str]) -> List[str]:
         if tracker and tracker.lower().startswith("udp://")
     ]
 
-
 def _filter_http(trackers: Iterable[str]) -> List[str]:
     return [
         tracker
         for tracker in trackers
         if tracker and (tracker.lower().startswith("http://") or tracker.lower().startswith("https://"))
     ]
-
 
 class TrackerService:
 
@@ -92,7 +84,6 @@ class TrackerService:
     ):
         self.redis = redis_client or get_redis_client()
         self.cache_ttl = cache_ttl
-        # Usa configuração global para workers (padrão: 20 para suportar múltiplos scrapers)
         max_workers = Config.TRACKER_MAX_WORKERS if hasattr(Config, 'TRACKER_MAX_WORKERS') else 20
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._udp_scraper = UDPScraper(timeout=scrape_timeout, retries=scrape_retries)
@@ -122,7 +113,6 @@ class TrackerService:
         if not todo:
             return results
 
-        # Lista de trackers dinâmicos uma vez por lote (evita N chamadas a get_trackers)
         dynamic_trackers = self._list_provider.get_trackers()
 
         futures = {
@@ -142,7 +132,7 @@ class TrackerService:
                 info_hash = futures[future]
                 _seen.add(info_hash)
                 try:
-                    peers = future.result(timeout=5)  # future já completou, 5s é fallback
+                    peers = future.result(timeout=5)
                     if peers is not None:
                         results[info_hash] = peers
                         self._store_cache(info_hash, peers)
@@ -151,7 +141,7 @@ class TrackerService:
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Falha ao obter peers para %s: %s", info_hash, exc)
                     results[info_hash] = (0, 0)
-        except Exception as e:  # TimeoutError ou outro - evita bloqueio indefinido
+        except Exception as e:
             remaining = [h for h in todo if h not in _seen]
             if remaining:
                 logger.debug("Tracker batch: timeout/erro após %ds, %d pendentes recebem (0,0)", _PEER_BATCH_TIMEOUT, len(remaining))
@@ -192,9 +182,8 @@ class TrackerService:
 
         best: Optional[Tuple[int, int]] = None
         zero_count = 0
-        _MAX_ZERO_RESPONSES = 2  # Se 2 trackers respondem (0,0), para de tentar
+        _MAX_ZERO_RESPONSES = 2
 
-        # HTTP/HTTPS primeiro (funciona com proxy TOR)
         for tracker in http_trackers:
             try:
                 peers = self._scrape_single_http_tracker(tracker, info_hash_bytes)
@@ -210,11 +199,9 @@ class TrackerService:
             except Exception:
                 pass
 
-        # Se já tem resposta (0,0) confirmada por 2+ trackers, retorna sem tentar UDP
         if zero_count >= _MAX_ZERO_RESPONSES and best is not None:
             return best
 
-        # UDP em seguida
         for tracker in udp_trackers:
             try:
                 peers = self._scrape_single_tracker(
@@ -271,23 +258,17 @@ class TrackerService:
     def _scrape_single_tracker(
         self, tracker: str, info_hash_bytes: bytes, info_hash: str
     ) -> Optional[Tuple[int, int]]:
-        """
-        Faz scrape de um único tracker UDP.
-        Método auxiliar para consultas paralelas.
-        """
+        """Faz scrape de um único tracker UDP"""
         try:
             leechers, seeders = self._udp_scraper.scrape(tracker, info_hash_bytes)
             return leechers, seeders
         except Exception:  # noqa: BLE001
-            # Erro será tratado e logado no loop principal com agrupamento
             return None
 
     def _cache_key(self, info_hash: str) -> str:
-        # Mantém para compatibilidade com cache em memória
         return tracker_key(info_hash)
 
     def _get_cached(self, info_hash: str) -> Optional[Tuple[int, int]]:
-        # Obtém peers do cache (Redis primeiro, memória se Redis não disponível)
         try:
             from cache.tracker_cache import TrackerCache
             tracker_cache = TrackerCache()
@@ -300,7 +281,6 @@ class TrackerService:
         return None
 
     def _store_cache(self, info_hash: str, peers: Tuple[int, int]) -> None:
-        # Salva peers no cache (Redis primeiro, memória se Redis não disponível)
         try:
             from cache.tracker_cache import TrackerCache
             tracker_cache = TrackerCache()
@@ -308,5 +288,4 @@ class TrackerService:
             tracker_cache.set(info_hash, tracker_data)
         except Exception:
             pass
-
 

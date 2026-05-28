@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import logging
 import asyncio
@@ -14,7 +13,6 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-
 class TorrentEnricherAsync:
     def __init__(self):
         self.tracker_service = get_tracker_service()
@@ -22,16 +20,12 @@ class TorrentEnricherAsync:
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Obtém ou cria sessão aiohttp reutilizável."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=30, connect=5)
-            # Tenta usar ProxyConnector primeiro (método recomendado)
             proxy_connector = get_aiohttp_proxy_connector()
             if proxy_connector:
-                # Quando usa ProxyConnector, não precisa passar proxy no ClientSession
                 connector = proxy_connector
             else:
-                # Se não tem proxy connector, usa TCPConnector normal
                 connector = aiohttp.TCPConnector(limit=30, limit_per_host=10)
             
             self._session = aiohttp.ClientSession(
@@ -45,7 +39,6 @@ class TorrentEnricherAsync:
         return self._session
     
     async def close(self):
-        """Fecha a sessão aiohttp e libera referências para o GC."""
         if self._session is not None:
             if not self._session.closed:
                 await self._session.close()
@@ -63,9 +56,6 @@ class TorrentEnricherAsync:
         if not torrents:
             return torrents, None
         
-        # Removida deduplicação - todos os magnets devem ser mostrados
-        # torrents = self._remove_duplicates(torrents)
-        
         if not skip_metadata:
             await self._ensure_titles_complete(torrents)
         
@@ -78,7 +68,6 @@ class TorrentEnricherAsync:
             filtered_count = 0
             approved_count = len(torrents)
         
-        # Cria estatísticas e retorna imediatamente para evitar race condition
         filter_stats = {
             'total': total_before_filter,
             'filtered': filtered_count,
@@ -104,7 +93,6 @@ class TorrentEnricherAsync:
         return torrents, filter_stats
     
     def _remove_duplicates(self, torrents: List[Dict]) -> List[Dict]:
-        """Remove duplicados baseado em info_hash."""
         seen_hashes = set()
         unique_torrents = []
         for torrent in torrents:
@@ -118,25 +106,20 @@ class TorrentEnricherAsync:
     
     async def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
         """Garante que títulos estão completos (async)."""
-        # OTIMIZAÇÃO: Só busca metadata se necessário para o filtro (quando não temos original_title nem title_translated_processed)
         from utils.text.cross_data import get_cross_data_from_redis
         
         session = await self._get_session()
         
         for torrent in torrents:
-            # Preenche original_title e title_translated_processed do cross-data ANTES do filtro
             info_hash = torrent.get('info_hash')
             if info_hash:
                 try:
                     cross_data = get_cross_data_from_redis(info_hash)
                     if cross_data:
-                        # Preenche original_title se não estiver preenchido
                         if not torrent.get('original_title') and cross_data.get('title_original_html'):
                             torrent['original_title'] = cross_data.get('title_original_html', '')
-                        # Preenche title_translated_processed se não estiver preenchido
                         if not torrent.get('title_translated_processed') and cross_data.get('title_translated_html'):
                             torrent['title_translated_processed'] = cross_data.get('title_translated_html', '')
-                        # Adiciona magnet_processed do cross-data
                         if cross_data.get('magnet_processed'):
                             torrent['magnet_processed'] = cross_data.get('magnet_processed')
                 except Exception:
@@ -168,7 +151,6 @@ class TorrentEnricherAsync:
                     pass
     
     async def _fetch_metadata_batch(self, torrents: List[Dict]) -> None:
-        """Busca metadata em lote com semáforo async para limitar requisições simultâneas."""
         from utils.concurrency.metadata_semaphore_async import metadata_slot_async
         from utils.text.cross_data import get_cross_data_from_redis
         from cache.metadata_cache import MetadataCache
@@ -184,8 +166,6 @@ class TorrentEnricherAsync:
             return
         
         async def fetch_metadata_for_torrent(torrent: Dict) -> tuple:
-            """Busca metadata para um torrent (async)."""
-            # Obtém info_hash ANTES de adquirir slot
             info_hash = torrent.get('info_hash')
             if not info_hash:
                 try:
@@ -197,7 +177,6 @@ class TorrentEnricherAsync:
             if not info_hash:
                 return (torrent, None)
             
-            # Verifica cross_data ANTES de adquirir slot
             try:
                 cross_data = get_cross_data_from_redis(info_hash)
                 if cross_data:
@@ -208,7 +187,6 @@ class TorrentEnricherAsync:
             except Exception:
                 pass
             
-            # Verifica cache de metadata ANTES de adquirir slot
             try:
                 metadata_cache = MetadataCache()
                 cached_metadata = metadata_cache.get(info_hash.lower())
@@ -217,12 +195,9 @@ class TorrentEnricherAsync:
             except Exception:
                 pass
             
-            # Só adquire slot se realmente precisa buscar metadata
             async with metadata_slot_async():
                 try:
-                    # Obtém scraper_name e title para o log
                     scraper_name = getattr(self, '_current_scraper_name', None)
-                    # Tenta obter título de múltiplas fontes para melhorar o log
                     title = (torrent.get('title_processed') or 
                             torrent.get('original_title') or 
                             torrent.get('title_translated_processed') or
@@ -233,7 +208,7 @@ class TorrentEnricherAsync:
                 except Exception:
                     return (torrent, None)
         
-        # Executa todas as requisições em paralelo
+
         tasks = [fetch_metadata_for_torrent(t) for t in torrents_to_fetch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -262,7 +237,7 @@ class TorrentEnricherAsync:
             if not magnet_link:
                 continue
             
-            # Primeiro, tenta buscar do cross-data
+
             if info_hash and len(info_hash) == 40:
                 cross_data = get_cross_data_from_redis(info_hash)
                 if cross_data and cross_data.get('size'):
@@ -279,7 +254,6 @@ class TorrentEnricherAsync:
             
             torrent['size'] = ''
             
-            # Tentativa 1: Metadata API
             if metadata_enabled:
                 if torrent.get('_metadata') and 'size' in torrent['_metadata']:
                     try:
@@ -296,7 +270,6 @@ class TorrentEnricherAsync:
                     except Exception:
                         pass
             
-            # Tentativa 2: Parâmetro 'xl' do magnet
             if magnet_data:
                 xl = magnet_data.get('params', {}).get('xl')
                 if xl:
@@ -313,7 +286,6 @@ class TorrentEnricherAsync:
                     except Exception:
                         pass
             
-            # Tentativa 3: Tamanho do HTML (fallback final)
             if html_size:
                 torrent['size'] = html_size
                 if info_hash and len(info_hash) == 40:
@@ -327,29 +299,24 @@ class TorrentEnricherAsync:
         from datetime import datetime
         
         for torrent in torrents:
-            # Só aplica fallback se date estiver vazio
             current_date = torrent.get('date', '')
             if current_date:
-                continue  # Já tem data, não precisa de fallback
+                continue
             
-            # Tentativa 1: Metadata API (se habilitado)
             if not skip_metadata:
                 if torrent.get('_metadata') and 'created_time' in torrent['_metadata']:
                     try:
                         created_time = torrent['_metadata']['created_time']
                         if created_time:
-                            # Se created_time já é string ISO, usa diretamente
                             if isinstance(created_time, str):
                                 torrent['date'] = created_time
                             else:
-                                # Se é timestamp, converte
                                 creation_date = datetime.fromtimestamp(created_time)
                                 torrent['date'] = creation_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-                            continue  # Encontrou no metadata, não precisa de fallback final
+                            continue
                     except Exception:
                         pass
             
-            # Tentativa 2: Fallback final - Data atual (formato ISO 8601 com Z)
             torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     
     def _apply_imdb_fallback(self, torrents: List[Dict]) -> None:
@@ -364,7 +331,6 @@ class TorrentEnricherAsync:
             return
         
         def extract_base_title_for_imdb(title: str) -> Optional[str]:
-            """Extrai título base do título finalizado para busca de IMDB."""
             if not title:
                 return None
             
@@ -420,7 +386,6 @@ class TorrentEnricherAsync:
                         pass
             
             if not torrent.get('imdb'):
-                # Fallback 1: Cache por info_hash
                 if info_hash and len(info_hash) == 40:
                     try:
                         key = imdb_key(info_hash)
@@ -433,7 +398,6 @@ class TorrentEnricherAsync:
                     except Exception:
                         pass
                 
-                # Fallback 2: Cache por base_title
                 base_title = extract_base_title_for_imdb(title)
                 if base_title and len(base_title) >= 3:
                     try:
@@ -447,7 +411,6 @@ class TorrentEnricherAsync:
                     except Exception:
                         pass
                 
-                # Fallback 3: Metadata do torrent
                 try:
                     magnet_link = torrent.get('magnet_link')
                     if magnet_link and info_hash:
@@ -478,7 +441,6 @@ class TorrentEnricherAsync:
         
         logger = logging.getLogger(__name__)
         
-        # Obtém scraper_name para logs
         scraper_name = getattr(self, '_current_scraper_name', None)
         
         infohash_map = {}
@@ -490,7 +452,6 @@ class TorrentEnricherAsync:
             if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
                 continue
             
-            # Monta identificação para o log
             log_parts = []
             if scraper_name:
                 log_parts.append(f"[{scraper_name}]")
@@ -501,25 +462,20 @@ class TorrentEnricherAsync:
             log_parts.append(f"(hash: {info_hash})")
             log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
             
-            # Tenta buscar do cross-data primeiro
             cross_data = get_cross_data_from_redis(info_hash)
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
-                # Se ambos estão presentes, usa do cross-data (mesmo se for 0, 0 - evita scrape desnecessário)
                 if tracker_seed is not None and tracker_leech is not None:
                     torrent['seed_count'] = tracker_seed
                     torrent['leech_count'] = tracker_leech
                     logger.debug(f"[Tracker] Buscando: {log_id} → (S:{tracker_seed} L:{tracker_leech}) cache")
                     continue
                 else:
-                    # Não tem ambos valores, prossegue para scrape
                     pass
             else:
-                # Não encontrou no cross-data, prossegue para scrape
                 pass
             
-            # Se não encontrou no cross-data, adiciona para fazer scrape
             trackers = torrent.get('trackers') or []
             
             if not trackers:
@@ -527,9 +483,6 @@ class TorrentEnricherAsync:
                 if magnet_link:
                     trackers = extract_trackers_from_magnet(magnet_link)
             
-            # Sempre adiciona o info_hash ao mapa, mesmo que a lista de trackers
-            # esteja vazia. O TrackerService usa a lista dinâmica de trackers
-            # como fallback quando não há trackers fornecidos pelo magnet/HTML.
             infohash_map.setdefault(info_hash, [])
             if trackers:
                 infohash_map[info_hash].extend(trackers)
@@ -538,7 +491,6 @@ class TorrentEnricherAsync:
         if not infohash_map:
             return
         
-        # Faz scrape dos trackers (ainda síncrono, mas pode ser migrado depois)
         try:
             peers_map = self.tracker_service.get_peers_bulk(infohash_map)
             for torrent in torrents:
@@ -555,7 +507,6 @@ class TorrentEnricherAsync:
                 torrent['leech_count'] = leech
                 torrent['seed_count'] = seed
                 
-                # Salva no TrackerCache se ainda não estiver salvo (garante consistência)
                 try:
                     from cache.tracker_cache import TrackerCache
                     tracker_cache = TrackerCache()
@@ -577,7 +528,6 @@ class TorrentEnricherAsync:
                 except Exception:
                     pass
                 
-                # Log com resultado da busca e salvamento
                 log_parts = []
                 if scraper_name:
                     log_parts.append(f"[{scraper_name}]")
@@ -596,7 +546,6 @@ class TorrentEnricherAsync:
             pass
     
     async def _save_metadata_name_to_cross_data(self, torrent: Dict, metadata: Dict) -> None:
-        # Salva metadata['name'] no cross_data se disponível e mais completo que magnet_processed atual
         try:
             info_hash = torrent.get('info_hash', '').lower()
             if not info_hash or len(info_hash) != 40:
@@ -610,15 +559,12 @@ class TorrentEnricherAsync:
             from utils.text.storage import _is_metadata_more_complete
             from utils.text.title_builder import _normalize_metadata_name
             
-            # Verifica cross_data atual
             cross_data = get_cross_data_from_redis(info_hash)
             cross_magnet_processed = None
             if cross_data and cross_data.get('magnet_processed'):
                 cross_magnet_processed = str(cross_data.get('magnet_processed')).strip()
             
-            # Se não tem cross_data['magnet_processed'] ou metadata é mais completo, salva
             if not cross_magnet_processed or not _is_metadata_more_complete(metadata_name, cross_magnet_processed):
-                # Salva metadata_name normalizado no cross_data
                 normalized_metadata = _normalize_metadata_name(metadata_name)
                 save_cross_data_to_redis(info_hash, {'metadata_name': metadata_name, 'magnet_processed': normalized_metadata})
         except Exception:

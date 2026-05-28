@@ -1,11 +1,6 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
-"""
-Scraper HTTP/HTTPS para trackers BitTorrent (BEP-48 / protocolo clássico).
-Usa GET para /scrape?info_hash=...; resposta bencoded com complete (seeders) e incomplete (leechers).
-Funciona com proxy (ex.: TOR) pois usa TCP/HTTP.
-"""
+"""Scraper HTTP/HTTPS para trackers BitTorrent (BEP-48 / protocolo clássico)"""
 
 import logging
 from typing import Optional, Tuple
@@ -16,7 +11,6 @@ import requests
 from utils.http.proxy import get_proxy_dict
 
 logger = logging.getLogger(__name__)
-
 
 def _announce_to_scrape_url(announce_url: str) -> Optional[str]:
     """Converte URL de announce em URL de scrape (troca último segmento announce por scrape)."""
@@ -39,13 +33,8 @@ def _announce_to_scrape_url(announce_url: str) -> Optional[str]:
     except Exception:
         return None
 
-
 def _decode_bencode_scrape(data: bytes) -> Optional[dict]:
-    """
-    Decodifica resposta bencode do scrape (apenas o que precisamos).
-    Formato: d5:filesd20:<hash>d8:completei<N>e10:incompletei<M>eeee
-    Retorna dict com "files" -> { info_hash_bytes -> {"complete": N, "incomplete": M} } ou None.
-    """
+    """Decodifica resposta bencode do scrape (apenas o que precisamos)"""
     if not data or not data.startswith(b"d"):
         return None
 
@@ -106,7 +95,6 @@ def _decode_bencode_scrape(data: bytes) -> Optional[dict]:
     except Exception:
         return None
 
-
 class HTTPScraper:
     """Scrape de trackers HTTP/HTTPS (GET /scrape?info_hash=...). Usa proxy quando configurado."""
 
@@ -122,16 +110,13 @@ class HTTPScraper:
         })
 
     def scrape(self, tracker_url: str, info_hash: bytes) -> Optional[Tuple[int, int]]:
-        """
-        Faz scrape HTTP no tracker. Retorna (leechers, seeders) ou None.
-        """
+        """Faz scrape HTTP no tracker"""
         if len(info_hash) != 20:
             return None
         scrape_url = _announce_to_scrape_url(tracker_url)
         if not scrape_url:
             return None
         try:
-            # info_hash: 20 bytes URL-encoded (%XX por byte)
             info_hash_encoded = quote(info_hash, safe="")
             url_with_params = f"{scrape_url}?info_hash={info_hash_encoded}"
             resp = self._session.get(url_with_params, timeout=self.timeout)
@@ -145,7 +130,6 @@ class HTTPScraper:
             files = decoded.get(b"files") or decoded.get("files")
             if not isinstance(files, dict):
                 return None
-            # Chave pode ser os 20 bytes do info_hash
             file_info = files.get(info_hash)
             if not file_info and isinstance(files, dict) and files:
                 first_key = next(iter(files))

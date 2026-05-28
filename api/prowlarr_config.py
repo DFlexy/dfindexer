@@ -1,21 +1,18 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 from typing import Dict, Optional
 
-# IDs numéricos legados (Prowlarr antigo). Não reutilizar números removidos.
 SCRAPER_NUMBER_MAP: Dict[str, Optional[str]] = {
     "1": "starck",
     "2": "rede",
     "3": "xfilmes",
     "4": "tfilme",
-    "5": None,  # vaca (removido)
+    "5": None,
     "6": "comand",
     "7": "bludv",
     "8": "portal",
 }
 
-# Ordem exibida no Prowlarr (slug -> rótulo). Novos scrapers: acrescentar ao final.
 PROWLARR_SCRAPER_OPTIONS: Dict[str, str] = {
     "starck": "Starck",
     "rede": "Rede",
@@ -26,17 +23,14 @@ PROWLARR_SCRAPER_OPTIONS: Dict[str, str] = {
     "portal": "Portal",
 }
 
-
 def get_valid_scraper_ids() -> Dict[str, str]:
     return {k: v for k, v in SCRAPER_NUMBER_MAP.items() if v is not None}
-
 
 def resolve_legacy_scraper_id(site_name: str) -> Optional[str]:
     """Converte ID numérico legado em slug; None se ID removido; slug inalterado."""
     if site_name not in SCRAPER_NUMBER_MAP:
         return site_name
     return SCRAPER_NUMBER_MAP[site_name]
-
 
 def is_removed_legacy_id(site_name: str) -> bool:
     return site_name in SCRAPER_NUMBER_MAP and SCRAPER_NUMBER_MAP[site_name] is None

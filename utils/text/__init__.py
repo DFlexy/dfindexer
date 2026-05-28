@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 from utils.text.constants import STOP_WORDS, RELEASE_CLEAN_REGEX
 from utils.text.cleaning import remove_accents, clean_title
@@ -13,7 +12,6 @@ from utils.text.cross_data import (
     get_field_from_cross_data
 )
 
-# Importa de utils.parsing.audio_extraction para manter compatibilidade
 from utils.parsing.audio_extraction import detect_audio_from_html, add_audio_tag_if_needed
 
 __all__ = [

@@ -1,5 +1,4 @@
-"""Copyright (c) 2025 DFlexy"""
-"""https://github.com/DFlexy"""
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import re
 import html
@@ -11,32 +10,16 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-
-# Extrai ID do IMDB de uma página HTML - retorna ID do IMDB (ex: 'tt1234567') ou string vazia se não encontrar
 def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = None, priority_div_id: Optional[str] = None) -> str:
-    """
-    Extrai IMDB ID do HTML.
-    
-    Args:
-        doc: BeautifulSoup da página
-        selectors: Lista de seletores CSS opcionais (usa 'a' por padrão)
-        priority_div_id: ID de div com prioridade para busca (opcional)
-    
-    Returns:
-        IMDB ID (ex: 'tt1234567') ou string vazia
-    """
-    # Busca prioritária em div específica
     if priority_div_id:
         priority_div = doc.find('div', id=priority_div_id)
         if priority_div:
             for a in priority_div.select('a'):
                 href = a.get('href', '')
                 if 'imdb.com' in href:
-                    # Tenta padrão /pt/title/tt
                     match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
                     if match:
                         return match.group(1)
-                    # Tenta padrão /title/tt
                     match = re.search(r'imdb\.com/title/(tt\d+)', href)
                     if match:
                         return match.group(1)
@@ -48,20 +31,15 @@ def extract_imdb_from_page(doc: BeautifulSoup, selectors: Optional[List[str]] = 
         for link_elem in doc.select(selector):
             href = link_elem.get('href', '')
             if 'imdb.com' in href:
-                # Tenta padrão /pt/title/tt
                 imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
                 if imdb_match:
                     return imdb_match.group(1)
-                # Tenta padrão /title/tt
                 imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
                 if imdb_match:
                     return imdb_match.group(1)
     
     return ''
 
-
-# Extrai links magnet de uma página HTML - tenta primeiro nos containers especificados, depois em fallback
-# Também resolve links protegidos (protlink, encurtador, etc.) automaticamente
 def extract_magnet_links(
     doc: BeautifulSoup, 
     container_selectors: List[str], 
@@ -75,17 +53,14 @@ def extract_magnet_links(
     
     magnet_links = []
     
-    # Seletores para buscar links protegidos também
     protected_selectors = [
         'a[href*="protlink"], a[href*="encurtador"], a[href*="encurta"], '
         'a[href*="go.php"], a[href*="get.php"]'
     ]
     
-    # Tenta primeiro nos containers especificados
     for container_selector in container_selectors:
         container = doc.select_one(container_selector)
         if container:
-            # Busca links magnet diretos
             magnets = container.select('a[href^="magnet:"]')
             for magnet in magnets:
                 href = magnet.get('href', '')
@@ -95,7 +70,6 @@ def extract_magnet_links(
                     if unescaped_href not in magnet_links:
                         magnet_links.append(unescaped_href)
             
-            # Busca links protegidos e resolve
             if session:
                 from utils.parsing.link_resolver import is_protected_link
                 for protected_selector in protected_selectors:
@@ -115,7 +89,6 @@ def extract_magnet_links(
             if magnet_links:
                 return magnet_links
     
-    # Fallback: busca em qualquer lugar
     for fallback_selector in fallback_selectors:
         magnets = doc.select(fallback_selector)
         for magnet in magnets:
@@ -126,7 +99,6 @@ def extract_magnet_links(
                 if unescaped_href not in magnet_links:
                     magnet_links.append(unescaped_href)
     
-    # Busca links protegidos no fallback também
     if session:
         from utils.parsing.link_resolver import is_protected_link
         for protected_selector in protected_selectors:
@@ -145,8 +117,6 @@ def extract_magnet_links(
     
     return magnet_links
 
-
-# Extrai texto de um elemento BeautifulSoup, removendo tags HTML
 def extract_text_from_element(elem: Tag, strip: bool = True) -> str:
     if not elem:
         return ''
@@ -154,19 +124,14 @@ def extract_text_from_element(elem: Tag, strip: bool = True) -> str:
     text = elem.get_text(separator=' ', strip=strip)
     return text
 
-
-# Extrai título original de um texto usando padrões comuns
 def extract_original_title_from_text(text: str, patterns: List[str]) -> str:
     for pattern in patterns:
         if pattern in text:
-            # Tenta extrair após o padrão
             parts = text.split(pattern, 1)
             if len(parts) > 1:
                 extracted = parts[1].strip()
-                # Remove caracteres de parada comuns
                 extracted = re.sub(r'[.!?].*$', '', extracted)
                 extracted = extracted.rstrip(' .,:;-')
-                # Limita tamanho
                 if len(extracted) > 200:
                     extracted = extracted[:200]
                 if extracted:
@@ -174,26 +139,13 @@ def extract_original_title_from_text(text: str, patterns: List[str]) -> str:
     
     return ''
 
-
-# Extrai título original do HTML usando padrões configuráveis
 def extract_original_title_from_page(doc: BeautifulSoup, patterns: Optional[List[str]] = None) -> str:
-    """
-    Extrai título original do HTML usando padrões configuráveis.
-    
-    Args:
-        doc: BeautifulSoup da página
-        patterns: Lista de padrões regex opcionais (usa padrões default se None)
-    
-    Returns:
-        Título original extraído ou string vazia
-    """
     if patterns is None:
         patterns = [
             r'Título Original:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|$))',
             r'Nome Original:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|$))',
         ]
     
-    # Busca em todos os parágrafos
     for p in doc.select('p'):
         text = p.get_text()
         for pattern in patterns:
@@ -206,28 +158,14 @@ def extract_original_title_from_page(doc: BeautifulSoup, patterns: Optional[List
     
     return ''
 
-
-# Extrai título traduzido do HTML usando padrões configuráveis
 def extract_translated_title_from_page(doc: BeautifulSoup, patterns: Optional[List[str]] = None) -> str:
-    """
-    Extrai título traduzido do HTML usando padrões configuráveis.
-    
-    Args:
-        doc: BeautifulSoup da página
-        patterns: Lista de padrões regex opcionais (usa padrões default se None)
-    
-    Returns:
-        Título traduzido extraído ou string vazia
-    """
     if patterns is None:
         patterns = [
             r'Título Traduzido:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|Título Original|$))',
             r'Titulo Traduzido:\s*([^\n\r]{1,200}?)(?:\s*(?:Gênero|Ano|Duração|Direção|Elenco|Sinopse|Título Original|$))',
         ]
     
-    # Busca em todos os parágrafos
     for p in doc.select('p'):
-        # Remove tags HTML internas
         for tag in p.find_all(['strong', 'em', 'b', 'i']):
             tag.unwrap()
         
@@ -237,10 +175,9 @@ def extract_translated_title_from_page(doc: BeautifulSoup, patterns: Optional[Li
             if match:
                 title = match.group(1).strip()
                 title = html.unescape(title)
-                title = re.sub(r'<[^>]+>', '', title)  # Remove HTML residual
+                title = re.sub(r'<[^>]+>', '', title)
                 title = title.rstrip(' .,:;-')
                 
-                # Limpeza adicional
                 from utils.text.cleaning import clean_translated_title
                 title = clean_translated_title(title)
                 
