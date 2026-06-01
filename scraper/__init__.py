@@ -61,17 +61,6 @@ def available_scraper_types() -> Dict[str, Dict[str, Any]]:
     _discover_scrapers()
     return {scraper_type: dict(metadata) for scraper_type, metadata in _SCRAPER_METADATA.items()}
 
-def get_scraper_default_url(scraper_type: str) -> Optional[str]:
-    _discover_scrapers()
-    normalized = _normalize_scraper_type(scraper_type)
-    metadata = _SCRAPER_METADATA.get(normalized)
-    if not metadata:
-        return None
-    default_url = metadata.get("default_url")
-    if isinstance(default_url, str) and default_url:
-        return default_url
-    return None
-
 def create_scraper(scraper_type: str, base_url: Optional[str] = None, use_flaresolverr: bool = False) -> BaseScraper:
     _discover_scrapers()
     normalized = _normalize_scraper_type(scraper_type)
@@ -85,6 +74,5 @@ __all__ = [
     "BaseScraper",
     "available_scraper_types",
     "create_scraper",
-    "get_scraper_default_url",
     "normalize_scraper_type",
 ]

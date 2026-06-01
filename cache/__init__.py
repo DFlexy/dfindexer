@@ -3,7 +3,6 @@
 import threading
 
 from cache.redis_client import init_redis, get_redis_client
-from cache.html_cache import HTMLCache
 from cache.metadata_cache import MetadataCache
 from cache.tracker_cache import TrackerCache
 
@@ -76,7 +75,6 @@ def cleanup_request_caches():
 __all__ = [
     'init_redis',
     'get_redis_client',
-    'HTMLCache',
     'MetadataCache',
     'TrackerCache',
     'cleanup_request_caches',

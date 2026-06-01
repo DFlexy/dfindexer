@@ -67,16 +67,3 @@ def metadata_slot(timeout=None):
                     logger.debug(f"[Semaforo] Batch concluido: {total_requests} requisicoes | Tempo medio: {avg_time:.2f}s | Min: {min_time:.2f}s | Max: {max_time:.2f}s")
                     _times_list.clear()
 
-def acquire_metadata_slot(timeout=None):
-    """Adquire um slot no semáforo"""
-    semaphore = get_metadata_semaphore()
-    if timeout is not None:
-        return semaphore.acquire(timeout=timeout)
-    else:
-        semaphore.acquire()
-        return True
-
-def release_metadata_slot():
-    semaphore = get_metadata_semaphore()
-    semaphore.release()
-

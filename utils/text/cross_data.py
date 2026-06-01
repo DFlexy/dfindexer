@@ -107,11 +107,3 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
     except Exception:
         pass
 
-def get_field_from_cross_data(info_hash: str, field: str) -> Optional[str]:
-    cross_data = get_cross_data_from_redis(info_hash)
-    if cross_data:
-        value = cross_data.get(field)
-        if value and value != 'N/A':
-            return str(value) if not isinstance(value, bool) else ('true' if value else 'false')
-    return None
-

@@ -32,7 +32,7 @@ class IndexerServiceAsync:
         
         try:
             filter_func = None
-            if query:
+            if filter_results and query:
                 filter_func = QueryFilter.create_filter(query)
             
             torrents = await asyncio.to_thread(
@@ -42,6 +42,7 @@ class IndexerServiceAsync:
                 skip_trackers=True,
                 skip_metadata=True,
             )
+            torrents = self._dedupe_by_info_hash(torrents)
             
             if max_results and max_results > 0:
                 torrents = torrents[:max_results]
@@ -91,17 +92,16 @@ class IndexerServiceAsync:
             torrents = await asyncio.to_thread(
                 scraper.get_page, page, max_items=max_links, is_test=is_test
             )
+            torrents = self._dedupe_by_info_hash(torrents)
             
             if max_results and max_results > 0:
                 torrents = torrents[:max_results]
             
-            enriched_torrents, filter_stats = await self._enrich_torrents_async(
-                torrents,
-                scraper_type,
-                None,
-                is_test=is_test
-            )
-            
+            # get_page já retorna itens enriquecidos no caminho sync do scraper.
+            # Evita segunda rodada de metadata/trackers no serviço async.
+            enriched_torrents = torrents
+            filter_stats = None
+
             self.processor.sanitize_torrents(enriched_torrents)
             self.processor.remove_internal_fields(enriched_torrents)
             
@@ -148,6 +148,19 @@ class IndexerServiceAsync:
         )
         
         return enriched, filter_stats
+
+    @staticmethod
+    def _dedupe_by_info_hash(torrents: List[Dict]) -> List[Dict]:
+        seen_hashes = set()
+        deduped: List[Dict] = []
+        for torrent in torrents or []:
+            info_hash = str(torrent.get('info_hash') or '').strip().lower()
+            if info_hash and len(info_hash) == 40:
+                if info_hash in seen_hashes:
+                    continue
+                seen_hashes.add(info_hash)
+            deduped.append(torrent)
+        return deduped
     
     get_scraper_info = staticmethod(get_scraper_info)
     validate_scraper_type = staticmethod(validate_scraper_type)

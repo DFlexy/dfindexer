@@ -32,21 +32,27 @@ def _normalize_url_slug_for_year(url: str) -> str:
     slug = url.rstrip('/').split('/')[-1].split('?')[0]
     return _RE_CATALOG_DATE_SUFFIX.sub('', slug)
 
-def content_matches_query_year(
-    query_year: Optional[str],
-    text: str,
-    *,
-    is_series: bool = False,
+def slug_year_matches_query_year(
+    slug_year: str,
+    query_year: str,
+    tolerance: int = 1,
 ) -> bool:
-    """Se a query tem ano, rejeita textos cujo ano explícito conflita com a query"""
-    if not query_year or is_series:
-        return True
-    years = extract_years_from_text(text)
-    if not years:
-        return True
-    return query_year in years
+    """True se o ano do slug está dentro de query_year ± tolerance."""
+    try:
+        return abs(int(slug_year) - int(query_year)) <= tolerance
+    except (TypeError, ValueError):
+        return False
 
-def filter_urls_by_query_year(query: str, urls: List[str]) -> List[str]:
+def filter_urls_by_query_year(
+    query: str,
+    urls: List[str],
+    tolerance: int = 1,
+) -> List[str]:
+    """
+    Filtra links de busca pelo ano no slug da URL (antes de abrir a página).
+    Objetivo: evitar coleta de metadata/trackers em páginas fora do ano da query.
+    Slug sem ano explícito → mantém o link.
+    """
     query_year = extract_query_year(query)
     if not query_year:
         return urls
@@ -54,7 +60,10 @@ def filter_urls_by_query_year(query: str, urls: List[str]) -> List[str]:
     for url in urls:
         slug = _normalize_url_slug_for_year(url)
         years = extract_years_from_text(slug)
-        if not years or query_year in years:
+        if not years:
+            filtered.append(url)
+            continue
+        if any(slug_year_matches_query_year(y, query_year, tolerance) for y in years):
             filtered.append(url)
     return filtered
 
@@ -80,6 +89,10 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
     
     if len(clean_query_words) == 0:
         return True
+    
+    non_year_words = [w for w in clean_query_words if not (w.isdigit() and len(w) == 4 and w.startswith(('19', '20')))]
+    if non_year_words:
+        clean_query_words = non_year_words
     
     first_title_word = None
     for word in clean_query_words:
@@ -174,19 +187,6 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
                 matches += 1
                 matched_words.append(query_word)
 
-    year_in_query = extract_query_year(query)
-
-    year_in_title = False
-    is_series = bool(re.search(r'(?i)s\d{1,2}e\d{1,2}|s\d{1,2}(?:\s|$|\.)', title))
-
-    if year_in_query:
-        year_pattern = r'\b' + re.escape(year_in_query) + r'\b'
-        if re.search(year_pattern, combined_title):
-            year_in_title = True
-
-    if not content_matches_query_year(year_in_query, combined_title, is_series=is_series):
-        return False
-    
     if len(clean_query_words) > 1 and first_title_word and not first_title_word_matched:
         return False
     
@@ -214,13 +214,6 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
             
             min_matches_percent = max(2, int(total_words * 0.3))
             if first_words_matches >= 2 or matches >= min_matches_percent:
-
-                if has_title_match:
-                    if not year_in_query or year_in_title or is_series:
-                        return True
-
-                    if matches >= min_matches_percent:
-                        return True
                 return has_title_match
             
             return False
@@ -242,14 +235,10 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
         if total_words == 3:
             if total_valid_matches < title_words_count:
                 return False
-            if year_in_query and not year_in_title and not is_series:
-                return False
             return True
         
         if total_words == 4:
             if total_valid_matches < 3:
-                return False
-            if year_in_query and not year_in_title and not is_series:
                 return False
             return True
         

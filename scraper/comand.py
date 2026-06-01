@@ -99,6 +99,7 @@ class ComandScraper(BaseScraper):
                     if href:
                         links.append(href)
         return links
+
     
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
         from urllib.parse import urljoin

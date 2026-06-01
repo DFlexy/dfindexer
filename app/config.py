@@ -57,6 +57,9 @@ class Config:
     
     TRACKER_SCRAPING_ENABLED: bool = True
     
+    # Tolerância do filtro de ano por link (slug): aceita query_year ± N (ex.: 2016 → 2015–2017)
+    QUERY_YEAR_LINK_TOLERANCE: int = max(0, int(os.getenv('QUERY_YEAR_LINK_TOLERANCE', '1')))
+
     MAX_QUERY_LENGTH: int = int(os.getenv('MAX_QUERY_LENGTH', '200'))
     MAX_EPISODE_NUMBER: int = 99
     MAX_EPISODE_DIFF: int = 20

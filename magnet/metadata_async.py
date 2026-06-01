@@ -10,7 +10,6 @@ import aiohttp
 from cache.redis_client import get_redis_client
 from cache.redis_keys import metadata_key, metadata_failure_key, metadata_failure503_key, circuit_metadata_key
 from app.config import Config
-from utils.concurrency.metadata_semaphore_async import metadata_slot_async
 
 logger = logging.getLogger(__name__)
 
@@ -239,54 +238,37 @@ async def _fetch_torrent_header_async(
     url = f"https://itorrents.org/torrent/{info_hash_hex}.torrent"
     
     timeout = aiohttp.ClientTimeout(total=3.5, connect=2, sock_read=1.5)
-    chunk_size = 128 * 1024
     max_size = 512 * 1024
-    all_data = b''
-    start = 0
-    max_iterations = 8
-    iteration = 0
     
     await _rate_limit()
     
     try:
-        while start < max_size and iteration < max_iterations:
-            iteration += 1
-            
-            headers = {'Range': f'bytes={start}-{start + chunk_size - 1}'}
-            async with session.get(url, headers=headers, timeout=timeout) as response:
-                if response.status not in (200, 206):
-                    if response.status == 404:
-                        await _cache_failure(info_hash, is_503=False)
-                        return None, False, False
-                    if response.status == 503:
-                        await _record_503()
-                        await _cache_failure(info_hash, is_503=True)
-                        return None, False, True
+        headers = {'Range': f'bytes=0-{max_size - 1}'}
+        async with session.get(url, headers=headers, timeout=timeout) as response:
+            if response.status not in (200, 206):
+                if response.status == 404:
+                    await _cache_failure(info_hash, is_503=False)
                     return None, False, False
-                
-                chunk = await response.read()
-                if not chunk:
-                    break
-                
-                all_data += chunk
-                
-                if b'<!DOCTYPE html' in all_data or b'<html' in all_data.lower():
-                    return None, False, False
-                
-                if b'pieces' in all_data:
-                    pieces_index = all_data.index(b'pieces')
-                    await _record_success()
-                    return all_data[:pieces_index + 20], False, False
-                
-                if len(chunk) < chunk_size:
-                    break
-                
-                start += len(chunk)
-                chunk_size = min(chunk_size * 2, 256 * 1024)
-        
-        if all_data:
+                if response.status == 503:
+                    await _record_503()
+                    await _cache_failure(info_hash, is_503=True)
+                    return None, False, True
+                return None, False, False
+
+            all_data = await response.read()
+            if not all_data:
+                return None, False, False
+
+            if b'<!DOCTYPE html' in all_data or b'<html' in all_data.lower():
+                return None, False, False
+
+            if b'pieces' in all_data:
+                pieces_index = all_data.index(b'pieces')
+                await _record_success()
+                return all_data[:pieces_index + 20], False, False
+
             await _record_success()
-        return (all_data if all_data else None), False, False
+            return all_data, False, False
     
     except asyncio.TimeoutError:
         await _record_timeout()

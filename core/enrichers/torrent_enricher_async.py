@@ -2,7 +2,7 @@
 
 import logging
 import asyncio
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Any
 from app.config import Config
 from tracker import get_tracker_service
 from magnet.metadata_async import fetch_metadata_from_itorrents_async
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 class TorrentEnricherAsync:
     def __init__(self):
         self.tracker_service = get_tracker_service()
-        self._last_filter_stats = None
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -43,6 +42,53 @@ class TorrentEnricherAsync:
             if not self._session.closed:
                 await self._session.close()
             self._session = None
+
+    @staticmethod
+    def _parse_cross_data(raw_map: Dict[bytes, bytes]) -> Dict[str, Any]:
+        parsed: Dict[str, Any] = {}
+        for field, value in (raw_map or {}).items():
+            field_str = field.decode('utf-8')
+            value_str = value.decode('utf-8')
+            if field_str in ('missing_dn', 'has_legenda'):
+                parsed[field_str] = value_str.lower() == 'true'
+            elif field_str in ('tracker_seed', 'tracker_leech'):
+                try:
+                    parsed[field_str] = int(value_str) if value_str and value_str != 'N/A' else 0
+                except (TypeError, ValueError):
+                    parsed[field_str] = 0
+            else:
+                parsed[field_str] = value_str if value_str and value_str != 'N/A' else None
+        return parsed
+
+    def _bulk_get_cross_data(self, info_hashes: List[str]) -> Dict[str, Dict[str, Any]]:
+        from cache.redis_client import get_redis_client
+        from cache.redis_keys import torrent_cross_data_key
+
+        normalized = [
+            str(h).strip().lower()
+            for h in info_hashes
+            if h and len(str(h).strip()) == 40
+        ]
+        if not normalized:
+            return {}
+        redis = get_redis_client()
+        if not redis:
+            return {}
+        try:
+            pipe = redis.pipeline(transaction=False)
+            for h in normalized:
+                pipe.hgetall(torrent_cross_data_key(h))
+            rows = pipe.execute()
+        except Exception:
+            return {}
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for info_hash, raw in zip(normalized, rows):
+            if raw:
+                parsed = self._parse_cross_data(raw)
+                if parsed:
+                    result[info_hash] = parsed
+        return result
     
     async def enrich(
         self,
@@ -75,8 +121,6 @@ class TorrentEnricherAsync:
             'scraper_name': scraper_name
         }
         
-        self._last_filter_stats = filter_stats.copy()
-        
         if not torrents:
             return torrents, filter_stats
         
@@ -92,70 +136,88 @@ class TorrentEnricherAsync:
         
         return torrents, filter_stats
     
-    def _remove_duplicates(self, torrents: List[Dict]) -> List[Dict]:
-        seen_hashes = set()
-        unique_torrents = []
-        for torrent in torrents:
-            info_hash = (torrent.get('info_hash') or '').lower()
-            if info_hash and len(info_hash) == 40:
-                if info_hash in seen_hashes:
-                    continue
-                seen_hashes.add(info_hash)
-            unique_torrents.append(torrent)
-        return unique_torrents
-    
     async def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
         """Garante que títulos estão completos (async)."""
-        from utils.text.cross_data import get_cross_data_from_redis
-        
-        session = await self._get_session()
-        
-        for torrent in torrents:
-            info_hash = torrent.get('info_hash')
-            if info_hash:
-                try:
-                    cross_data = get_cross_data_from_redis(info_hash)
-                    if cross_data:
-                        if not torrent.get('original_title') and cross_data.get('title_original_html'):
-                            torrent['original_title'] = cross_data.get('title_original_html', '')
-                        if not torrent.get('title_translated_processed') and cross_data.get('title_translated_html'):
-                            torrent['title_translated_processed'] = cross_data.get('title_translated_html', '')
-                        if cross_data.get('magnet_processed'):
-                            torrent['magnet_processed'] = cross_data.get('magnet_processed')
-                except Exception:
-                    pass
-            
-            from utils.text.storage import (
-                torrent_needs_metadata_title_upgrade,
-                upgrade_torrent_title_from_metadata,
-            )
-
-            if torrent_needs_metadata_title_upgrade(torrent) and info_hash:
-                try:
-                    scraper_name = getattr(self, '_current_scraper_name', None)
-                    title_for_log = (
-                        torrent.get('title_processed')
-                        or torrent.get('original_title')
-                        or torrent.get('title_translated_processed')
-                        or torrent.get('magnet_processed')
-                        or None
-                    )
-                    metadata = await fetch_metadata_from_itorrents_async(
-                        session, info_hash, scraper_name=scraper_name, title=title_for_log
-                    )
-                    if metadata and metadata.get('name'):
-                        torrent['_metadata'] = metadata
-                        torrent['_metadata_fetched'] = True
-                        upgrade_torrent_title_from_metadata(torrent, metadata)
-                except Exception:
-                    pass
-    
-    async def _fetch_metadata_batch(self, torrents: List[Dict]) -> None:
-        from utils.concurrency.metadata_semaphore_async import metadata_slot_async
-        from utils.text.cross_data import get_cross_data_from_redis
         from cache.metadata_cache import MetadataCache
         
         session = await self._get_session()
+        metadata_cache = MetadataCache()
+        cross_data_by_hash = self._bulk_get_cross_data(
+            [str(t.get('info_hash') or '').lower() for t in torrents]
+        )
+        from utils.text.storage import (
+            torrent_needs_metadata_title_upgrade,
+            upgrade_torrent_title_from_metadata,
+        )
+        to_upgrade: List[Dict] = []
+        
+        for torrent in torrents:
+            info_hash = str(torrent.get('info_hash') or '').lower()
+            cross_data = cross_data_by_hash.get(info_hash)
+            if cross_data:
+                if not torrent.get('original_title') and cross_data.get('title_original_html'):
+                    torrent['original_title'] = cross_data.get('title_original_html', '')
+                if not torrent.get('title_translated_processed') and cross_data.get('title_translated_html'):
+                    torrent['title_translated_processed'] = cross_data.get('title_translated_html', '')
+                if cross_data.get('magnet_processed'):
+                    torrent['magnet_processed'] = cross_data.get('magnet_processed')
+
+            if not (info_hash and len(info_hash) == 40):
+                continue
+            if not torrent_needs_metadata_title_upgrade(torrent):
+                continue
+            try:
+                cached_metadata = metadata_cache.get(info_hash)
+            except Exception:
+                cached_metadata = None
+            if cached_metadata and cached_metadata.get('name'):
+                torrent['_metadata'] = cached_metadata
+                torrent['_metadata_fetched'] = True
+                upgrade_torrent_title_from_metadata(torrent, cached_metadata)
+                continue
+            to_upgrade.append(torrent)
+
+        if not to_upgrade:
+            return
+
+        worker_limit = min(24, max(4, int(getattr(Config, 'METADATA_MAX_CONCURRENT', 32) / 4)))
+
+        async def upgrade_one(torrent: Dict) -> None:
+            info_hash = str(torrent.get('info_hash') or '').lower()
+            if not info_hash:
+                return
+            try:
+                scraper_name = getattr(self, '_current_scraper_name', None)
+                title_for_log = (
+                    torrent.get('title_processed')
+                    or torrent.get('original_title')
+                    or torrent.get('title_translated_processed')
+                    or torrent.get('magnet_processed')
+                    or None
+                )
+                metadata = await fetch_metadata_from_itorrents_async(
+                    session, info_hash, scraper_name=scraper_name, title=title_for_log
+                )
+                if metadata and metadata.get('name'):
+                    torrent['_metadata'] = metadata
+                    torrent['_metadata_fetched'] = True
+                    upgrade_torrent_title_from_metadata(torrent, metadata)
+            except Exception:
+                pass
+
+        for i in range(0, len(to_upgrade), worker_limit):
+            chunk = to_upgrade[i:i + worker_limit]
+            await asyncio.gather(*(upgrade_one(t) for t in chunk), return_exceptions=True)
+    
+    async def _fetch_metadata_batch(self, torrents: List[Dict]) -> None:
+        from utils.concurrency.metadata_semaphore_async import metadata_slot_async
+        from cache.metadata_cache import MetadataCache
+        
+        session = await self._get_session()
+        metadata_cache = MetadataCache()
+        cross_data_by_hash = self._bulk_get_cross_data(
+            [str(t.get('info_hash') or '').lower() for t in torrents]
+        )
         
         torrents_to_fetch = [
             t for t in torrents
@@ -178,7 +240,7 @@ class TorrentEnricherAsync:
                 return (torrent, None)
             
             try:
-                cross_data = get_cross_data_from_redis(info_hash)
+                cross_data = cross_data_by_hash.get(str(info_hash).lower())
                 if cross_data:
                     has_release_title = cross_data.get('magnet_processed')
                     has_size = cross_data.get('size')
@@ -188,7 +250,6 @@ class TorrentEnricherAsync:
                 pass
             
             try:
-                metadata_cache = MetadataCache()
                 cached_metadata = metadata_cache.get(info_hash.lower())
                 if cached_metadata:
                     return (torrent, cached_metadata)
@@ -209,26 +270,33 @@ class TorrentEnricherAsync:
                     return (torrent, None)
         
 
-        tasks = [fetch_metadata_for_torrent(t) for t in torrents_to_fetch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for result in results:
-            if isinstance(result, Exception):
-                continue
-            if isinstance(result, tuple):
-                torrent, metadata = result
-                if metadata:
-                    torrent['_metadata'] = metadata
-                    torrent['_metadata_fetched'] = True
-                    from utils.text.storage import upgrade_torrent_title_from_metadata
-                    upgrade_torrent_title_from_metadata(torrent, metadata)
-                    await self._save_metadata_name_to_cross_data(torrent, metadata)
+        worker_limit = min(32, max(4, int(getattr(Config, 'METADATA_MAX_CONCURRENT', 32) / 4)))
+        for i in range(0, len(torrents_to_fetch), worker_limit):
+            chunk = torrents_to_fetch[i:i + worker_limit]
+            results = await asyncio.gather(
+                *(fetch_metadata_for_torrent(t) for t in chunk),
+                return_exceptions=True,
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    continue
+                if isinstance(result, tuple):
+                    torrent, metadata = result
+                    if metadata:
+                        torrent['_metadata'] = metadata
+                        torrent['_metadata_fetched'] = True
+                        from utils.text.storage import upgrade_torrent_title_from_metadata
+                        upgrade_torrent_title_from_metadata(torrent, metadata)
+                        await self._save_metadata_name_to_cross_data(torrent, metadata)
     
     def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
         """Aplica fallbacks para tamanho (síncrono - usa dados já obtidos)."""
-        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        from utils.text.cross_data import save_cross_data_to_redis
         
         metadata_enabled = not skip_metadata
+        cross_data_by_hash = self._bulk_get_cross_data(
+            [str(t.get('info_hash') or '').lower() for t in torrents]
+        )
         
         for torrent in torrents:
             html_size = torrent.get('size', '')
@@ -239,7 +307,7 @@ class TorrentEnricherAsync:
             
 
             if info_hash and len(info_hash) == 40:
-                cross_data = get_cross_data_from_redis(info_hash)
+                cross_data = cross_data_by_hash.get(info_hash)
                 if cross_data and cross_data.get('size'):
                     cross_size = cross_data.get('size')
                     if cross_size and cross_size.strip() and cross_size != 'N/A':
@@ -436,12 +504,15 @@ class TorrentEnricherAsync:
     async def _attach_peers(self, torrents: List[Dict]) -> None:
         """Anexa dados de peers (seeds/leechers) via trackers (async)."""
         from utils.parsing.magnet_utils import extract_trackers_from_magnet
-        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
+        from utils.text.cross_data import save_cross_data_to_redis
         import logging
         
         logger = logging.getLogger(__name__)
         
         scraper_name = getattr(self, '_current_scraper_name', None)
+        cross_data_by_hash = self._bulk_get_cross_data(
+            [str(t.get('info_hash') or '').lower() for t in torrents]
+        )
         
         infohash_map = {}
         log_id_by_hash = {}
@@ -462,7 +533,7 @@ class TorrentEnricherAsync:
             log_parts.append(f"(hash: {info_hash})")
             log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
             
-            cross_data = get_cross_data_from_redis(info_hash)
+            cross_data = cross_data_by_hash.get(info_hash)
             if cross_data:
                 tracker_seed = cross_data.get('tracker_seed')
                 tracker_leech = cross_data.get('tracker_leech')
@@ -483,16 +554,23 @@ class TorrentEnricherAsync:
                 if magnet_link:
                     trackers = extract_trackers_from_magnet(magnet_link)
             
-            infohash_map.setdefault(info_hash, [])
             if trackers:
-                infohash_map[info_hash].extend(trackers)
+                unique_trackers = list(dict.fromkeys(trackers))
+                infohash_map.setdefault(info_hash, [])
+                infohash_map[info_hash].extend(unique_trackers)
             log_id_by_hash[info_hash] = log_id
         
         if not infohash_map:
             return
         
         try:
-            peers_map = self.tracker_service.get_peers_bulk(infohash_map)
+            peers_map = await asyncio.to_thread(self.tracker_service.get_peers_bulk, infohash_map)
+            tracker_cache = None
+            try:
+                from cache.tracker_cache import TrackerCache
+                tracker_cache = TrackerCache()
+            except Exception:
+                tracker_cache = None
             for torrent in torrents:
                 info_hash = (torrent.get('info_hash') or '').lower()
                 if not info_hash or len(info_hash) != 40:
@@ -507,15 +585,14 @@ class TorrentEnricherAsync:
                 torrent['leech_count'] = leech
                 torrent['seed_count'] = seed
                 
-                try:
-                    from cache.tracker_cache import TrackerCache
-                    tracker_cache = TrackerCache()
-                    cached = tracker_cache.get(info_hash)
-                    if not cached:
-                        tracker_data = {"leech": leech, "seed": seed}
-                        tracker_cache.set(info_hash, tracker_data)
-                except Exception:
-                    pass
+                if tracker_cache:
+                    try:
+                        cached = tracker_cache.get(info_hash)
+                        if not cached:
+                            tracker_data = {"leech": leech, "seed": seed}
+                            tracker_cache.set(info_hash, tracker_data)
+                    except Exception:
+                        pass
                 
                 saved_to_redis = False
                 try:

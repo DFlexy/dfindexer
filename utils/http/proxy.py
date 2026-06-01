@@ -80,9 +80,6 @@ def get_aiohttp_proxy_connector():
         logger.warning(f"Erro ao criar ProxyConnector: {e}")
         return None
 
-def get_aiohttp_proxy_url() -> Optional[str]:
-    return get_proxy_url()
-
 def is_proxy_local() -> bool:
     """Verifica se o proxy está na mesma rede local que o FlareSolverr"""
     if not Config.PROXY_HOST:

@@ -11,9 +11,6 @@ import requests
 from cache.redis_client import get_redis_client
 from cache.redis_keys import html_long_key, html_short_key
 from app.config import Config
-from tracker import get_tracker_service  # type: ignore[import]
-from magnet.parser import MagnetParser
-from utils.text.utils import format_bytes
 from utils.http.flaresolverr import FlareSolverrClient
 from utils.http.proxy import get_proxy_dict, is_proxy_local
 
@@ -79,7 +76,6 @@ class BaseScraper(ABC):
         proxy_dict = get_proxy_dict()
         if proxy_dict:
             self.session.proxies.update(proxy_dict)
-        self.tracker_service = get_tracker_service()
         self._skip_metadata = False
         self._is_test = False
         self._closed = False
@@ -641,6 +637,7 @@ class BaseScraper(ABC):
                 continue
             
             page_links = self._extract_search_results(doc)
+            page_links = self._filter_links_by_result_titles(doc, page_links, variation)
             for href in page_links:
                 absolute_url = urljoin(self.base_url, href)
                 if absolute_url not in seen_urls:
@@ -648,10 +645,100 @@ class BaseScraper(ABC):
                     seen_urls.add(absolute_url)
         
         return links
+
+    def _normalize_search_result_url(self, href: str) -> str:
+        from urllib.parse import urljoin
+        if not href:
+            return ''
+        absolute = urljoin(self.base_url, href)
+        absolute = absolute.split('#', 1)[0]
+        return absolute.rstrip('/').lower()
+
+    def _collect_search_result_titles(self, doc: BeautifulSoup) -> Dict[str, str]:
+        """Coleta títulos exibidos nos cards de busca para validar query sem olhar sinopse."""
+        title_by_url: Dict[str, str] = {}
+        article_selectors = [
+            'article.post',
+            'article',
+            '.post',
+            '.item',
+            '.result',
+        ]
+        link_selectors = [
+            'h1.entry-title a',
+            'h2.entry-title a',
+            'h3.entry-title a',
+            'header.entry-header a',
+            'h1 a',
+            'h2 a',
+            'h3 a',
+        ]
+
+        for article_sel in article_selectors:
+            for article in doc.select(article_sel):
+                link_elem = None
+                for link_sel in link_selectors:
+                    link_elem = article.select_one(link_sel)
+                    if link_elem:
+                        break
+                if not link_elem:
+                    continue
+                href = (link_elem.get('href') or '').strip()
+                title_text = link_elem.get_text(strip=True)
+                normalized = self._normalize_search_result_url(href)
+                if normalized and title_text:
+                    title_by_url[normalized] = title_text
+
+        return title_by_url
+
+    def _filter_links_by_result_titles(self, doc: BeautifulSoup, links: List[str], query: str) -> List[str]:
+        """Filtra links de busca usando só o título do card de resultado."""
+        from utils.text.query import check_query_match
+
+        if not links or not query or not query.strip():
+            return links
+
+        title_by_url = self._collect_search_result_titles(doc)
+        if not title_by_url:
+            return links
+
+        filtered: List[str] = []
+        for href in links:
+            normalized = self._normalize_search_result_url(href)
+            title_text = title_by_url.get(normalized)
+            # Se não achou título para o link, mantém para evitar falso negativo agressivo.
+            if not title_text:
+                filtered.append(href)
+                continue
+            if check_query_match(query, title_text, '', ''):
+                filtered.append(href)
+
+        return filtered
     
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         return []
     
+    def _filter_search_links_by_query_year(self, query: str, links: List[str]) -> List[str]:
+        """Filtro de ano só por link (slug), centralizado para todos os scrapers."""
+        from app.config import Config
+        from utils.text.query import extract_query_year, filter_urls_by_query_year
+
+        links_before = len(links)
+        filtered = filter_urls_by_query_year(
+            query,
+            links,
+            tolerance=Config.QUERY_YEAR_LINK_TOLERANCE,
+        )
+        scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
+        if links_before != len(filtered):
+            query_year = extract_query_year(query)
+            tol = Config.QUERY_YEAR_LINK_TOLERANCE
+            logger.debug(
+                f"[{scraper_name}] Filtro por ano no link ({query_year} ±{tol}): "
+                f"{links_before} → {len(filtered)} páginas"
+            )
+        return filtered
+
     def _default_search(
         self,
         query: str,
@@ -660,19 +747,11 @@ class BaseScraper(ABC):
         skip_metadata: bool = False,
     ) -> List[Dict]:
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
-        from utils.text.query import extract_query_year, filter_urls_by_query_year
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
         links = self._search_variations(query)
-        links_before = len(links)
-        links = filter_urls_by_query_year(query, links)
+        links = self._filter_search_links_by_query_year(query, links)
 
         scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
-        if links_before != len(links):
-            query_year = extract_query_year(query)
-            logger.debug(
-                f"[{scraper_name}] Filtro por ano ({query_year}): "
-                f"{links_before} → {len(links)} páginas"
-            )
         if links:
             pages_list = '\n'.join([f"  - {link}" for link in links])
             logger.debug(f"[{scraper_name}] Páginas encontradas ({len(links)}):\n{pages_list}")
@@ -736,379 +815,4 @@ class BaseScraper(ABC):
                 scraper_name = getattr(self, 'DISPLAY_NAME', '') or scraper_type
         
         return self._enricher.enrich(torrents, skip_metadata, skip_trackers, filter_func, scraper_name=scraper_name)
-    
-    def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
-        from magnet.metadata import fetch_metadata_from_itorrents
-        
-        for torrent in torrents:
-            title = torrent.get('title_processed', '')
-            if not title or len(title.strip()) < 10:
-                info_hash = torrent.get('info_hash')
-                if info_hash:
-                    try:
-                        from utils.text.cross_data import get_cross_data_from_redis
-                        cross_data = get_cross_data_from_redis(info_hash)
-                        if cross_data and cross_data.get('magnet_processed'):
-                            continue
-                    except Exception:
-                        pass
-                    
-                    try:
-                        metadata = fetch_metadata_from_itorrents(info_hash)
-                        if metadata and metadata.get('name'):
-                            name = metadata.get('name', '').strip()
-                            if name and len(name) >= 3:
-                                torrent['title_processed'] = name
-                    except Exception:
-                        pass
-    
-    def _fetch_metadata_batch(self, torrents: List[Dict]) -> None:
-        from magnet.metadata import fetch_metadata_from_itorrents
-        from magnet.parser import MagnetParser
-        from utils.concurrency.metadata_semaphore import metadata_slot
-        
-        torrents_to_fetch = [
-            t for t in torrents
-            if not t.get('_metadata_fetched') and t.get('magnet_link')
-        ]
-        
-        if not torrents_to_fetch:
-            return
-        
-        def fetch_metadata_for_torrent(torrent: Dict) -> tuple:
-            info_hash = torrent.get('info_hash')
-            if not info_hash:
-                try:
-                    from magnet.parser import MagnetParser
-                    magnet_data = MagnetParser.parse(torrent.get('magnet_link'))
-                    info_hash = magnet_data.get('info_hash')
-                except Exception:
-                    return (torrent, None)
-            
-            if not info_hash:
-                return (torrent, None)
-                
-            try:
-                from utils.text.cross_data import get_cross_data_from_redis
-                cross_data = get_cross_data_from_redis(info_hash)
-                if cross_data:
-                    has_release_title = cross_data.get('magnet_processed')
-                    has_size = cross_data.get('size')
-                    if has_release_title and has_size:
-                        return (torrent, None)
-            except Exception:
-                pass
-            
-            try:
-                from cache.metadata_cache import MetadataCache
-                metadata_cache = MetadataCache()
-                cached_metadata = metadata_cache.get(info_hash.lower())
-                if cached_metadata:
-                    return (torrent, cached_metadata)
-            except Exception:
-                pass
-            
-            from utils.concurrency.metadata_semaphore import metadata_slot
-            with metadata_slot():
-                try:
-                    from magnet.metadata import fetch_metadata_from_itorrents
-                    metadata = fetch_metadata_from_itorrents(info_hash)
-                    return (torrent, metadata)
-                except Exception:
-                    return (torrent, None)
-        
-        if len(torrents_to_fetch) > 1:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            
-            max_workers = min(16, len(torrents_to_fetch))
-            
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_torrent = {
-                    executor.submit(fetch_metadata_for_torrent, t): t
-                    for t in torrents_to_fetch
-                }
-                
-                for future in as_completed(future_to_torrent):
-                    try:
-                        torrent, metadata = future.result(timeout=30)
-                        if metadata:
-                            torrent['_metadata'] = metadata
-                            torrent['_metadata_fetched'] = True
-                    except Exception as e:
-                        pass
-        else:
-            for torrent in torrents_to_fetch:
-                try:
-                    torrent, metadata = fetch_metadata_for_torrent(torrent)
-                    if metadata:
-                        torrent['_metadata'] = metadata
-                        torrent['_metadata_fetched'] = True
-                except Exception:
-                    pass
-
-    def _apply_size_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
-        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
-        
-        metadata_enabled = not skip_metadata
-        
-        for torrent in torrents:
-            html_size = torrent.get('size', '')
-            info_hash = torrent.get('info_hash', '').lower()
-            
-            magnet_link = torrent.get('magnet_link')
-            if not magnet_link:
-                continue
-            
-
-            if info_hash and len(info_hash) == 40:
-                cross_data = get_cross_data_from_redis(info_hash)
-                if cross_data and cross_data.get('size'):
-                    cross_size = cross_data.get('size')
-                    if cross_size and cross_size.strip() and cross_size != 'N/A':
-                        torrent['size'] = cross_size.strip()
-                        continue
-            
-            magnet_data = None
-            try:
-                magnet_data = MagnetParser.parse(magnet_link)
-            except Exception:
-                pass
-            
-            torrent['size'] = ''
-            
-            if metadata_enabled:
-                if torrent.get('_metadata') and 'size' in torrent['_metadata']:
-                    try:
-                        from utils.text.utils import format_bytes
-                        size_bytes = torrent['_metadata']['size']
-                        formatted_size = format_bytes(size_bytes)
-                        if formatted_size:
-                            torrent['size'] = formatted_size
-                            if info_hash and len(info_hash) == 40:
-                                try:
-                                    save_cross_data_to_redis(info_hash, {'size': formatted_size})
-                                except Exception:
-                                    pass
-                            continue
-                    except Exception:
-                        pass
-                
-                try:
-                    from magnet.metadata import get_torrent_size
-                    current_info_hash = info_hash
-                    if not current_info_hash and magnet_data:
-                        current_info_hash = (magnet_data.get('info_hash') or '').lower()
-                    
-                    if current_info_hash and len(current_info_hash) == 40:
-                        metadata_size = get_torrent_size(magnet_link, current_info_hash)
-                        if metadata_size:
-                            torrent['size'] = metadata_size
-                            try:
-                                save_cross_data_to_redis(current_info_hash, {'size': metadata_size})
-                            except Exception:
-                                pass
-                            continue
-                except Exception:
-                    pass
-            
-            if not torrent.get('size') and magnet_data:
-                try:
-                    xl_value = magnet_data.get('params', {}).get('xl')
-                    if xl_value:
-                        try:
-                            formatted_size = format_bytes(int(xl_value))
-                            if formatted_size:
-                                torrent['size'] = formatted_size
-                                if info_hash and len(info_hash) == 40:
-                                    try:
-                                        save_cross_data_to_redis(info_hash, {'size': formatted_size})
-                                    except Exception:
-                                        pass
-                                continue
-                        except (ValueError, TypeError):
-                            pass
-                except Exception:
-                    pass
-            
-            if not torrent.get('size') and html_size:
-                torrent['size'] = html_size
-                continue
-
-    def _apply_date_fallback(self, torrents: List[Dict], skip_metadata: bool = False) -> None:
-        from datetime import datetime
-        
-        for torrent in torrents:
-            current_date = torrent.get('date', '')
-            if current_date:
-                continue
-            
-            if not skip_metadata:
-                magnet_link = torrent.get('magnet_link')
-                if magnet_link:
-                    info_hash = torrent.get('info_hash')
-                    if not info_hash:
-                        try:
-                            magnet_data = MagnetParser.parse(magnet_link)
-                            info_hash = magnet_data.get('info_hash')
-                        except Exception:
-                            pass
-                    
-                    if info_hash:
-                        try:
-                            metadata = torrent.get('_metadata')
-                            if not metadata:
-                                from magnet.metadata import fetch_metadata_from_itorrents
-                                metadata = fetch_metadata_from_itorrents(info_hash)
-                            
-                            if metadata and metadata.get('creation_date'):
-                                creation_timestamp = metadata['creation_date']
-                                try:
-                                    creation_date = datetime.fromtimestamp(creation_timestamp)
-
-                                    torrent['date'] = creation_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-                                    continue
-                                except (ValueError, OSError):
-                                    pass
-                        except Exception:
-                            pass
-            
-            details_url = torrent.get('details', '')
-            if details_url:
-                try:
-                    doc = self.get_document(details_url, self.base_url)
-                    if doc:
-                        from utils.parsing.date_extraction import extract_release_year_date_from_page
-                        release_year_date = extract_release_year_date_from_page(doc, self.SCRAPER_TYPE)
-                        if release_year_date:
-
-                            torrent['date'] = release_year_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-                            continue
-                except Exception:
-                    pass
-            
-            torrent['date'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-
-    def _attach_peers(self, torrents: List[Dict]) -> None:
-        if not self.tracker_service:
-            return
-        
-
-        from utils.text.cross_data import get_cross_data_from_redis, save_cross_data_to_redis
-        
-        scraper_name = None
-        if hasattr(self, 'SCRAPER_TYPE'):
-            scraper_type = getattr(self, 'SCRAPER_TYPE', '')
-            if scraper_type:
-                from scraper import available_scraper_types
-                types_info = available_scraper_types()
-                normalized_type = scraper_type.lower().strip()
-                if normalized_type in types_info:
-                    scraper_name = types_info[normalized_type].get('display_name', scraper_type)
-                else:
-                    scraper_name = getattr(self, 'DISPLAY_NAME', '') or scraper_type
-        
-        infohash_map: Dict[str, List[str]] = {}
-        log_id_by_hash: Dict[str, str] = {}
-        for torrent in torrents:
-            info_hash = (torrent.get('info_hash') or '').lower()
-            if not info_hash or len(info_hash) != 40:
-                continue
-            if (torrent.get('seed_count') or 0) > 0 or (torrent.get('leech_count') or 0) > 0:
-                continue
-            
-            log_parts = []
-            if scraper_name:
-                log_parts.append(f"[{scraper_name}]")
-            title = torrent.get('title_processed', '')
-            if title:
-                title_preview = title[:120] if len(title) > 120 else title
-                log_parts.append(title_preview)
-            log_parts.append(f"(hash: {info_hash})")
-            log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
-            
-            cross_data = get_cross_data_from_redis(info_hash)
-            if cross_data:
-                tracker_seed = cross_data.get('tracker_seed')
-                tracker_leech = cross_data.get('tracker_leech')
-                if tracker_seed is not None and tracker_leech is not None:
-                    torrent['seed_count'] = tracker_seed
-                    torrent['leech_count'] = tracker_leech
-                    continue
-                else:
-                    pass
-            else:
-                pass
-            
-            trackers = torrent.get('trackers') or []
-            
-            if not trackers:
-                magnet_link = torrent.get('magnet_link')
-                if magnet_link:
-                    try:
-                        from utils.parsing.magnet_utils import extract_trackers_from_magnet
-                        trackers = extract_trackers_from_magnet(magnet_link)
-                    except Exception:
-                        pass
-            
-            if info_hash:
-                log_id_by_hash[info_hash] = log_id
-                infohash_map.setdefault(info_hash, [])
-                if trackers:
-                    infohash_map[info_hash].extend(trackers)
-                elif info_hash not in infohash_map or not infohash_map[info_hash]:
-                    infohash_map[info_hash] = []
-        
-        if not infohash_map:
-            return
-        
-        peers_map = self.tracker_service.get_peers_bulk(infohash_map)
-        
-        for torrent in torrents:
-            info_hash = (torrent.get('info_hash') or '').lower()
-            if not info_hash:
-                continue
-            leech_seed = peers_map.get(info_hash)
-            if not leech_seed:
-                if info_hash in log_id_by_hash:
-                    logger.debug(f"[Tracker] Buscando: {log_id_by_hash[info_hash]} → Não encontrado")
-                continue
-            leech, seed = leech_seed
-            torrent['leech_count'] = leech
-            torrent['seed_count'] = seed
-            
-            try:
-                from cache.tracker_cache import TrackerCache
-                tracker_cache = TrackerCache()
-                cached = tracker_cache.get(info_hash)
-                if not cached:
-                    tracker_data = {"leech": leech, "seed": seed}
-                    tracker_cache.set(info_hash, tracker_data)
-            except Exception:
-                pass
-            
-            saved_to_redis = False
-            try:
-                cross_data_to_save = {
-                    'tracker_seed': seed,
-                    'tracker_leech': leech
-                }
-                save_cross_data_to_redis(info_hash, cross_data_to_save)
-                saved_to_redis = True
-            except Exception as e:
-                logger.debug(f"Cross-data save error: {info_hash[:16]}")
-            
-            log_parts = []
-            if scraper_name:
-                log_parts.append(f"[{scraper_name}]")
-            title = torrent.get('title_processed', '')
-            if title:
-                title_preview = title[:120] if len(title) > 120 else title
-                log_parts.append(title_preview)
-            log_parts.append(f"(hash: {info_hash})")
-            log_id = " ".join(log_parts) if log_parts else f"hash: {info_hash}"
-            
-            if saved_to_redis:
-                logger.debug(f"[Tracker] Buscando: {log_id} → (S:{seed} L:{leech}) Salvo no Redis")
-            else:
-                logger.debug(f"[Tracker] Buscando: {log_id} → (S:{seed} L:{leech}) Scrape realizado (erro ao salvar no Redis)")
 

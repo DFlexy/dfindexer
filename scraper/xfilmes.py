@@ -94,32 +94,8 @@ class XFilmesScraper(BaseScraper):
         skip_trackers: bool = False,
         skip_metadata: bool = False,
     ) -> List[Dict]:
-        from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
-        query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
-        from utils.text.query import extract_query_year, filter_urls_by_query_year
-        links = self._search_variations(query)
-        links_before = len(links)
-        links = filter_urls_by_query_year(query, links)
-        if links_before != len(links):
-            query_year = extract_query_year(query)
-            logger.debug(
-                f"[{self.DISPLAY_NAME}] Filtro por ano ({query_year}): "
-                f"{links_before} → {len(links)} páginas"
-            )
-
-        if not links:
-            return []
-        
-        all_torrents = []
-        for link in links:
-            torrents = self._get_torrents_from_page(link)
-            all_torrents.extend(torrents)
-        
-        return self.enrich_torrents(
-            all_torrents,
-            filter_func=filter_func,
-            skip_trackers=skip_trackers,
-            skip_metadata=skip_metadata,
+        return self._default_search(
+            query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
         )
     
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:

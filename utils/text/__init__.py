@@ -9,7 +9,6 @@ from utils.text.query import check_query_match
 from utils.text.cross_data import (
     get_cross_data_from_redis,
     save_cross_data_to_redis,
-    get_field_from_cross_data
 )
 
 from utils.parsing.audio_extraction import detect_audio_from_html, add_audio_tag_if_needed
@@ -30,6 +29,4 @@ __all__ = [
     'check_query_match',
     'get_cross_data_from_redis',
     'save_cross_data_to_redis',
-    'get_field_from_cross_data',
 ]
-

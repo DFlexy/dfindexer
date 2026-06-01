@@ -2,7 +2,6 @@
 
 import logging
 from typing import List, Dict, Optional, Callable
-from app.config import Config
 from tracker import get_tracker_service
 from magnet.metadata import fetch_metadata_from_itorrents
 from magnet.parser import MagnetParser
@@ -13,7 +12,6 @@ logger = logging.getLogger(__name__)
 class TorrentEnricher:
     def __init__(self):
         self.tracker_service = get_tracker_service()
-        self._last_filter_stats = None
     
     def enrich(self, torrents: List[Dict], skip_metadata: bool = False, skip_trackers: bool = False, filter_func: Optional[Callable[[Dict], bool]] = None, scraper_name: Optional[str] = None) -> List[Dict]:
         if not torrents:
@@ -22,21 +20,8 @@ class TorrentEnricher:
         if not skip_metadata:
             self._ensure_titles_complete(torrents)
         
-        total_before_filter = len(torrents)
         if filter_func:
             torrents = [t for t in torrents if filter_func(t)]
-            filtered_count = total_before_filter - len(torrents)
-            approved_count = len(torrents)
-        else:
-            filtered_count = 0
-            approved_count = len(torrents)
-        
-        self._last_filter_stats = {
-            'total': total_before_filter,
-            'filtered': filtered_count,
-            'approved': approved_count,
-            'scraper_name': scraper_name
-        }
         
         if not torrents:
             return torrents
@@ -74,18 +59,6 @@ class TorrentEnricher:
         self._apply_imdb_fallback(torrents)
         
         return torrents
-    
-    def _remove_duplicates(self, torrents: List[Dict]) -> List[Dict]:
-        seen_hashes = set()
-        unique_torrents = []
-        for torrent in torrents:
-            info_hash = (torrent.get('info_hash') or '').lower()
-            if info_hash and len(info_hash) == 40:
-                if info_hash in seen_hashes:
-                    continue
-                seen_hashes.add(info_hash)
-            unique_torrents.append(torrent)
-        return unique_torrents
     
     def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
         from utils.text.cross_data import get_cross_data_from_redis
@@ -420,16 +393,6 @@ class TorrentEnricher:
                     magnet_link = torrent.get('magnet_link')
                     if magnet_link and info_hash:
                         metadata = torrent.get('_metadata')
-                        if not metadata:
-                            from magnet.metadata import fetch_metadata_from_itorrents
-                            scraper_name = getattr(self, '_current_scraper_name', None)
-                            title = (torrent.get('title_processed') or 
-                                    torrent.get('original_title') or 
-                                    torrent.get('title_translated_processed') or
-                                    torrent.get('magnet_processed') or
-                                    None)
-                            metadata = fetch_metadata_from_itorrents(info_hash, scraper_name=scraper_name, title=title)
-                        
                         if metadata and metadata.get('imdb'):
                             imdb_from_metadata = metadata.get('imdb')
                             if isinstance(imdb_from_metadata, str) and imdb_from_metadata.startswith('tt') and imdb_from_metadata[2:].isdigit():

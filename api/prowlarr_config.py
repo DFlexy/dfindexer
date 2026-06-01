@@ -23,9 +23,6 @@ PROWLARR_SCRAPER_OPTIONS: Dict[str, str] = {
     "portal": "Portal",
 }
 
-def get_valid_scraper_ids() -> Dict[str, str]:
-    return {k: v for k, v in SCRAPER_NUMBER_MAP.items() if v is not None}
-
 def resolve_legacy_scraper_id(site_name: str) -> Optional[str]:
     """Converte ID numérico legado em slug; None se ID removido; slug inalterado."""
     if site_name not in SCRAPER_NUMBER_MAP:
