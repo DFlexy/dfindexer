@@ -4,15 +4,12 @@ import html
 import re
 import logging
 import base64
-from datetime import datetime
-from utils.parsing.date_extraction import parse_date_from_string
-from typing import List, Dict, Optional, Callable
-from urllib.parse import quote, unquote, urlparse, parse_qs, urljoin
-from bs4 import BeautifulSoup
+from typing import List, Dict, Optional, Callable, Tuple
+from urllib.parse import urlparse, parse_qs, urljoin
+from bs4 import BeautifulSoup, Tag
 from scraper.base import BaseScraper
 from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
-from utils.text.constants import STOP_WORDS
 from utils.text.utils import find_year_from_text, find_sizes_from_text
 from utils.parsing.audio_extraction import add_audio_tag_if_needed
 from utils.text.title_builder import create_standardized_title, prepare_release_title
@@ -22,71 +19,192 @@ logger = logging.getLogger(__name__)
 
 _log_ctx = ScraperLogContext("XFilmes", logger)
 
+_INFO_STOPS = (
+    'IMDb', 'Ano de Lançamento', 'Ano de Lancamento', 'Gênero', 'Genero',
+    'Formato', 'Qualidade', 'Idioma', 'Legenda', 'Tamanho', 'Duração',
+    'Duracao', 'Servidor', 'Qualidade Áudio', 'Filme:', 'Série:', 'Serie:',
+)
+
+_FILMES_SECTION = (
+    'Últimos Filmes Adicionados',
+    'Ultimos Filmes Adicionados',
+    'Últimos Filmes',
+    'Ultimos Filmes',
+)
+_SERIES_SECTION = (
+    'Últimas Séries Adicionadas',
+    'Ultimas Series Adicionadas',
+    'Últimas Séries',
+    'Ultimas Series',
+)
+_LEGACY_COMBINED_SECTION = (
+    'Últimos Filmes e Séries',
+    'Ultimos Filmes e Series',
+)
+
+_SKIP_H2_TEXT = (
+    'categorias', 'buscas recentes', 'populares', 'pesquisa em alta',
+    'resultados para', 'filmes e séries', 'voltar para', 'como baixar',
+    'página de pedidos', 'dual áudio', 'trailer', 'relacionados',
+)
+
+
 class XFilmesScraper(BaseScraper):
     SCRAPER_TYPE = "xfilmes"
-    DEFAULT_BASE_URL = "https://www.xfilmes.com.br/"
+    DEFAULT_BASE_URL = "https://www.xbrtorrent.net/"
     DISPLAY_NAME = "XFilmes"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
-    
-    def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
-        links = []
+
+    def _is_content_url(self, href: str) -> bool:
+        if not href or href.startswith('#') or href.startswith('mailto:'):
+            return False
+        lower = href.lower()
+        if any(x in lower for x in ('telegram', 'facebook', 'twitter', 'instagram', 'whatsapp')):
+            return False
+        absolute = urljoin(self.base_url, href)
+        parsed = urlparse(absolute)
+        if parsed.netloc and parsed.netloc.replace('www.', '') not in urlparse(self.base_url).netloc.replace('www.', ''):
+            return False
+        path = (parsed.path or '').lower().rstrip('/')
+        if not path or path in ('', '/'):
+            return False
+        skip_paths = (
+            '/filmes/', '/series/', '/720p/', '/1080p/', '/4k/',
+            '/categoria/', '/tag/', '/page/', '/author/', '/wp-',
+            '/como-baixar', '/pedidos', '/buscar',
+        )
+        if any(path.startswith(p) or p in path for p in skip_paths):
+            return False
+        if '?s=' in absolute or '/search' in path:
+            return False
+        return True
+
+    def _append_link(self, links: List[str], href: str) -> None:
+        if not href or not self._is_content_url(href):
+            return
+        absolute_url = urljoin(self.base_url, href)
+        if absolute_url not in links:
+            links.append(absolute_url)
+
+    def _should_skip_h2(self, text: str) -> bool:
+        lower = (text or '').lower().strip()
+        if not lower or len(lower) < 3:
+            return True
+        return any(k in lower for k in _SKIP_H2_TEXT)
+
+    def _link_from_h2(self, h2: Tag) -> Optional[str]:
+        link = h2.find('a', href=True)
+        if link:
+            return link.get('href')
+        parent_link = h2.find_parent('a', href=True)
+        if parent_link:
+            return parent_link.get('href')
+        return None
+
+    def _extract_legacy_post_links(self, doc: BeautifulSoup) -> List[str]:
+        links: List[str] = []
         for item in doc.select('.post'):
-            link_elem = item.select_one('div.title > a')
-            if not link_elem:
-                link_elem = item.select_one('div.thumb > a')
+            link_elem = item.select_one('div.title > a') or item.select_one('div.thumb > a')
             if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
+                self._append_link(links, link_elem.get('href', ''))
         return links
-    
-    def _search_variations(self, query: str) -> List[str]:
-        links = []
-        variations = [query]
-        
-        words = [w for w in query.split() if w.lower() not in STOP_WORDS]
-        if words and ' '.join(words) != query:
-            variations.append(' '.join(words))
-        
-        query_words = query.split()
 
-        if len(query_words) >= 2 and query_words[-1].isdigit() and len(query_words[-1]) == 4 and query_words[-1][:2] in ('19', '20'):
-            without_year = ' '.join(query_words[:-1])
-            if without_year not in variations:
-                variations.append(without_year)
+    def _normalize_section_text(self, text: str) -> str:
+        return ' '.join((text or '').split())
 
-        if len(query_words) > 1 and len(query_words) < 3:
-            first_word = query_words[0].lower()
-            if first_word not in STOP_WORDS:
-                variations.append(query_words[0])
-        
-        if len(query_words) > 3:
-            first_words = ' '.join(query_words[:3])
-            variations.append(first_words)
-        
-        for variation in variations:
-            from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
-            normalized_variation = normalize_query_for_flaresolverr(variation, self.use_flaresolverr)
-            search_url = f"{self.base_url}{self.search_url}{quote(normalized_variation)}"
-            doc = self.get_document(search_url, self.base_url)
-            if not doc:
+    def _section_title_matches(self, text: str, section_markers: tuple) -> bool:
+        normalized = self._normalize_section_text(text)
+        return any(marker in normalized for marker in section_markers)
+
+    def _extract_grid_section_links(self, doc: BeautifulSoup, section_markers: tuple) -> List[str]:
+        """
+        Layout xbr-home-v6: h1.section-title + div.grid > article.card > a[href].
+        """
+        links: List[str] = []
+        for h1 in doc.find_all('h1', class_='section-title'):
+            if not self._section_title_matches(h1.get_text(), section_markers):
                 continue
-            
-            for item in doc.select('.post'):
-                link_elem = item.select_one('div.title > a')
-                if not link_elem:
-                    link_elem = item.select_one('div.thumb > a')
-                if link_elem:
-                    href = link_elem.get('href')
-                    if href:
-                        links.append(href)
-        
-        return list(set(links))
-    
+            grid = h1.find_next_sibling('div', class_='grid')
+            if not grid:
+                continue
+            for card in grid.select('article.card'):
+                anchor = card.find('a', href=True)
+                if anchor:
+                    self._append_link(links, anchor.get('href', ''))
+        return links
+
+    def _extract_h2_section_links(self, doc: BeautifulSoup, section_markers: tuple) -> List[str]:
+        """Fallback: percorre h1/h2 e usa link no h2 ou no <a> ancestral."""
+        links: List[str] = []
+        collecting = False
+
+        for tag in doc.find_all(['h1', 'h2']):
+            text = self._normalize_section_text(tag.get_text())
+            if self._section_title_matches(text, section_markers):
+                collecting = True
+                continue
+            if not collecting or tag.name != 'h2':
+                if collecting and tag.name == 'h1' and not self._section_title_matches(text, section_markers):
+                    collecting = False
+                continue
+            if self._should_skip_h2(text):
+                continue
+            href = self._link_from_h2(tag)
+            if href:
+                self._append_link(links, href)
+
+        return links
+
+    def _extract_search_h2_links(self, doc: BeautifulSoup) -> List[str]:
+        links: List[str] = []
+        in_results = False
+
+        for tag in doc.find_all(['h1', 'h2']):
+            text = tag.get_text(strip=True).lower()
+            if 'resultado' in text and 'para' in text:
+                in_results = True
+                continue
+            if not in_results or tag.name != 'h2':
+                continue
+            if self._should_skip_h2(tag.get_text(strip=True)):
+                continue
+            href = self._link_from_h2(tag)
+            if href:
+                self._append_link(links, href)
+
+        if not links:
+            for h2 in doc.find_all('h2'):
+                if self._should_skip_h2(h2.get_text(strip=True)):
+                    continue
+                href = self._link_from_h2(h2)
+                if href:
+                    self._append_link(links, href)
+
+        return links
+
+    def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
+        links = self._extract_search_h2_links(doc)
+        if not links:
+            links = self._extract_legacy_post_links(doc)
+        return [urljoin(self.base_url, u) if not u.startswith('http') else u for u in links]
+
+    def _collect_search_result_titles(self, doc: BeautifulSoup) -> Dict[str, str]:
+        title_by_url = super()._collect_search_result_titles(doc)
+        for h2 in doc.find_all('h2'):
+            link_elem = h2.find('a', href=True) or h2.find_parent('a', href=True)
+            if not link_elem:
+                continue
+            href = (link_elem.get('href') or '').strip()
+            title_text = h2.get_text(strip=True) or link_elem.get_text(strip=True)
+            normalized = self._normalize_search_result_url(href)
+            if normalized and title_text and normalized not in title_by_url:
+                title_by_url[normalized] = title_text
+        return title_by_url
+
     def search(
         self,
         query: str,
@@ -98,108 +216,267 @@ class XFilmesScraper(BaseScraper):
             query, filter_func, skip_trackers=skip_trackers, skip_metadata=skip_metadata
         )
     
-    def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
-        links = []
-        
+    def _extract_legacy_combined_links(self, doc: BeautifulSoup) -> List[str]:
+        """Layout antigo: bloco único 'Últimos Filmes e Séries' com div.post."""
+        links: List[str] = []
         ultimos_h2 = None
         for h2 in doc.find_all('h2'):
             h2_text = h2.get_text()
-            if 'Últimos Filmes e Séries' in h2_text or 'Ultimos Filmes e Series' in h2_text:
+            if any(marker in h2_text for marker in _LEGACY_COMBINED_SECTION):
                 ultimos_h2 = h2
                 break
-        
-        if ultimos_h2:
-            main_title_container = ultimos_h2.find_parent('div', class_='main_title')
-            
-            post_list_container = None
-            if main_title_container:
-                post_list_container = main_title_container.find_parent('div', class_='post_list')
-            
-            if post_list_container:
-                row_container = main_title_container.find_next_sibling('div', class_='row')
-                if row_container:
-                    for post in row_container.select('div.post'):
-                        link_elem = post.select_one('div.title > a')
-                        if not link_elem:
-                            link_elem = post.select_one('div.thumb > a')
-                        if link_elem:
-                            href = link_elem.get('href')
-                            if href:
-                                absolute_url = urljoin(self.base_url, href)
-                                if absolute_url not in links:
-                                    links.append(absolute_url)
-                
-                if not links:
-                    current = main_title_container.find_next_sibling()
-                    while current:
-                        if current.name == 'div' and 'post_list' in current.get('class', []):
-                            break
-                        
-                        if current.name == 'div' and 'main_title' in current.get('class', []):
-                            break
-                        
-                        if current.name == 'div' and 'pagination' in current.get('class', []):
-                            break
-                        
-                        if current.name == 'div' and 'post' in current.get('class', []):
-                            link_elem = current.select_one('div.title > a')
-                            if not link_elem:
-                                link_elem = current.select_one('div.thumb > a')
-                            if link_elem:
-                                href = link_elem.get('href')
-                                if href:
-                                    absolute_url = urljoin(self.base_url, href)
-                                    if absolute_url not in links:
-                                        links.append(absolute_url)
-                        
-                        for post in current.select('div.post'):
-                            link_elem = post.select_one('div.title > a')
-                            if not link_elem:
-                                link_elem = post.select_one('div.thumb > a')
-                            if link_elem:
-                                href = link_elem.get('href')
-                                if href:
-                                    absolute_url = urljoin(self.base_url, href)
-                                    if absolute_url not in links:
-                                        links.append(absolute_url)
-                        
-                        current = current.find_next_sibling()
-            
-            if not links:
-                for post in ultimos_h2.find_all_next('div', class_='post'):
-                    prev_main_title = post.find_previous('div', class_='main_title')
-                    if prev_main_title and prev_main_title != main_title_container:
-                        break
-                    
-                    prev_post_list = post.find_previous('div', class_='post_list')
-                    if prev_post_list and prev_post_list != post_list_container:
-                        break
-                    
-                    link_elem = post.select_one('div.title > a')
-                    if not link_elem:
-                        link_elem = post.select_one('div.thumb > a')
+
+        if not ultimos_h2:
+            return links
+
+        main_title_container = ultimos_h2.find_parent('div', class_='main_title')
+        post_list_container = None
+        if main_title_container:
+            post_list_container = main_title_container.find_parent('div', class_='post_list')
+
+        if post_list_container and main_title_container:
+            row_container = main_title_container.find_next_sibling('div', class_='row')
+            if row_container:
+                for post in row_container.select('div.post'):
+                    link_elem = post.select_one('div.title > a') or post.select_one('div.thumb > a')
                     if link_elem:
-                        href = link_elem.get('href')
-                        if href:
-                            absolute_url = urljoin(self.base_url, href)
-                            if absolute_url not in links:
-                                links.append(absolute_url)
-        else:
-            _log_ctx.info("Seção 'Últimos Filmes e Séries' não encontrada - usando fallback genérico")
-            for item in doc.select('.post'):
-                link_elem = item.select_one('div.title > a')
-                if not link_elem:
-                    link_elem = item.select_one('div.thumb > a')
+                        self._append_link(links, link_elem.get('href', ''))
+
+            if not links:
+                current = main_title_container.find_next_sibling()
+                while current:
+                    classes = current.get('class', []) or []
+                    if current.name == 'div' and any(
+                        c in classes for c in ('post_list', 'main_title', 'pagination')
+                    ):
+                        break
+                    if current.name == 'div' and 'post' in classes:
+                        link_elem = current.select_one('div.title > a') or current.select_one('div.thumb > a')
+                        if link_elem:
+                            self._append_link(links, link_elem.get('href', ''))
+                    for post in current.select('div.post'):
+                        link_elem = post.select_one('div.title > a') or post.select_one('div.thumb > a')
+                        if link_elem:
+                            self._append_link(links, link_elem.get('href', ''))
+                    current = current.find_next_sibling()
+
+        if not links:
+            for post in ultimos_h2.find_all_next('div', class_='post'):
+                link_elem = post.select_one('div.title > a') or post.select_one('div.thumb > a')
                 if link_elem:
-                    href = link_elem.get('href')
-                    if href:
-                        absolute_url = urljoin(self.base_url, href)
-                        links.append(absolute_url)
-        
+                    self._append_link(links, link_elem.get('href', ''))
+
         return links
-    
+
+    def _split_links_filmes_series(self, links: List[str]) -> Tuple[List[str], List[str]]:
+        """Divide lista mista: séries costumam ter 'temporada' no título/URL."""
+        filmes: List[str] = []
+        series: List[str] = []
+        for url in links:
+            lower = url.lower()
+            if 'temporada' in lower or re.search(r'/\d{1,2}a-temporada', lower):
+                series.append(url)
+            else:
+                filmes.append(url)
+        return filmes, series
+
+    def _extract_links_from_page(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:
+        filmes_links = self._extract_grid_section_links(doc, _FILMES_SECTION)
+        series_links = self._extract_grid_section_links(doc, _SERIES_SECTION)
+
+        if not filmes_links:
+            filmes_links = self._extract_h2_section_links(doc, _FILMES_SECTION)
+        if not series_links:
+            series_links = self._extract_h2_section_links(doc, _SERIES_SECTION)
+
+        if not filmes_links and not series_links:
+            combined = self._extract_legacy_combined_links(doc)
+            if combined:
+                filmes_links, series_links = self._split_links_filmes_series(combined)
+            else:
+                _log_ctx.info("Seções de filmes/séries não encontradas - fallback .post")
+                fallback: List[str] = []
+                for href in self._extract_legacy_post_links(doc):
+                    self._append_link(fallback, href)
+                if fallback:
+                    filmes_links, series_links = self._split_links_filmes_series(fallback)
+
+        return filmes_links, series_links
+
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
-        return self._default_get_page(page, max_items, is_test=is_test)
+        is_using_default_limit, skip_metadata, skip_trackers = self._prepare_page_flags(max_items, is_test=is_test)
+
+        try:
+            from utils.concurrency.scraper_helpers import (
+                build_page_url, get_effective_max_items, limit_list,
+                process_links_parallel,
+            )
+            page_url = build_page_url(self.base_url, self.page_pattern, page)
+
+            doc = self.get_document(page_url, self.base_url)
+            if not doc:
+                return []
+
+            filmes_links, series_links = self._extract_links_from_page(doc)
+            effective_max = get_effective_max_items(max_items)
+
+            if effective_max > 0:
+                half_limit = max(1, effective_max // 2)
+                filmes_links = limit_list(filmes_links, half_limit)
+                series_links = limit_list(series_links, half_limit)
+                _log_ctx.info(
+                    f"Limite configurado: {effective_max} - "
+                    f"Coletando {len(filmes_links)} filmes e {len(series_links)} séries"
+                )
+                links = filmes_links + series_links
+            else:
+                links = filmes_links + series_links
+
+            all_torrents = process_links_parallel(
+                links,
+                self._get_torrents_from_page,
+                None,
+                scraper_name=self.SCRAPER_TYPE,
+                use_flaresolverr=self.use_flaresolverr,
+            )
+
+            return self.enrich_torrents(
+                all_torrents,
+                skip_metadata=skip_metadata,
+                skip_trackers=skip_trackers,
+            )
+        finally:
+            self._skip_metadata = False
+
+    def _find_content_root(self, doc: BeautifulSoup) -> Optional[Tag]:
+        return (
+            doc.find('article')
+            or doc.find('main')
+            or doc.select_one('.single-post, .post-single, .entry-content, .content-area')
+        )
+
+    def _extract_labeled_value(self, source: str, label: str) -> str:
+        if not source:
+            return ''
+        stops_pattern = '|'.join(re.escape(s) for s in _INFO_STOPS if s != label)
+        patterns = [
+            rf'(?is)<strong>\s*{re.escape(label)}\s*:?\s*</strong>\s*([^<]+)',
+            rf'(?is)<b>\s*{re.escape(label)}\s*:?\s*</b>\s*([^<]+)',
+            rf'(?is){re.escape(label)}\s*:\s*(.+?)(?=\s*(?:{stops_pattern})\s*:|$)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, source)
+            if match:
+                value = match.group(1).strip()
+                value = re.sub(r'<[^>]+>', '', value)
+                value = html.unescape(value)
+                value = re.sub(r'\s+', ' ', value).strip()
+                value = value.rstrip(' .,:;')
+                if value:
+                    return value
+        return ''
+
+    def _extract_idioma_from_root(self, root: Tag) -> str:
+        root_html = str(root)
+        idioma = self._extract_labeled_value(root_html, 'Idioma')
+        if idioma:
+            return idioma
+        root_text = root.get_text(' ', strip=True)
+        match = re.search(
+            r'(?i)Idioma\s*:\s*([^|]+(?:\|[^|]+)?)(?=\s*(?:Legenda|Tamanho|Qualidade|Servidor|Formato)|$)',
+            root_text,
+        )
+        return match.group(1).strip() if match else ''
+
+    def _audio_info_from_idioma(self, idioma: str) -> Optional[str]:
+        if not idioma:
+            return None
+        idioma_lower = idioma.lower()
+        idiomas_detectados = []
+        if 'português' in idioma_lower or 'portugues' in idioma_lower:
+            idiomas_detectados.append('português')
+        if 'inglês' in idioma_lower or 'ingles' in idioma_lower or 'english' in idioma_lower:
+            idiomas_detectados.append('inglês')
+        if 'japonês' in idioma_lower or 'japones' in idioma_lower or 'japanese' in idioma_lower or 'jap' in idioma_lower:
+            idiomas_detectados.append('japonês')
+        idiomas_detectados = idiomas_detectados[:3]
+        if len(idiomas_detectados) >= 2:
+            if 'português' in idiomas_detectados and 'inglês' in idiomas_detectados:
+                return 'dual'
+            if 'português' in idiomas_detectados:
+                return 'dual'
+            return idiomas_detectados[0]
+        if len(idiomas_detectados) == 1:
+            return idiomas_detectados[0]
+        return None
+
+    def _collect_magnet_links(self, doc: BeautifulSoup, article: Tag) -> List[str]:
+        magnet_links: List[str] = []
+        containers = []
+        for sel in ('div.content', 'div.entry-content', '.left', 'div.modal-downloads', 'div#modal-downloads'):
+            containers.extend(article.select(sel) if article else [])
+        if article and article not in containers:
+            containers.append(article)
+
+        def try_href(href: str, original_href: Optional[str] = None) -> None:
+            if not href:
+                return
+            resolved_magnet = self._resolve_link(href)
+            if not resolved_magnet or not resolved_magnet.startswith('magnet:'):
+                if 'token=' in href:
+                    try:
+                        parsed = urlparse(href)
+                        params = parse_qs(parsed.query)
+                        token = params.get('token', [None])[0]
+                        if token:
+                            decoded = base64.b64decode(token).decode('utf-8')
+                            if decoded.startswith('magnet:'):
+                                resolved_magnet = decoded
+                    except Exception:
+                        pass
+            if not resolved_magnet or not resolved_magnet.startswith('magnet:'):
+                return
+            orig = original_href or href
+            if 'protlink=' in orig:
+                try:
+                    magnet_data = MagnetParser.parse(resolved_magnet)
+                    trackers = magnet_data.get('trackers', [])
+                    if not trackers:
+                        from tracker.list_provider import TrackerListProvider
+                        tracker_provider = TrackerListProvider(redis_client=self.redis)
+                        default_trackers = tracker_provider.get_trackers()
+                        if default_trackers:
+                            from urllib.parse import urlencode
+                            magnet_params = {'xt': f"urn:btih:{magnet_data.get('info_hash', '')}"}
+                            display_name = magnet_data.get('display_name', '')
+                            if display_name and display_name.strip():
+                                magnet_params['dn'] = display_name
+                            for tracker in default_trackers[:5]:
+                                magnet_params.setdefault('tr', []).append(tracker)
+                            resolved_magnet = f"magnet:?{urlencode(magnet_params, doseq=True)}"
+                except Exception:
+                    pass
+            if resolved_magnet not in magnet_links:
+                magnet_links.append(resolved_magnet)
+
+        seen_hrefs = set()
+        for text_content in containers:
+            for a in text_content.select('a[href]'):
+                href = a.get('href', '')
+                if href in seen_hrefs:
+                    continue
+                seen_hrefs.add(href)
+                try_href(href, href)
+
+        if not magnet_links:
+            for a in doc.select('a[href]'):
+                href = a.get('href', '')
+                if href in seen_hrefs:
+                    continue
+                seen_hrefs.add(href)
+                try_href(href, href)
+
+        return magnet_links
     
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
         absolute_link = urljoin(self.base_url, link) if link and not link.startswith('http') else link
@@ -211,126 +488,44 @@ class XFilmesScraper(BaseScraper):
         date = extract_date_from_page(doc, absolute_link, self.SCRAPER_TYPE)
         
         torrents = []
-        article = doc.find('article')
+        article = self._find_content_root(doc)
         if not article:
             return []
         
-        original_title = ''
-        
+        root_html = str(article)
+        root_text = article.get_text(' ', strip=True)
+
+        original_title = self._extract_labeled_value(root_html, 'Titulo Original')
+        if not original_title:
+            original_title = self._extract_labeled_value(root_html, 'Título Original')
+
+        title_translated_processed = self._extract_labeled_value(root_html, 'Titulo Traduzido')
+        if not title_translated_processed:
+            title_translated_processed = self._extract_labeled_value(root_html, 'Título Traduzido')
+
         entry_content = article.select_one('div.content, div.entry-content, .left')
         if entry_content:
             html_content = str(entry_content)
-            
-            title_original_match = re.search(
-                r'<strong>T[íi]tulo Original[:\s]*</strong>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
-                html_content,
-                re.IGNORECASE | re.DOTALL
-            )
-            if title_original_match:
-                original_title = title_original_match.group(1).strip()
-                original_title = re.sub(r'<[^>]+>', '', original_title).strip()
-                original_title = html.unescape(original_title)
-                original_title = re.sub(r'\s+', ' ', original_title).strip()
-                original_title = original_title.rstrip(' .,:;')
-                if len(original_title) > 200:
-                    original_title = original_title[:200].strip()
-            
             if not original_title:
-                title_original_match = re.search(
-                    r'<b>T[íi]tulo Original[:\s]*</b>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
-                    html_content,
-                    re.IGNORECASE | re.DOTALL
+                original_title = self._extract_labeled_value(html_content, 'Titulo Original') or self._extract_labeled_value(
+                    html_content, 'Título Original'
                 )
-                if title_original_match:
-                    original_title = title_original_match.group(1).strip()
-                    original_title = re.sub(r'<[^>]+>', '', original_title).strip()
-                    original_title = html.unescape(original_title)
-                    original_title = re.sub(r'\s+', ' ', original_title).strip()
-                    original_title = original_title.rstrip(' .,:;')
-                    if len(original_title) > 200:
-                        original_title = original_title[:200].strip()
+            if not title_translated_processed:
+                title_translated_processed = self._extract_labeled_value(html_content, 'Titulo Traduzido') or self._extract_labeled_value(
+                    html_content, 'Título Traduzido'
+                )
         
         if not original_title:
-            article_text = article.get_text(' ', strip=True)
-            if 'Título Original:' in article_text or 'Titulo Original:' in article_text:
-                parts = article_text.split('Título Original:') if 'Título Original:' in article_text else article_text.split('Titulo Original:')
-                if len(parts) > 1:
-                    title_part = parts[1].strip()
-                    stops = ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:']
-                    for stop in stops:
-                        if stop in title_part:
-                            idx = title_part.index(stop)
-                            title_part = title_part[:idx]
-                            break
-                    title_part = html.unescape(title_part)
-                    title_part = re.sub(r'\s+', ' ', title_part).strip()
-                    if title_part:
-                        original_title = title_part
-        
-        if not original_title:
-            title_raw = article.find('h1', class_='entry-title')
-            if not title_raw:
-                title_raw = article.find('h1')
+            title_raw = article.find('h1', class_='entry-title') or article.find('h1')
             if title_raw:
                 original_title = title_raw.get_text(strip=True)
                 original_title = re.sub(r'\s*\(\d{4}(-\d{4})?\)\s*$', '', original_title)
         
-        original_title = original_title.replace(' Torrent Dual Áudio', '').strip()
-        original_title = original_title.replace(' Torrent Dublado', '').strip()
-        original_title = original_title.replace(' Torrent Legendado', '').strip()
-        original_title = original_title.replace(' Torrent', '').strip()
-        
-        title_translated_processed = ''
-        
-        if entry_content:
-            html_content = str(entry_content)
-            
-            title_translated_match = re.search(
-                r'<strong>T[íi]tulo Traduzido[:\s]*</strong>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
-                html_content,
-                re.IGNORECASE | re.DOTALL
-            )
-            if title_translated_match:
-                title_translated_processed = title_translated_match.group(1).strip()
-                title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed).strip()
-                title_translated_processed = html.unescape(title_translated_processed)
-                title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
-                title_translated_processed = title_translated_processed.rstrip(' .,:;')
-            
-            if not title_translated_processed:
-                title_translated_match = re.search(
-                    r'<b>T[íi]tulo Traduzido[:\s]*</b>\s*(?:<br\s*/?>)?\s*([^<]+?)\s*<br\s*/?>',
-                    html_content,
-                    re.IGNORECASE | re.DOTALL
-                )
-                if title_translated_match:
-                    title_translated_processed = title_translated_match.group(1).strip()
-                    title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed).strip()
-                    title_translated_processed = html.unescape(title_translated_processed)
-                    title_translated_processed = re.sub(r'\s+', ' ', title_translated_processed).strip()
-                    title_translated_processed = title_translated_processed.rstrip(' .,:;')
-        
-        if not title_translated_processed and article:
-            article_text = article.get_text(' ', strip=True)
-            if 'Título Traduzido:' in article_text or 'Titulo Traduzido:' in article_text:
-                parts = article_text.split('Título Traduzido:') if 'Título Traduzido:' in article_text else article_text.split('Titulo Traduzido:')
-                if len(parts) > 1:
-                    title_part = parts[1].strip()
-                    stops = ['Formato:', 'Qualidade:', 'Idioma:', 'Legenda:', 'Tamanho:', 'Servidor:', 'Título Original:', 'Titulo Original:']
-                    for stop in stops:
-                        if stop in title_part:
-                            idx = title_part.index(stop)
-                            title_part = title_part[:idx]
-                            break
-                    title_part = html.unescape(title_part)
-                    title_part = re.sub(r'\s+', ' ', title_part).strip()
-                    if title_part:
-                        title_translated_processed = title_part
+        for suffix in (' Torrent Dual Áudio', ' Torrent Dublado', ' Torrent Legendado', ' Torrent'):
+            original_title = original_title.replace(suffix, '').strip()
         
         if not title_translated_processed:
-            title_raw = article.find('h1', class_='entry-title')
-            if not title_raw:
-                title_raw = article.find('h1')
+            title_raw = article.find('h1', class_='entry-title') or article.find('h1')
             if title_raw:
                 title_translated_processed = title_raw.get_text(strip=True)
         
@@ -364,50 +559,29 @@ class XFilmesScraper(BaseScraper):
                 idioma_match = re.search(r'(?i)<b>Idioma:</b>\s*([^<]+?)(?:<br|</div|</p|</b|$)', entry_meta_html, re.DOTALL)
                 if idioma_match:
                     idioma = idioma_match.group(1).strip()
-                    idioma = html.unescape(idioma)
-                    idioma = re.sub(r'<[^>]+>', '', idioma).strip()
-                    idioma = re.sub(r'\s+', ' ', idioma).strip()
                 else:
                     idioma_match = re.search(r'(?i)Idioma\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', entry_meta_html, re.DOTALL)
                     if idioma_match:
                         idioma = idioma_match.group(1).strip()
-                        idioma = html.unescape(idioma)
-                        idioma = re.sub(r'<[^>]+>', '', idioma).strip()
-                        idioma = re.sub(r'\s+', ' ', idioma).strip()
+                if idioma:
+                    idioma = html.unescape(idioma)
+                    idioma = re.sub(r'<[^>]+>', '', idioma).strip()
+                    idioma = re.sub(r'\s+', ' ', idioma).strip()
             
             if idioma:
                 break
+
+        if not idioma:
+            idioma = self._extract_idioma_from_root(article)
         
         from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
         legenda = extract_legenda_from_page(doc, scraper_type='xfilmes', entry_meta_list=entry_meta_list)
         
         legend_info = determine_legend_info(legenda) if legenda else None
         
-        if idioma:
-            idioma_lower = idioma.lower()
-            
-            idiomas_detectados = []
-            
-            if 'português' in idioma_lower or 'portugues' in idioma_lower:
-                idiomas_detectados.append('português')
-            if 'inglês' in idioma_lower or 'ingles' in idioma_lower or 'english' in idioma_lower:
-                idiomas_detectados.append('inglês')
-            if 'japonês' in idioma_lower or 'japones' in idioma_lower or 'japanese' in idioma_lower or 'jap' in idioma_lower:
-                idiomas_detectados.append('japonês')
-            
-            idiomas_detectados = idiomas_detectados[:3]
-            
-            if len(idiomas_detectados) >= 2:
-                if 'português' in idiomas_detectados and 'inglês' in idiomas_detectados:
-                    audio_info = 'dual'
-                elif 'português' in idiomas_detectados:
-                    audio_info = 'dual'
-                else:
-                    audio_info = idiomas_detectados[0]
-            elif len(idiomas_detectados) == 1:
-                audio_info = idiomas_detectados[0]
+        audio_info = self._audio_info_from_idioma(idioma)
         
-        for p in article.select('div.content p, div.entry-content p'):
+        for p in article.select('div.content p, div.entry-content p, p'):
             html_content = str(p)
             all_paragraphs_html.append(html_content)
         
@@ -417,7 +591,7 @@ class XFilmesScraper(BaseScraper):
                 audio_html_content += f' Legenda: {legenda}'
         
         if not audio_info:
-            for p in article.select('div.content p, div.entry-content p'):
+            for p in article.select('div.content p, div.entry-content p, p'):
                 text = p.get_text()
                 html_content = str(p)
                 
@@ -427,13 +601,12 @@ class XFilmesScraper(BaseScraper):
                 
                 sizes.extend(find_sizes_from_text(html_content))
                 
-                if not audio_info:
-                    from utils.parsing.audio_extraction import detect_audio_from_html
-                    audio_info = detect_audio_from_html(html_content)
-                    if audio_info:
-                        break
+                from utils.parsing.audio_extraction import detect_audio_from_html
+                audio_info = detect_audio_from_html(html_content)
+                if audio_info:
+                    break
         else:
-            for p in article.select('div.entry-meta, div.content p, div.entry-content p'):
+            for p in article.select('div.entry-meta, div.content p, div.entry-content p, p'):
                 text = p.get_text()
                 html_content = str(p)
                 
@@ -446,11 +619,23 @@ class XFilmesScraper(BaseScraper):
         sizes = list(dict.fromkeys(sizes))
         
         if not year:
+            year_match = re.search(
+                r'(?i)Ano de Lançamento\s*:\s*((?:19|20)\d{2})',
+                root_text,
+            )
+            if year_match:
+                year = year_match.group(1)
+        
+        if not year:
             try:
-                article_full_text = article.get_text(' ', strip=True)
-                year_match = re.search(r'(19|20)\d{2}', article_full_text)
+                year_match = re.search(r'(?i)Lançamento\s*:?\s*((?:19|20)\d{2})', root_text)
                 if year_match:
-                    year = year_match.group(0)
+                    year = year_match.group(1)
+                else:
+                    article_full_text = article.get_text(' ', strip=True)
+                    year_match = re.search(r'(19|20)\d{2}', article_full_text)
+                    if year_match:
+                        year = year_match.group(0)
             except Exception:
                 pass
 
@@ -466,68 +651,7 @@ class XFilmesScraper(BaseScraper):
                 imdb = imdb_match.group(1)
                 break
 
-        magnet_links = []
-        for text_content in doc.select('div.content, div.entry-content, div.modal-downloads, div#modal-downloads'):
-            for a in text_content.select('a[href]'):
-                href = a.get('href', '')
-                if not href:
-                    continue
-                
-                resolved_magnet = self._resolve_link(href)
-                if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                    original_href = href
-                    if 'protlink=' in original_href:
-                        try:
-                            magnet_data = MagnetParser.parse(resolved_magnet)
-                            trackers = magnet_data.get('trackers', [])
-                            if not trackers:
-                                from tracker.list_provider import TrackerListProvider
-                                tracker_provider = TrackerListProvider(redis_client=self.redis)
-                                default_trackers = tracker_provider.get_trackers()
-                                if default_trackers:
-                                    from urllib.parse import urlencode
-                                    magnet_params = {
-                                        'xt': f"urn:btih:{magnet_data.get('info_hash', '')}"
-                                    }
-                                    display_name = magnet_data.get('display_name', '')
-                                    if display_name and display_name.strip():
-                                        magnet_params['dn'] = display_name
-                                    for tracker in default_trackers[:5]:
-                                        magnet_params.setdefault('tr', []).append(tracker)
-                                    resolved_magnet = f"magnet:?{urlencode(magnet_params, doseq=True)}"
-                        except Exception:
-                            pass
-                    
-                    if resolved_magnet not in magnet_links:
-                        magnet_links.append(resolved_magnet)
-                    continue
-                
-                if 'token=' in href:
-                    try:
-                        parsed = urlparse(href)
-                        params = parse_qs(parsed.query)
-                        token = params.get('token', [None])[0]
-                        if token:
-                            try:
-                                decoded = base64.b64decode(token).decode('utf-8')
-                                if decoded.startswith('magnet:'):
-                                    magnet_links.append(decoded)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-        
-        if not magnet_links:
-            all_links = doc.select('a[href]')
-            for link in all_links:
-                href = link.get('href', '')
-                if not href:
-                    continue
-                
-                resolved_magnet = self._resolve_link(href)
-                if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                    if resolved_magnet not in magnet_links:
-                        magnet_links.append(resolved_magnet)
+        magnet_links = self._collect_magnet_links(doc, article)
         
         if not magnet_links:
             return []
@@ -683,4 +807,3 @@ class XFilmesScraper(BaseScraper):
                 continue
         
         return torrents
-

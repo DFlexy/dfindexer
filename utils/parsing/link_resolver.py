@@ -2,6 +2,7 @@
 
 import codecs
 import hashlib
+import json
 import re
 import logging
 import base64
@@ -11,7 +12,7 @@ import time
 import threading
 import zlib
 from typing import Optional, List
-from urllib.parse import urljoin, urlparse, parse_qs, unquote
+from urllib.parse import urljoin, urlparse, parse_qs, unquote, quote
 from bs4 import BeautifulSoup
 import requests
 from cache.redis_client import get_redis_client
@@ -288,9 +289,71 @@ def is_offline_decodable_link(href: str) -> bool:
     lower = href.lower()
     return 'get.php' in lower and 'id=' in lower
 
+def is_embedded_go_payload_link(href: str) -> bool:
+    """XBR Torrent e similares: ?go=<id>.p1.<base64-json> com hash no campo m."""
+    if not href:
+        return False
+    try:
+        parsed = urlparse(html.unescape(href.strip()))
+        go_param = parse_qs(parsed.query).get('go', [None])[0]
+        return bool(go_param and '.p1.' in go_param)
+    except Exception:
+        return '.p1.' in href and ('?go=' in href.lower() or '&go=' in href.lower())
+
+
+def decode_embedded_go_payload_link(href: str) -> Optional[str]:
+    """
+    Decodifica ?go=<token>.p1.<base64-json> sem HTTP.
+    JSON esperado: {"m":"<infohash hex>","t":"<display name>", ...}
+    """
+    if not href:
+        return None
+    try:
+        parsed = urlparse(html.unescape(href.strip()))
+        go_param = parse_qs(parsed.query).get('go', [None])[0]
+        if not go_param or '.p1.' not in go_param:
+            return None
+
+        payload_b64 = go_param.split('.p1.', 1)[1].strip()
+        if not payload_b64:
+            return None
+
+        data = None
+        for candidate in (payload_b64, payload_b64.replace('-', '+').replace('_', '/')):
+            try:
+                raw = base64.b64decode(_pad_b64(candidate))
+                data = json.loads(raw.decode('utf-8'))
+                break
+            except Exception:
+                continue
+        if not isinstance(data, dict):
+            return None
+
+        u_value = data.get('u')
+        if isinstance(u_value, str) and u_value.strip().lower().startswith('magnet:'):
+            return u_value.strip()
+
+        info_hash = str(data.get('m') or '').strip().lower()
+        if not re.fullmatch(r'[0-9a-f]{32,64}', info_hash):
+            return None
+        if len(info_hash) > 40:
+            info_hash = info_hash[:40]
+
+        title = str(data.get('t') or '').strip()
+        params = [f'xt=urn:btih:{info_hash}']
+        if title:
+            params.append(f'dn={quote(title)}')
+        return f"magnet:?{'&'.join(params)}"
+    except Exception as e:
+        logger.debug("embedded go payload decode error: %s", type(e).__name__)
+        return None
+
+
 def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None) -> bool:
     if not href:
         return False
+    if is_embedded_go_payload_link(href):
+        return True
     if is_offline_decodable_link(href):
         return True
     if protected_patterns is None:
@@ -581,9 +644,21 @@ def decode_data_u(data_u_value: str) -> Optional[str]:
 def resolve_protected_link(protlink_url: str, session: requests.Session, base_url: str = '', redis=None) -> Optional[str]:
     redis_client = redis or get_redis_client()
 
+    if protlink_url and base_url:
+        parsed_in = urlparse(protlink_url.strip())
+        if not parsed_in.scheme:
+            protlink_url = urljoin(base_url, protlink_url)
+
     cached = _get_cached(redis_client, protlink_url)
     if cached:
         return cached
+
+    if is_embedded_go_payload_link(protlink_url):
+        decoded_magnet = decode_embedded_go_payload_link(protlink_url)
+        if decoded_magnet:
+            _cache_result(redis_client, protlink_url, decoded_magnet)
+            return decoded_magnet
+        logger.debug("Falha ao decodificar go payload embutido: %s", protlink_url[:100])
 
     if is_go_php_link(protlink_url):
         return resolve_go_php_link(protlink_url, session, base_url, redis_client)

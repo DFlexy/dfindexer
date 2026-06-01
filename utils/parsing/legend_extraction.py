@@ -297,7 +297,7 @@ def _extract_legenda_comand(doc: BeautifulSoup, content_div: Optional[BeautifulS
     return legenda
 
 def _extract_legenda_xfilmes(doc: BeautifulSoup, entry_meta_list: Optional[list] = None) -> str:
-    """XFilmes: Extrai "Legenda" de div.entry-meta"""
+    """XFilmes / XBR Torrent: entry-meta legado ou bloco »INFORMAÇÕES«."""
     legenda = ''
     
     if not entry_meta_list:
@@ -320,6 +320,32 @@ def _extract_legenda_xfilmes(doc: BeautifulSoup, entry_meta_list: Optional[list]
                 legenda = html.unescape(legenda)
                 legenda = re.sub(r'<[^>]+>', '', legenda).strip()
                 legenda = re.sub(r'\s+', ' ', legenda).strip()
+                return legenda
+
+    root = doc.find('article') or doc.find('main') or doc.body
+    if root:
+        root_html = str(root)
+        legenda_match = re.search(
+            r'(?i)(?:<strong>\s*)?Legenda\s*:?\s*(?:</strong>)?\s*([^<\n\r|]+?)(?=\s*(?:<|$|\||Tamanho|Qualidade|Duração|Servidor|Formato|Gênero|Ano))',
+            root_html,
+            re.DOTALL,
+        )
+        if legenda_match:
+            legenda = legenda_match.group(1).strip()
+            legenda = html.unescape(legenda)
+            legenda = re.sub(r'<[^>]+>', '', legenda).strip()
+            legenda = re.sub(r'\s+', ' ', legenda).strip()
+            if legenda:
+                return legenda
+        root_text = root.get_text(' ', strip=True)
+        legenda_match = re.search(
+            r'(?i)Legenda\s*:\s*([^|]+?)(?=\s*(?:Tamanho|Qualidade|Duração|Servidor|Formato|Gênero|Ano de|Filme:|Série:)|$)',
+            root_text,
+        )
+        if legenda_match:
+            legenda = legenda_match.group(1).strip()
+            legenda = re.sub(r'\s+', ' ', legenda).strip()
+            if legenda:
                 return legenda
     
     return legenda

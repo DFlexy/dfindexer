@@ -6,6 +6,8 @@ from utils.parsing.link_resolver import (
     resolve_go_php_link,
     is_protected_link,
     is_go_php_link,
+    is_embedded_go_payload_link,
+    decode_embedded_go_payload_link,
     decode_ad_link,
     decode_redirect_chain_id,
 )
@@ -17,6 +19,8 @@ __all__ = [
     'resolve_go_php_link',
     'is_protected_link',
     'is_go_php_link',
+    'is_embedded_go_payload_link',
+    'decode_embedded_go_payload_link',
     'decode_ad_link',
     'decode_redirect_chain_id',
     'process_trackers',

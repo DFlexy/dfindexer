@@ -23,7 +23,7 @@ _log_ctx = ScraperLogContext("Portal", logger)
 
 class PortalScraper(BaseScraper):
     SCRAPER_TYPE = "portal"
-    DEFAULT_BASE_URL = "https://nerdfilmes.net/"
+    DEFAULT_BASE_URL = "https://www.nerdfilmes1.net"
     DISPLAY_NAME = "Portal"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
