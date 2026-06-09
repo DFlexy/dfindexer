@@ -47,29 +47,6 @@ def _extract_release_year_starck(doc: BeautifulSoup) -> Optional[int]:
                 return year
     return None
 
-def _extract_release_year_portal(doc: BeautifulSoup) -> Optional[int]:
-    """Portal: <b>Lançamento :</b> 2022<br />"""
-    for b_tag in doc.find_all('b'):
-        b_text = b_tag.get_text(strip=True).lower()
-        if 'lançamento' in b_text or 'lancamento' in b_text:
-            parent = b_tag.parent
-            if parent:
-                parent_html = str(parent)
-                year_match = re.search(r'(?i)Lançamento\s*:?\s*(?:</b>|</strong>)?\s*(?:<a[^>]*>)?\s*(\d{4})', parent_html)
-                if year_match:
-                    year = int(year_match.group(1))
-                    current_year = datetime.now().year
-                    if year != current_year:
-                        return year
-                parent_text = parent.get_text()
-                year_match = re.search(r'(?i)Lançamento\s*:?\s*(\d{4})', parent_text)
-                if year_match:
-                    year = int(year_match.group(1))
-                    current_year = datetime.now().year
-                    if year != current_year:
-                        return year
-    return None
-
 def _extract_release_year_tfilme(doc: BeautifulSoup) -> Optional[int]:
     """Torrent dos Filmes: <b>Lançamento:</b> <a href="...">2025</a><br />"""
     for b_tag in doc.find_all('b'):
@@ -133,7 +110,6 @@ def _extract_release_year_rede(doc: BeautifulSoup) -> Optional[int]:
 
 SCRAPER_RELEASE_YEAR_EXTRACTORS: Dict[str, Callable[[BeautifulSoup], Optional[int]]] = {
     'starck': _extract_release_year_starck,
-    'portal': _extract_release_year_portal,
     'tfilme': _extract_release_year_tfilme,
     'bludv': _extract_release_year_bludv,
     'comand': _extract_release_year_comand,

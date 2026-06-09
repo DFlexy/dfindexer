@@ -12,7 +12,7 @@ SCRAPER_NUMBER_MAP: Dict[str, Optional[str]] = {
     "5": None,
     "6": "comand",
     "7": "bludv",
-    "8": "portal",
+    "8": None,
 }
 
 

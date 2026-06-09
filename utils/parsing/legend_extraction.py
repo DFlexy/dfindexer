@@ -386,46 +386,12 @@ def _extract_legenda_tfilme(doc: BeautifulSoup, **kwargs) -> str:
     
     return legenda
 
-def _extract_legenda_portal(doc: BeautifulSoup, **kwargs) -> str:
-    """Portal: Extrai "Legenda" de div.content"""
-    legenda = ''
-    
-    article = doc.find('article')
-    if not article:
-        return legenda
-    
-    content_div = article.find('div', class_='content')
-    if not content_div:
-        return legenda
-    
-    content_html = str(content_div)
-    
-    legenda_match = re.search(r'(?i)<b>Legenda:</b>\s*([^<]+?)(?:<br|</div|</p|$)', content_html)
-    if legenda_match:
-        legenda = legenda_match.group(1).strip()
-        legenda = html.unescape(legenda)
-        legenda = re.sub(r'<[^>]+>', '', legenda).strip()
-        if legenda:
-            return legenda
-    
-    if not legenda:
-        legenda_match = re.search(r'(?i)Legenda\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', content_html)
-        if legenda_match:
-            legenda = legenda_match.group(1).strip()
-            legenda = html.unescape(legenda)
-            legenda = re.sub(r'<[^>]+>', '', legenda).strip()
-            if legenda:
-                return legenda
-    
-    return legenda
-
 LEGENDA_EXTRACTORS = {
     'rede': _extract_legenda_rede,
     'bludv': _extract_legenda_bludv,
     'comand': _extract_legenda_comand,
     'starck': _extract_legenda_starck,
     'tfilme': _extract_legenda_tfilme,
-    'portal': _extract_legenda_portal,
 }
 
 def extract_legenda_from_page(doc: BeautifulSoup, scraper_type: Optional[str] = None, **kwargs) -> str:

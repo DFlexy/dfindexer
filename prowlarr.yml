@@ -29,7 +29,6 @@ settings:
       tfilme: Tfilme
       comand: Comando
       bludv: Bludv
-      portal: Portal
   
   - name: use_flaresolverr
     type: select
