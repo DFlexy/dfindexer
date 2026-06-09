@@ -39,7 +39,6 @@ Tags adicionadas ao título conforme áudio detectado (HTML → magnet → metad
 - ✅ **Я€Ð€**
 - ✅ **†₣!£₥€**
 - ✅ **₱ØЯ†@£**
-- ✅ **Ẍ₣!£₥€$**
 - ✅ **©Ø₥@₦ÐØ** - Necessário selecionar o FlareSolverr
 - ✅ **฿£µÐ√** - Necessário selecionar o FlareSolverr
 
