@@ -61,6 +61,7 @@ def index_handler():
         'endpoints': endpoints,
         'configured_sites': scraper_info['configured_sites'],
         'available_types': scraper_info['available_types'],
+        'types_info': scraper_info['types_info'],
         'indexed_torrents': indexed_count,
     })
 

@@ -27,7 +27,7 @@
         .header {
             text-align: center;
             margin-bottom: 20px;
-            padding: 10px;
+            padding: 4px 10px;
         }
 
         .header h1 {
@@ -43,6 +43,73 @@
         .header p {
             font-size: 0.9em;
             color: #b0b0b0;
+        }
+
+        .support-banner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            padding: 10px 14px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.14) 100%);
+            border: 1px solid rgba(167, 139, 250, 0.35);
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(102, 126, 234, 0.12);
+        }
+
+        .support-banner-text {
+            max-width: 520px;
+        }
+
+        .support-banner-title {
+            font-size: 1.05em;
+            font-weight: 700;
+            color: #f3e8ff;
+            margin-bottom: 4px;
+        }
+
+        .support-banner-desc {
+            font-size: 0.82em;
+            line-height: 1.45;
+            color: #c4b5fd;
+        }
+
+        .support-banner-desc span {
+            display: block;
+            margin-top: 2px;
+        }
+
+        .btn-support {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #d946ef 100%);
+            color: #fff;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+            box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+            white-space: nowrap;
+        }
+
+        .btn-support:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
+            filter: brightness(1.06);
+        }
+
+        .btn-support:active {
+            transform: translateY(0);
         }
 
         .search-box {
@@ -598,11 +665,30 @@
             .checkbox-wrapper {
                 padding: 8px 12px;
             }
+            .support-banner {
+                padding: 8px 12px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <aside class="support-banner" aria-label="Apoie o projeto">
+            <div class="support-banner-text">
+                <div class="support-banner-title">💖 Apoie este projeto</div>
+                <p class="support-banner-desc">
+                    Este projeto é 100% independente e open-source.
+                    <span>💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.</span>
+                </p>
+            </div>
+            <a
+                class="btn-support"
+                href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000"
+                target="_blank"
+                rel="noopener noreferrer"
+            >Clique aqui e apoie o projeto</a>
+        </aside>
+
         <div class="header">
             <h1>🔍 DF Indexer</h1>
             <p>Busca Inteligente de Torrents Brasileiros</p>
@@ -666,12 +752,13 @@
                 const data = await response.json();
                 const scrapersList = document.getElementById('scrapersList');
                 const selectAllCheckbox = document.getElementById('selectAll');
+                const typesInfo = data.types_info || {};
                 
                 if (data.available_types && Array.isArray(data.available_types)) {
                     scrapersList.innerHTML = '';
                     console.log('[DEBUG] Scrapers disponíveis:', data.available_types);
-                    console.log('[DEBUG] Configuração FlareSolverr:', FLARESOLVERR_CONFIG);
-                    data.available_types.forEach(site => {
+                    data.available_types.forEach((site, index) => {
+                        const meta = typesInfo[site] || {};
                         const wrapper = document.createElement('div');
                         wrapper.className = 'checkbox-wrapper';
                         const checkbox = document.createElement('input');
@@ -679,10 +766,11 @@
                         checkbox.id = `site_${site}`;
                         checkbox.value = site;
                         checkbox.name = 'scraper';
-                        if (site.toLowerCase() === 'starck') checkbox.checked = true;
+                        checkbox.dataset.useFlaresolverr = meta.use_flaresolverr_default ? 'true' : 'false';
+                        if (index === 0) checkbox.checked = true;
                         const label = document.createElement('label');
                         label.htmlFor = `site_${site}`;
-                        label.textContent = site.charAt(0).toUpperCase() + site.slice(1);
+                        label.textContent = meta.display_name || (site.charAt(0).toUpperCase() + site.slice(1));
                         wrapper.appendChild(checkbox);
                         wrapper.appendChild(label);
                         scrapersList.appendChild(wrapper);
@@ -867,22 +955,6 @@
             setTimeout(() => errorBox.classList.remove('active'), 5000);
         }
 
-        // ============================================================================
-        // CONFIGURAÇÃO FLARESOLVERR POR SCRAPER
-        // ============================================================================
-        // Configure aqui o FlareSolverr para cada scraper (true ou false)
-        // IMPORTANTE: Use o nome exato do scraper em minúsculas como vem da API
-        const FLARESOLVERR_CONFIG = {
-            'starck': false,
-            'comand': true,      // Comando precisa de FlareSolverr (Cloudflare)
-            'bludv': true,       // Bludv precisa de FlareSolverr (Cloudflare)
-            'xfilmes': false,
-            'portal': false,
-            'tfilme': false,
-            'rede': false
-        };
-        // ============================================================================
-
         async function searchTorrents(query, selectedScrapers) {
             const loading = document.getElementById('loading');
             const results = document.getElementById('results');
@@ -916,13 +988,11 @@
                 // Sempre faz requisições individuais para poder aplicar FlareSolverr por scraper
                 const promises = scrapersToSearch.map(async (site) => {
                     try {
-                        // Obtém configuração de FlareSolverr para este scraper (padrão: false)
-                        const siteLower = site.toLowerCase();
-                        const configValue = FLARESOLVERR_CONFIG[siteLower];
-                        const useFlareSolverr = configValue === true; // Garante que só usa se for explicitamente true
+                        const checkbox = document.getElementById(`site_${site}`);
+                        const useFlareSolverr = checkbox?.dataset.useFlaresolverr === 'true';
                         const flaresolverrParam = useFlareSolverr ? '&use_flaresolverr=true' : '&use_flaresolverr=false';
                         const url = `/indexers/${site}?q=${encodeURIComponent(query)}&filter_results=true${flaresolverrParam}`;
-                        console.log(`[FlareSolverr] Scraper: ${site} | Lower: ${siteLower} | Config: ${configValue} | Use: ${useFlareSolverr}`);
+                        console.log(`[FlareSolverr] Scraper: ${site} | Use: ${useFlareSolverr}`);
                         const response = await fetch(url);
                         const data = await response.json();
                         return data.results || [];

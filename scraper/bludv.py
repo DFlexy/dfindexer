@@ -22,6 +22,7 @@ class BludvScraper(BaseScraper):
     SCRAPER_TYPE = "bludv"
     DEFAULT_BASE_URL = "https://bludv1.com/"
     DISPLAY_NAME = "Bludv"
+    USE_FLARESOLVERR_DEFAULT = True
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)

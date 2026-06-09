@@ -43,6 +43,7 @@ def _discover_scrapers() -> None:
                 default_url = getattr(attribute, "DEFAULT_BASE_URL", "")
                 display_name = getattr(attribute, "DISPLAY_NAME", "") or attribute.__name__
                 doc = (attribute.__doc__ or "").strip()
+                use_flaresolverr_default = bool(getattr(attribute, "USE_FLARESOLVERR_DEFAULT", False))
 
                 _SCRAPER_REGISTRY[normalized_type] = attribute
                 _SCRAPER_METADATA[normalized_type] = {
@@ -52,6 +53,7 @@ def _discover_scrapers() -> None:
                     "default_url": default_url,
                     "doc": doc,
                     "display_name": display_name,
+                    "use_flaresolverr_default": use_flaresolverr_default,
                 }
 
 def normalize_scraper_type(scraper_type: str) -> str:
@@ -60,6 +62,10 @@ def normalize_scraper_type(scraper_type: str) -> str:
 def available_scraper_types() -> Dict[str, Dict[str, Any]]:
     _discover_scrapers()
     return {scraper_type: dict(metadata) for scraper_type, metadata in _SCRAPER_METADATA.items()}
+
+
+def list_scraper_types() -> list[str]:
+    return sorted(available_scraper_types().keys())
 
 def create_scraper(scraper_type: str, base_url: Optional[str] = None, use_flaresolverr: bool = False) -> BaseScraper:
     _discover_scrapers()
@@ -73,6 +79,7 @@ def create_scraper(scraper_type: str, base_url: Optional[str] = None, use_flares
 __all__ = [
     "BaseScraper",
     "available_scraper_types",
+    "list_scraper_types",
     "create_scraper",
     "normalize_scraper_type",
 ]

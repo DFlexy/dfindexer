@@ -26,7 +26,6 @@ settings:
     options:
       starck: Starck
       rede: Rede
-      xfilmes: XFilmes
       tfilme: Tfilme
       comand: Comando
       bludv: Bludv

@@ -131,20 +131,6 @@ def _extract_release_year_rede(doc: BeautifulSoup) -> Optional[int]:
                         return year
     return None
 
-def _extract_release_year_baixafilmes(doc: BeautifulSoup) -> Optional[int]:
-    """XFilmes: <meta property="og:updated_time" content="2025-12-12T22:12:38-03:00" />"""
-    meta_updated = doc.find('meta', {'property': 'og:updated_time'})
-    if meta_updated:
-        content = meta_updated.get('content', '')
-        if content:
-            date_match = re.search(r'(\d{4})-\d{2}-\d{2}', content)
-            if date_match:
-                year = int(date_match.group(1))
-                current_year = datetime.now().year
-                if year != current_year:
-                    return year
-    return None
-
 SCRAPER_RELEASE_YEAR_EXTRACTORS: Dict[str, Callable[[BeautifulSoup], Optional[int]]] = {
     'starck': _extract_release_year_starck,
     'portal': _extract_release_year_portal,
@@ -152,7 +138,6 @@ SCRAPER_RELEASE_YEAR_EXTRACTORS: Dict[str, Callable[[BeautifulSoup], Optional[in
     'bludv': _extract_release_year_bludv,
     'comand': _extract_release_year_comand,
     'rede': _extract_release_year_rede,
-    'xfilmes': _extract_release_year_baixafilmes,
 }
 
 def extract_release_year_from_page(doc: BeautifulSoup, scraper_type: Optional[str] = None) -> Optional[int]:
@@ -197,48 +182,6 @@ def extract_date_from_page(doc: BeautifulSoup, url: str, scraper_type: Optional[
     date = parse_date_from_string(url)
     if date:
         return date
-    
-    if scraper_type == 'xfilmes':
-        all_meta = doc.find_all('meta')
-        meta_updated = None
-        
-        for meta in all_meta:
-            prop = meta.get('property', '')
-            if prop == 'og:updated_time':
-                meta_updated = meta
-                break
-        
-        if not meta_updated:
-            for meta in all_meta:
-                prop = meta.get('name', '')
-                if prop == 'og:updated_time':
-                    meta_updated = meta
-                    break
-        
-        if not meta_updated:
-            for meta in all_meta:
-                prop = meta.get('property', '') or meta.get('name', '')
-                prop_lower = prop.lower()
-                if any(mp in prop_lower for mp in ['article:published_time', 'article:modified_time', 'datepublished', 'datemodified', 'published_time', 'modified_time']):
-                    meta_updated = meta
-                    break
-        
-        if meta_updated:
-            content = meta_updated.get('content', '')
-            if content:
-                try:
-                    date_str = content.split('T')[0]
-                    date = datetime.strptime(date_str, '%Y-%m-%d')
-                    return date
-                except (ValueError, AttributeError):
-                    year_match = re.search(r'(\d{4})-\d{2}-\d{2}', content)
-                    if year_match:
-                        year = int(year_match.group(1))
-                        current_year = datetime.now().year
-                        if year != current_year:
-                            return datetime(year, 12, 31)
-        else:
-            pass
     
     release_year_date = extract_release_year_date_from_page(doc, scraper_type)
     if release_year_date:

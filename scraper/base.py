@@ -47,6 +47,7 @@ class BaseScraper(ABC):
     SCRAPER_TYPE: str = ''
     DEFAULT_BASE_URL: str = ''
     DISPLAY_NAME: str = ''
+    USE_FLARESOLVERR_DEFAULT: bool = False
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         resolved_url = (base_url or self.DEFAULT_BASE_URL or '').strip()
