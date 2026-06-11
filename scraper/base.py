@@ -263,7 +263,6 @@ class BaseScraper(ABC):
                 with flaresolverr_lock:
                     session_id = self.flaresolverr_client.get_or_create_session(
                         self.base_url,
-                        skip_redis=self._is_test
                     )
                     if session_id:
                         pass
@@ -275,7 +274,6 @@ class BaseScraper(ABC):
                             session_id,
                             referer if referer else self.base_url,
                             self.base_url,
-                            skip_redis=self._is_test
                         )
                     if html_content:
                         html_str = html_content.decode('utf-8', errors='ignore') if isinstance(html_content, bytes) else str(html_content)
@@ -343,7 +341,6 @@ class BaseScraper(ABC):
                         if should_retry:
                             new_session_id = self.flaresolverr_client.get_or_create_session(
                                 self.base_url,
-                                skip_redis=self._is_test
                             )
                             if new_session_id:
                                 if new_session_id != session_id:
@@ -354,7 +351,6 @@ class BaseScraper(ABC):
                                     new_session_id,
                                     referer if referer else self.base_url,
                                     self.base_url,
-                                    skip_redis=self._is_test
                                 )
                                 if html_content:
                                     html_str = html_content.decode('utf-8', errors='ignore') if isinstance(html_content, bytes) else str(html_content)
@@ -431,7 +427,6 @@ class BaseScraper(ABC):
                     with flaresolverr_lock:
                         session_id = self.flaresolverr_client.get_or_create_session(
                             self.base_url,
-                            skip_redis=self._is_test
                         )
                         if session_id:
                             html_content = self.flaresolverr_client.solve(
@@ -439,7 +434,6 @@ class BaseScraper(ABC):
                                 session_id,
                                 referer if referer else self.base_url,
                                 self.base_url,
-                                skip_redis=self._is_test
                             )
                         if html_content:
                             html_str = html_content.decode('utf-8', errors='ignore') if isinstance(html_content, bytes) else str(html_content)

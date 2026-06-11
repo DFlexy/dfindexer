@@ -82,6 +82,11 @@ class HTTPLocalCache:
         for key in sorted_keys[:to_remove]:
             del self._cache[key]
     
+    def delete(self, key: str) -> None:
+        """Remove uma entrada específica do cache."""
+        with self._lock:
+            self._cache.pop(key, None)
+
     def clear(self) -> None:
         """Limpa todo o cache."""
         with self._lock:

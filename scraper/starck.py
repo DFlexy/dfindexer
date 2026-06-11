@@ -1,14 +1,18 @@
 # Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
 import html
+import json
 import re
 import logging
 from datetime import datetime
 from utils.parsing.date_extraction import parse_date_from_string
 from typing import List, Dict, Optional, Callable
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
+import requests
 from bs4 import BeautifulSoup
+from app.config import Config
 from scraper.base import BaseScraper
+from utils.http.proxy import get_proxy_dict, get_proxy_url, is_proxy_local
 from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.cleaning import clean_title, remove_accents
@@ -22,6 +26,202 @@ logger = logging.getLogger(__name__)
 
 _RE_STARCK_DATA_U_DQ = re.compile(r'data-u\s*=\s*"([^"]*)"', re.I)
 _RE_STARCK_DATA_U_SQ = re.compile(r"data-u\s*=\s*'([^']*)'", re.I)
+
+_GATE_MARKERS = (
+    'createGenericNotification',
+    '/current-address',
+    'Análise de acesso',
+    'Comunicado Importante',
+    'Ir para o novo site',
+    'sendVerification',
+    'unshuffleString',
+)
+_DEFAULT_TIME_MONIT = '14542588'
+_TIME_MONIT_RE = re.compile(r'timeMonit\s*:\s*["\']([^"\']+)["\']', re.I)
+
+
+def _is_starck_gate_page(html_content: str) -> bool:
+    if not html_content:
+        return False
+    return sum(1 for marker in _GATE_MARKERS if marker in html_content) >= 2
+
+
+def _unshuffle_string(text: str) -> str:
+    if not text or not str(text).strip():
+        return ''
+    s = str(text).strip()
+    if (len(s) >= 2) and ((s[0] == s[-1]) and s[0] in '"\''):
+        s = s[1:-1]
+    length = len(s)
+    if length == 0:
+        return ''
+    used = [False] * length
+    out = [''] * length
+    n = 0
+    for t in range(length):
+        while used[n]:
+            n = (n + 1) % length
+        used[n] = True
+        out[t] = s[n]
+        n = (n + 3) % length
+    return ''.join(out)
+
+
+def _extract_time_monit(html_content: str) -> str:
+    match = _TIME_MONIT_RE.search(html_content or '')
+    return match.group(1) if match else _DEFAULT_TIME_MONIT
+
+
+def _invalidate_starck_gate_cache(redis, url: str) -> None:
+    try:
+        from cache.http_cache import get_http_cache
+        from cache.redis_keys import html_long_key, html_short_key
+
+        get_http_cache().delete(url)
+        if redis:
+            redis.delete(html_long_key(url))
+            redis.delete(html_short_key(url))
+    except Exception:
+        pass
+
+
+def _normalize_starck_base_url(url: str) -> Optional[str]:
+    if not url or not url.startswith('http'):
+        return None
+    parsed = urlparse(url.strip())
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f'{parsed.scheme}://{parsed.netloc}/'
+
+
+def _post_starck_verification_requests(
+    session: requests.Session,
+    verify_url: str,
+    origin: str,
+    referer: str,
+    time_monit: str,
+) -> Optional[str]:
+    response = session.post(
+        verify_url,
+        data=json.dumps({'timeMonit': time_monit}),
+        headers={
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Accept': '*/*',
+            'Origin': origin,
+            'Referer': referer,
+        },
+        timeout=Config.HTTP_REQUEST_TIMEOUT,
+    )
+    if not response.ok:
+        logger.warning(
+            '[Starck] Verificação de acesso retornou HTTP %s para %s',
+            response.status_code,
+            verify_url,
+        )
+        return None
+    return _unshuffle_string(response.text)
+
+
+def _post_starck_verification_flaresolverr(
+    flaresolverr_client,
+    session_id: str,
+    verify_url: str,
+    referer: str,
+    time_monit: str,
+) -> Optional[str]:
+    payload = {
+        'cmd': 'request.post',
+        'url': verify_url,
+        'session': session_id,
+        'postData': json.dumps({'timeMonit': time_monit}),
+        'headers': {
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Referer': referer,
+        },
+        'maxTimeout': 60000,
+    }
+    proxy_url = get_proxy_url()
+    if proxy_url:
+        payload['proxy'] = proxy_url
+    proxy_dict = get_proxy_dict() if not is_proxy_local() else None
+    try:
+        response = requests.post(
+            flaresolverr_client.api_url,
+            json=payload,
+            timeout=90,
+            headers={'Content-Type': 'application/json'},
+            proxies=proxy_dict if proxy_dict else None,
+        )
+        response.raise_for_status()
+        result = response.json()
+        if result.get('status') != 'ok':
+            logger.warning(
+                '[Starck] FlareSolverr falhou na verificação: %s',
+                result.get('message', 'erro desconhecido'),
+            )
+            return None
+        body = result.get('solution', {}).get('response', '')
+        return _unshuffle_string(body) if body else None
+    except Exception as e:
+        logger.warning('[Starck] Erro na verificação via FlareSolverr: %s', type(e).__name__)
+        return None
+
+
+def _bypass_starck_access(
+    session: requests.Session,
+    url: str,
+    html_content: str,
+    referer: Optional[str] = None,
+    flaresolverr_client=None,
+    flaresolverr_base_url: Optional[str] = None,
+    is_test: bool = False,
+) -> Optional[str]:
+    parsed = urlparse(url)
+    origin = f'{parsed.scheme}://{parsed.netloc}'
+    verify_url = urljoin(f'{origin}/', 'current-address')
+    page_referer = referer or url
+    time_monit = _extract_time_monit(html_content)
+
+    resolved: Optional[str] = None
+    if flaresolverr_client and flaresolverr_base_url:
+        fs_session = flaresolverr_client.get_or_create_session(
+            flaresolverr_base_url,
+        )
+        if fs_session:
+            resolved = _post_starck_verification_flaresolverr(
+                flaresolverr_client,
+                fs_session,
+                verify_url,
+                page_referer,
+                time_monit,
+            )
+
+    if resolved is None:
+        resolved = _post_starck_verification_requests(
+            session,
+            verify_url,
+            origin,
+            page_referer,
+            time_monit,
+        )
+
+    if resolved is None:
+        return None
+    if resolved and 'http' in resolved.lower():
+        return resolved
+    return ''
+
+
+def _apply_resolved_base_url(scraper: 'StarckScraper', resolved_url: str) -> None:
+    new_base = _normalize_starck_base_url(resolved_url)
+    if not new_base:
+        return
+    current = _normalize_starck_base_url(scraper.base_url)
+    if current and urlparse(new_base).netloc == urlparse(current).netloc:
+        return
+    logger.info('[Starck] Atualizando base_url: %s → %s', scraper.base_url, new_base)
+    scraper.base_url = new_base
+
 
 def _starck_raw_data_u_values(page_html: str) -> List[str]:
     if not page_html:
@@ -45,13 +245,47 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
 
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v18.com/"
+    DEFAULT_BASE_URL = "https://starckfilmes-v20.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
         super().__init__(base_url, use_flaresolverr)
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
+        self._gate_bypass_attempted: set = set()
+
+    def _fetch_document(self, url: str, referer: str = ''):
+        soup = super()._fetch_document(url, referer)
+        page_html = self._get_fetched_html() or ''
+
+        if not _is_starck_gate_page(page_html):
+            return soup
+
+        gate_key = url.rstrip('/').lower()
+        if gate_key in self._gate_bypass_attempted:
+            logger.warning('[Starck] Página de verificação persistente após bypass: %s', url[:80])
+            return None
+        self._gate_bypass_attempted.add(gate_key)
+
+        _invalidate_starck_gate_cache(self.redis, url)
+
+        resolved = _bypass_starck_access(
+            session=self.session,
+            url=url,
+            html_content=page_html,
+            referer=referer or self.base_url,
+            flaresolverr_client=self.flaresolverr_client if self.use_flaresolverr else None,
+            flaresolverr_base_url=self.base_url,
+            is_test=self._is_test,
+        )
+        if resolved is None:
+            logger.warning('[Starck] Falha ao passar pela verificação de acesso')
+            return None
+
+        if resolved:
+            _apply_resolved_base_url(self, resolved)
+
+        return super()._fetch_document(url, referer)
     
     def search(
         self,

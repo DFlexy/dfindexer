@@ -13,10 +13,10 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            background: #ffffff;
             min-height: 100vh;
-            padding: 15px;
-            color: #ffffff;
+            padding: 12px;
+            color: #2d2d3a;
         }
 
         .container {
@@ -24,62 +24,83 @@
             margin: 0 auto;
         }
 
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
         .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 4px 10px;
+            text-align: left;
+            padding: 4px 0;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .stat-pill {
+            background: #f0effa;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            color: #6b6f85;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .stat-pill strong {
+            color: #0c066f;
+            font-weight: 700;
         }
 
         .header h1 {
             font-size: 1.8em;
             margin-bottom: 5px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #0c066f;
             font-weight: 700;
         }
 
         .header p {
             font-size: 0.9em;
-            color: #b0b0b0;
+            color: #6b6f85;
         }
 
         .support-banner {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            justify-content: center;
-            text-align: center;
-            gap: 8px;
-            margin-bottom: 6px;
+            justify-content: space-between;
+            text-align: left;
+            gap: 12px;
+            margin-bottom: 12px;
             padding: 10px 14px;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.14) 100%);
-            border: 1px solid rgba(167, 139, 250, 0.35);
+            background: #f0effa;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-left: 4px solid #0c066f;
             border-radius: 12px;
-            box-shadow: 0 4px 18px rgba(102, 126, 234, 0.12);
+            box-shadow: 0 4px 18px rgba(12, 6, 111, 0.08);
         }
 
         .support-banner-text {
-            max-width: 520px;
+            flex: 1;
+            min-width: 0;
         }
 
         .support-banner-title {
             font-size: 1.05em;
             font-weight: 700;
-            color: #f3e8ff;
+            color: #0c066f;
             margin-bottom: 4px;
         }
 
         .support-banner-desc {
             font-size: 0.82em;
             line-height: 1.45;
-            color: #c4b5fd;
-        }
-
-        .support-banner-desc span {
-            display: block;
-            margin-top: 2px;
+            color: #6b6f85;
+            white-space: nowrap;
         }
 
         .btn-support {
@@ -88,8 +109,8 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 8px 16px;
-            background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #d946ef 100%);
+            padding: 7px 14px;
+            background: #16a34a;
             color: #fff;
             font-size: 0.9em;
             font-weight: 600;
@@ -97,15 +118,15 @@
             border-radius: 999px;
             border: none;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-            box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
             white-space: nowrap;
         }
 
         .btn-support:hover {
+            background: #15803d;
             transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
-            filter: brightness(1.06);
+            box-shadow: 0 6px 20px rgba(22, 163, 74, 0.4);
         }
 
         .btn-support:active {
@@ -113,25 +134,25 @@
         }
 
         .search-box {
-            background: rgba(26, 26, 26, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-top: 3px solid #0c066f;
             border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
         }
 
         .search-form {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
         }
 
         .form-row {
             display: grid;
             grid-template-columns: 1fr auto;
-            gap: 12px;
+            gap: 10px;
             align-items: end;
         }
 
@@ -142,7 +163,7 @@
         }
 
         .form-group label {
-            color: #e0e0e0;
+            color: #0c066f;
             font-weight: 600;
             font-size: 0.85em;
             letter-spacing: 0.3px;
@@ -154,24 +175,24 @@
 
         .form-group input {
             width: 100%;
-            padding: 10px 40px 10px 14px;
-            background: rgba(15, 15, 15, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 9px 38px 9px 12px;
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.15);
             border-radius: 8px;
             font-size: 0.95em;
-            color: #ffffff;
+            color: #0c066f;
             transition: all 0.3s ease;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #667eea;
-            background: rgba(15, 15, 15, 0.9);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+            border-color: #0c066f;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(12, 6, 111, 0.12);
         }
 
         .form-group input::placeholder {
-            color: #666;
+            color: #9ca3b8;
         }
 
         .clear-button {
@@ -194,13 +215,13 @@
         }
 
         .clear-button:hover {
-            color: #ffffff;
-            background: rgba(255, 255, 255, 0.1);
+            color: #0c066f;
+            background: rgba(12, 6, 111, 0.08);
         }
 
         .btn-search {
-            padding: 10px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 9px 20px;
+            background: #0c066f;
             color: white;
             border: none;
             border-radius: 8px;
@@ -210,13 +231,14 @@
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            box-shadow: 0 3px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 3px 12px rgba(12, 6, 111, 0.35);
             white-space: nowrap;
         }
 
         .btn-search:hover {
+            background: #1e14b8;
             transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 5px 20px rgba(12, 6, 111, 0.45);
         }
 
         .btn-search:disabled {
@@ -226,41 +248,41 @@
         }
 
         .sites-section label {
-            color: #e0e0e0;
+            color: #0c066f;
             font-weight: 600;
             font-size: 0.85em;
             letter-spacing: 0.3px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             display: block;
         }
 
         .scrapers-container {
-            background: rgba(15, 15, 15, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.1);
             border-radius: 8px;
-            padding: 12px;
+            padding: 10px;
         }
 
         .scrapers-grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
         }
 
         .select-all-wrapper {
             width: 100%;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(12, 6, 111, 0.1);
         }
 
         .checkbox-wrapper {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            padding: 7px 14px;
-            background: rgba(30, 30, 30, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 6px 12px;
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.15);
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -268,8 +290,8 @@
         }
 
         .checkbox-wrapper:hover {
-            background: rgba(40, 40, 40, 0.9);
-            border-color: #667eea;
+            background: #f0effa;
+            border-color: #0c066f;
             transform: translateY(-1px);
         }
 
@@ -277,13 +299,13 @@
             width: 17px;
             height: 17px;
             cursor: pointer;
-            accent-color: #667eea;
+            accent-color: #0c066f;
             margin: 0;
         }
 
         .checkbox-wrapper label {
             cursor: pointer;
-            color: #e0e0e0;
+            color: #0c066f;
             font-size: 0.88em;
             font-weight: 500;
             margin: 0;
@@ -292,7 +314,7 @@
 
         .loading {
             text-align: center;
-            padding: 50px 20px;
+            padding: 36px 16px;
             display: none;
         }
 
@@ -301,13 +323,13 @@
         }
 
         .spinner {
-            border: 4px solid rgba(102, 126, 234, 0.1);
-            border-top: 4px solid #667eea;
+            border: 4px solid rgba(12, 6, 111, 0.1);
+            border-top: 4px solid #0c066f;
             border-radius: 50%;
             width: 45px;
             height: 45px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            margin: 0 auto 12px;
         }
 
         @keyframes spin {
@@ -316,18 +338,17 @@
         }
 
         .loading p {
-            color: #b0b0b0;
+            color: #6b6f85;
             font-size: 1em;
         }
 
         .results {
-            background: rgba(26, 26, 26, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.12);
             border-radius: 12px;
-            padding: 20px;
+            padding: 16px;
             display: none;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
             max-width: 1600px;
             margin: 0 auto;
         }
@@ -340,48 +361,45 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 18px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(12, 6, 111, 0.15);
         }
 
         .results-header h2 {
             font-size: 1.3em;
             font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #0c066f;
         }
 
         .results-count {
-            color: #888;
+            color: #6b6f85;
             font-size: 0.9em;
             font-weight: 500;
         }
 
         .result-item {
-            background: rgba(15, 15, 15, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.1);
             border-radius: 10px;
-            padding: 14px 16px;
-            margin: 0 auto 12px;
+            padding: 12px 14px;
+            margin: 0 auto 10px;
             width: 100%;
-            border-left: 3px solid #667eea;
+            border-left: 3px solid #0c066f;
             transition: all 0.3s ease;
         }
 
         .result-item:hover {
-            background: rgba(20, 20, 20, 0.9);
-            border-left-color: #b29e1b;
+            background: #f0effa;
+            border-left-color: #1e14b8;
             transform: translateX(4px);
-            box-shadow: 0 4px 20px rgba(12, 173, 7, 0.433);
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.12);
         }
 
         .result-content {
             display: grid;
             grid-template-columns: 70% 30%;
-            gap: 8px 20px;
+            gap: 8px 16px;
             width: 100%;
         }
 
@@ -390,7 +408,7 @@
             align-items: flex-start;
             gap: 8px;
         }
-        
+
         .result-line .result-value {
             display: flex;
             align-items: center;
@@ -398,13 +416,11 @@
             flex-wrap: wrap;
             gap: 4px;
         }
-        
-        /* Centraliza badges quando presentes */
+
         .result-value:has(.badge) {
             justify-content: center;
         }
-        
-        /* Fallback para navegadores que não suportam :has() */
+
         @supports not selector(:has(*)) {
             .result-value {
                 text-align: center;
@@ -412,7 +428,7 @@
         }
 
         .result-label {
-            color: #888;
+            color: #6b6f85;
             font-size: 0.78em;
             font-weight: 600;
             text-transform: uppercase;
@@ -422,11 +438,11 @@
         }
 
         .result-value {
-            color: #e0e0e0;
+            color: #2d2d3a;
             font-size: 0.88em;
             word-break: break-word;
         }
-        
+
         .result-value .badge {
             margin: 0 2px;
         }
@@ -434,19 +450,19 @@
         .result-title {
             font-size: 0.95em;
             font-weight: 600;
-            color: #ffffff;
+            color: #0c066f;
             line-height: 1.3;
         }
 
         .result-link {
-            color: #667eea;
+            color: #1e14b8;
             text-decoration: none;
             font-size: 0.85em;
             transition: color 0.2s;
         }
 
         .result-link:hover {
-            color: #764ba2;
+            color: #0c066f;
             text-decoration: underline;
         }
 
@@ -464,75 +480,76 @@
         }
 
         .badge.audio {
-            background: rgba(102, 126, 234, 0.2);
-            color: #667eea;
-            border: 1px solid rgba(102, 126, 234, 0.4);
+            background: rgba(12, 6, 111, 0.08);
+            color: #0c066f;
+            border: 1px solid rgba(12, 6, 111, 0.2);
         }
 
         .badge.info {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4caf50;
-            border: 1px solid rgba(76, 175, 80, 0.4);
+            background: rgba(30, 20, 184, 0.08);
+            color: #1e14b8;
+            border: 1px solid rgba(30, 20, 184, 0.2);
         }
 
         .hash-value {
             font-family: 'Courier New', monospace;
             font-size: 0.75em;
-            color: #888;
+            color: #6b6f85;
             word-break: break-all;
         }
 
         .magnet-name {
             font-size: 0.65em;
-            color: #e0e0e0;
+            color: #2d2d3a;
             word-break: break-word;
         }
 
         .magnet-button {
             display: inline-block;
             padding: 4px 14px;
-            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            background: #0c066f;
             color: white;
             text-decoration: none;
             border-radius: 6px;
             font-size: 0.75em;
             font-weight: 600;
-			line-height: 1;
+            line-height: 1;
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
+            box-shadow: 0 2px 10px rgba(12, 6, 111, 0.25);
             white-space: nowrap;
         }
 
         .magnet-button:hover {
+            background: #1e14b8;
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.5);
+            box-shadow: 0 4px 15px rgba(12, 6, 111, 0.35);
         }
 
         .no-results {
             text-align: center;
-            padding: 50px 20px;
+            padding: 36px 16px;
         }
 
         .no-results h3 {
             font-size: 1.4em;
             margin-bottom: 12px;
-            color: #e0e0e0;
+            color: #0c066f;
         }
 
         .no-results p {
-            color: #888;
+            color: #6b6f85;
             font-size: 0.95em;
         }
 
         .error {
-            background: rgba(244, 67, 54, 0.1);
-            border: 1px solid rgba(244, 67, 54, 0.3);
+            background: #fff5f5;
+            border: 1px solid #fecaca;
             border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 20px;
-            color: #ff6b6b;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            color: #b91c1c;
             display: none;
             font-weight: 500;
         }
@@ -543,24 +560,19 @@
 
         .footer {
             text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            color: #888;
+            margin-top: 28px;
+            padding: 14px;
+            color: #6b6f85;
             font-size: 0.85em;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(12, 6, 111, 0.1);
         }
 
         .footer-content {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             flex-wrap: wrap;
-        }
-
-        .footer-stat {
-            color: #667eea;
-            font-weight: 700;
         }
 
         @media (max-width: 1024px) {
@@ -574,10 +586,20 @@
 
         @media (max-width: 768px) {
             body {
-                padding: 10px;
+                padding: 8px;
             }
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
             .header {
-                margin-bottom: 15px;
+                margin-bottom: 0;
+            }
+
+            .stat-pill {
+                width: 100%;
+                text-align: center;
             }
             .header h1 {
                 font-size: 1.5em;
@@ -586,19 +608,19 @@
                 font-size: 0.85em;
             }
             .search-box {
-                padding: 15px;
+                padding: 12px;
             }
             .form-row {
                 grid-template-columns: 1fr;
-                gap: 12px;
+                gap: 10px;
             }
             .btn-search {
                 width: 100%;
-                padding: 12px;
+                padding: 10px;
             }
             .form-group input {
                 font-size: 16px;
-                padding: 12px 40px 12px 14px;
+                padding: 10px 38px 10px 12px;
             }
             .result-content {
                 grid-template-columns: 1fr;
@@ -644,55 +666,68 @@
             .results-header h2 {
                 font-size: 1.2em;
             }
+            .support-banner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .support-banner-desc {
+                white-space: normal;
+            }
+            .btn-support {
+                width: 100%;
+                justify-content: center;
+            }
         }
 
         @media (max-width: 480px) {
             body {
-                padding: 8px;
+                padding: 6px;
             }
             .header h1 {
                 font-size: 1.3em;
             }
             .search-box {
-                padding: 12px;
+                padding: 10px;
             }
             .results {
-                padding: 15px;
-            }
-            .result-item {
                 padding: 12px;
             }
+            .result-item {
+                padding: 10px;
+            }
             .checkbox-wrapper {
-                padding: 8px 12px;
+                padding: 6px 10px;
             }
             .support-banner {
-                padding: 8px 12px;
+                padding: 8px 10px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="top-bar">
+            <div class="header">
+                <h1>🔍 DF Indexer</h1>
+                <p>Busca Inteligente de Torrents Brasileiros</p>
+            </div>
+            <div class="stat-pill">
+                Indexados: <strong id="indexedCountTop">Carregando...</strong>
+            </div>
+        </div>
+
         <aside class="support-banner" aria-label="Apoie o projeto">
             <div class="support-banner-text">
                 <div class="support-banner-title">💖 Apoie este projeto</div>
-                <p class="support-banner-desc">
-                    Este projeto é 100% independente e open-source.
-                    <span>💜 Seu apoio mantém o desenvolvimento ativo e faz o projeto continuar evoluindo.</span>
-                </p>
+                <p class="support-banner-desc">Projeto 100% independente e open-source. Seu apoio mantém o desenvolvimento ativo.</p>
             </div>
             <a
                 class="btn-support"
                 href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000"
                 target="_blank"
                 rel="noopener noreferrer"
-            >Clique aqui e apoie o projeto</a>
+            >Apoiar projeto</a>
         </aside>
-
-        <div class="header">
-            <h1>🔍 DF Indexer</h1>
-            <p>Busca Inteligente de Torrents Brasileiros</p>
-        </div>
 
         <div class="search-box">
             <form id="searchForm" class="search-form">
@@ -739,8 +774,6 @@
         <div class="footer">
             <div class="footer-content">
                 <span>DF Indexer © 2025</span>
-                <span>|</span>
-                <span>Torrents Indexados: <span class="footer-stat" id="indexedCount">Carregando...</span></span>
             </div>
         </div>
     </div>
@@ -753,11 +786,11 @@
                 const scrapersList = document.getElementById('scrapersList');
                 const selectAllCheckbox = document.getElementById('selectAll');
                 const typesInfo = data.types_info || {};
-                
+
                 if (data.available_types && Array.isArray(data.available_types)) {
                     scrapersList.innerHTML = '';
-                    console.log('[DEBUG] Scrapers disponíveis:', data.available_types);
-                    data.available_types.forEach((site, index) => {
+                    const defaultScraper = data.available_types.includes('starck') ? 'starck' : data.available_types[0];
+                    data.available_types.forEach((site) => {
                         const meta = typesInfo[site] || {};
                         const wrapper = document.createElement('div');
                         wrapper.className = 'checkbox-wrapper';
@@ -767,7 +800,7 @@
                         checkbox.value = site;
                         checkbox.name = 'scraper';
                         checkbox.dataset.useFlaresolverr = meta.use_flaresolverr_default ? 'true' : 'false';
-                        if (index === 0) checkbox.checked = true;
+                        if (site === defaultScraper) checkbox.checked = true;
                         const label = document.createElement('label');
                         label.htmlFor = `site_${site}`;
                         label.textContent = meta.display_name || (site.charAt(0).toUpperCase() + site.slice(1));
@@ -787,7 +820,7 @@
                 console.error('Erro ao carregar sites:', error);
             }
         }
-        
+
         function updateSelectAllState() {
             const checkboxes = document.querySelectorAll('input[name="scraper"]');
             const selectAllCheckbox = document.getElementById('selectAll');
@@ -803,66 +836,40 @@
                 selectAllCheckbox.indeterminate = true;
             }
         }
-        
+
         function getSelectedScrapers() {
             const selected = Array.from(document.querySelectorAll('input[name="scraper"]:checked')).map(cb => cb.value);
-            console.log('[DEBUG] Scrapers selecionados:', selected);
             return selected;
         }
 
         function extractAudioTags(title) {
-            // As tags [Brazilian], [Eng], [Jap] devem permanecer no título
-            // Apenas extrai os idiomas para exibição separada
             const finalTitle = title.trim();
-            
-            // Extrai idiomas das tags (suporta múltiplos - máximo 3)
             const idiomas = [];
             if (title.includes('[Brazilian]')) idiomas.push('Português');
             if (title.includes('[Eng]')) idiomas.push('Inglês');
             if (title.includes('[Jap]')) idiomas.push('Japonês');
-            
-            // Limita a 3 idiomas no máximo
-            const idiomasLimitados = idiomas.slice(0, 3);
-            
-            return { 
-                finalTitle: finalTitle, // Mantém as tags no título
-                idiomas: idiomasLimitados,
-                legendas: [] // Tag [Leg] foi removida - legenda não é mais detectada via tags
+            return {
+                finalTitle: finalTitle,
+                idiomas: idiomas.slice(0, 3),
+                legendas: []
             };
         }
-        
+
         function determineLegenda(torrent) {
-            // Lógica de detecção de legenda seguindo ordem de fallbacks:
-            // 1. Campo legend do torrent (se disponível - valor exato do HTML extraído de "Legenda:", ex: "S/L", "Português")
-            // 2. Campo has_legenda do torrent (se disponível - vem do cross_data)
-            // 3. Busca no título processado por palavras-chave (legendado/legenda/leg)
-            // 4. Busca no magnet original (legendado/legenda/leg)
-            // 5. Busca no magnet link (dn=) se magnet_original não disponível
-            
-            // Fonte 1: Campo legend (valor exato do HTML extraído de "Legenda:" - preserva "S/L", "S.L.", "Português", etc.)
-            // Verifica se existe e não é null/undefined/empty
             if (torrent.legend != null && torrent.legend !== undefined && torrent.legend !== 'N/A' && String(torrent.legend).trim()) {
                 return String(torrent.legend).trim();
             }
-            
-            // Fonte 2: Campo has_legenda (se disponível)
             if (torrent.has_legenda === true) {
                 return 'Português';
             }
-            
-            // Fallback 1: Busca no título processado
             const title = (torrent.title_processed || '').toLowerCase();
             if (title.includes('legendado') || title.includes('legenda') || /\bleg\b/.test(title)) {
                 return 'Português';
             }
-            
-            // Fallback 2: Busca no magnet original
             const magnetOriginal = (torrent.magnet_original || '').toLowerCase();
             if (magnetOriginal.includes('legendado') || magnetOriginal.includes('legenda') || /\bleg\b/.test(magnetOriginal)) {
                 return 'Português';
             }
-            
-            // Fallback 3: Busca no magnet link (extrai dn=)
             const magnetLink = (torrent.magnet || torrent.magnet_link || '').toLowerCase();
             if (magnetLink.includes('magnet:')) {
                 try {
@@ -877,7 +884,6 @@
                     // Ignora erros de decodificação
                 }
             }
-            
             return null;
         }
 
@@ -910,8 +916,6 @@
             resultsList.innerHTML = torrents.map(torrent => {
                 const { finalTitle, idiomas } = extractAudioTags(torrent.title_processed || '');
                 const idiomasStr = idiomas.length > 0 ? idiomas.join(', ') : 'N/A';
-                
-                // Determina legenda usando função dedicada (não mais via tag [Leg])
                 const legendaDetectada = determineLegenda(torrent);
                 const legendaStr = legendaDetectada || 'N/A';
                 const detailsUrl = torrent.details || '#';
@@ -921,11 +925,9 @@
                 const leech = formatNumber(torrent.tracker_leech !== undefined ? torrent.tracker_leech : (torrent.leech_count !== undefined ? torrent.leech_count : 0));
                 const size = formatSize(torrent.size);
                 const hash = torrent.info_hash || 'N/A';
-                // Tenta extrair o nome do magnet do próprio link magnet se magnet_original não estiver disponível
                 let releaseTitleMagnet = torrent.magnet_original;
                 if (!releaseTitleMagnet && magnetLink && magnetLink !== '#') {
                     try {
-                        // Tenta extrair o parâmetro dn= do magnet link
                         const dnMatch = magnetLink.match(/[&?]dn=([^&]+)/i);
                         if (dnMatch) {
                             releaseTitleMagnet = decodeURIComponent(dnMatch[1]);
@@ -964,35 +966,26 @@
             searchBtn.disabled = true;
             try {
                 let allResults = [];
-                
-                // Determina quais scrapers buscar
                 let scrapersToSearch = [];
                 const allScrapers = Array.from(document.querySelectorAll('input[name="scraper"]')).map(cb => cb.value);
-                
+
                 if (selectedScrapers.length === 0 || selectedScrapers.length === allScrapers.length) {
-                    // Busca em todos os scrapers
                     scrapersToSearch = allScrapers;
                 } else {
-                    // Busca apenas nos selecionados
                     scrapersToSearch = selectedScrapers;
                 }
-                
-                // Garante que há scrapers para buscar
+
                 if (scrapersToSearch.length === 0) {
                     showError('Por favor, selecione pelo menos um site de busca.');
                     return;
                 }
-                
-                console.log(`[DEBUG] Buscando em ${scrapersToSearch.length} scraper(s):`, scrapersToSearch);
-                
-                // Sempre faz requisições individuais para poder aplicar FlareSolverr por scraper
+
                 const promises = scrapersToSearch.map(async (site) => {
                     try {
                         const checkbox = document.getElementById(`site_${site}`);
                         const useFlareSolverr = checkbox?.dataset.useFlaresolverr === 'true';
                         const flaresolverrParam = useFlareSolverr ? '&use_flaresolverr=true' : '&use_flaresolverr=false';
                         const url = `/indexers/${site}?q=${encodeURIComponent(query)}&filter_results=true${flaresolverrParam}`;
-                        console.log(`[FlareSolverr] Scraper: ${site} | Use: ${useFlareSolverr}`);
                         const response = await fetch(url);
                         const data = await response.json();
                         return data.results || [];
@@ -1001,13 +994,9 @@
                         return [];
                     }
                 });
-                
-                // Aguarda todas as requisições e processa resultados
+
                 const resultsArray = await Promise.all(promises);
                 allResults = resultsArray.flat();
-                
-                // Não remove duplicados - mantém todos os magnets encontrados
-                // Ordena por data (mais recente primeiro)
                 allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
                 renderResults(allResults);
                 results.classList.add('active');
@@ -1022,18 +1011,18 @@
 
         const queryInput = document.getElementById('query');
         const clearButton = document.getElementById('clearButton');
-        
+
         function toggleClearButton() {
             clearButton.style.display = queryInput.value.trim().length > 0 ? 'flex' : 'none';
         }
-        
+
         queryInput.addEventListener('input', toggleClearButton);
         clearButton.addEventListener('click', () => {
             queryInput.value = '';
             queryInput.focus();
             clearButton.style.display = 'none';
         });
-        
+
         document.getElementById('searchForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const query = queryInput.value.trim();
@@ -1044,14 +1033,18 @@
             searchTorrents(query, getSelectedScrapers());
         });
 
+        function setIndexedCount(value) {
+            document.getElementById('indexedCountTop').textContent = value;
+        }
+
         async function loadIndexedCount() {
             try {
                 const response = await fetch('/');
                 const data = await response.json();
-                document.getElementById('indexedCount').textContent = (data.indexed_torrents || 0).toLocaleString('pt-BR');
+                setIndexedCount((data.indexed_torrents || 0).toLocaleString('pt-BR'));
             } catch (error) {
                 console.error('Erro ao carregar contagem:', error);
-                document.getElementById('indexedCount').textContent = 'N/A';
+                setIndexedCount('N/A');
             }
         }
 

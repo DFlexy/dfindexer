@@ -102,8 +102,11 @@ class FlareSolverrClient:
                 _active_sessions_count -= 1
                 logger.debug(f"FlareSolverr: sessão removida ({_active_sessions_count}/{self._get_max_sessions()})")
     
+    def _redis_sessions_enabled(self) -> bool:
+        return self.redis is not None
+
     def _create_session(self, base_url: str, skip_redis: bool = False) -> Optional[str]:
-        if self.redis and not skip_redis:
+        if self._redis_sessions_enabled():
             try:
                 failure_key = flaresolverr_session_creation_failure_key(base_url)
                 if self.redis.exists(failure_key):
@@ -113,7 +116,7 @@ class FlareSolverrClient:
                 pass
         
         if not self._can_create_session():
-            if self.redis and not skip_redis:
+            if self._redis_sessions_enabled():
                 try:
                     session_key = self._get_session_key(base_url)
                     cached = self.redis.get(session_key)
@@ -156,7 +159,7 @@ class FlareSolverrClient:
             if result.get("status") == "ok":
                 created_session_id = result.get("session")
                 if created_session_id:
-                    if self.redis and not skip_redis:
+                    if self._redis_sessions_enabled():
                         try:
                             failure_key = flaresolverr_session_creation_failure_key(base_url)
                             self.redis.delete(failure_key)
@@ -165,7 +168,7 @@ class FlareSolverrClient:
                     
                     self._increment_session_count()
                     
-                    if self.redis and not skip_redis:
+                    if self._redis_sessions_enabled():
                         try:
                             session_key = self._get_session_key(base_url)
                             created_key = self._get_session_created_key(base_url)
@@ -290,10 +293,11 @@ class FlareSolverrClient:
             return True
     
     def get_or_create_session(self, base_url: str, skip_redis: bool = False) -> Optional[str]:
+        """Obtém ou cria sessão FlareSolverr. Com Redis configurado, sempre usa TTL (FLARESOLVERR_SESSION_TTL)."""
         global _session_validation_lock
         
         need_to_create = False
-        if self.redis and not skip_redis:
+        if self._redis_sessions_enabled():
             try:
                 session_key = self._get_session_key(base_url)
                 cached = self.redis.get(session_key)
@@ -333,10 +337,10 @@ class FlareSolverrClient:
                 logger.debug(f"FlareSolverr: erro ao obter sessão do Redis: {type(e).__name__}")
                 need_to_create = True
         
-        if not need_to_create and self.redis and not skip_redis:
+        if not need_to_create and self._redis_sessions_enabled():
             return None
         
-        if not self.redis or skip_redis:
+        if not self._redis_sessions_enabled():
             with _shared_sessions_lock:
                 if base_url in _shared_sessions_cache:
                     session_id, expire_at = _shared_sessions_cache[base_url]
@@ -352,7 +356,7 @@ class FlareSolverrClient:
         
         creation_lock = _get_session_creation_lock(base_url)
         with creation_lock:
-            if self.redis and not skip_redis:
+            if self._redis_sessions_enabled():
                 try:
                     session_key = self._get_session_key(base_url)
                     cached = self.redis.get(session_key)
@@ -364,9 +368,9 @@ class FlareSolverrClient:
                 except Exception:
                     pass
         
-        session_id = self._create_session(base_url, skip_redis)
+        session_id = self._create_session(base_url)
         
-        if (not self.redis or skip_redis) and session_id:
+        if not self._redis_sessions_enabled() and session_id:
             with _shared_sessions_lock:
                 expire_at = time.time() + Config.FLARESOLVERR_SESSION_TTL
                 _shared_sessions_cache[base_url] = (session_id, expire_at)
@@ -472,7 +476,7 @@ class FlareSolverrClient:
             return None
     
     def _cache_session_creation_failure(self, base_url: str, skip_redis: bool = False):
-        if self.redis and not skip_redis:
+        if self._redis_sessions_enabled():
             try:
                 failure_key = flaresolverr_session_creation_failure_key(base_url)
                 self.redis.setex(failure_key, 120, "1")
@@ -483,7 +487,7 @@ class FlareSolverrClient:
         global _session_validation_lock
         
         with _session_validation_lock:
-            if self.redis and not skip_redis:
+            if self._redis_sessions_enabled():
                 try:
                     session_key = self._get_session_key(base_url)
                     cached = self.redis.get(session_key)
