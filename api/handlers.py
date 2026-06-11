@@ -39,7 +39,7 @@ def index_handler():
             'query_params': {
                 'q': 'query de busca',
                 'page': 'número da página',
-                'filter_results': 'filtrar resultados com similaridade zero (true/false)',
+                'debug_no_filter': 'desligar filtro de similaridade em buscas (true/false, uso interno)',
                 'use_flaresolverr': 'usar FlareSolverr para resolver Cloudflare (true/false)',
             },
         },
@@ -49,7 +49,7 @@ def index_handler():
             'query_params': {
                 'q': 'query de busca',
                 'page': 'número da página',
-                'filter_results': 'filtrar resultados com similaridade zero (true/false)',
+                'debug_no_filter': 'desligar filtro de similaridade em buscas (true/false, uso interno)',
                 'use_flaresolverr': 'usar FlareSolverr para resolver Cloudflare (true/false)',
             },
         },
@@ -115,7 +115,7 @@ def _run_all_scrapers(
         log_prefix,
         query,
         page,
-        has_query,
+        filter_results,
         use_flaresolverr,
     )
 
@@ -137,7 +137,10 @@ def _run_all_scrapers(
         if not scraper_torrents:
             continue
         if scraper_stats and count_unique_hashes(scraper_torrents) > 0:
-            log_filter_stats(log_prefix, query, scraper_stats, scraper_torrents, scraper_label)
+            log_filter_stats(
+                log_prefix, query, scraper_stats, scraper_torrents, scraper_label,
+                filter_results=filter_results,
+            )
         logger.info('%s [%s] Encontrados: %s resultados', log_prefix, scraper_label, len(scraper_torrents))
 
     sort_torrents_by_date(all_torrents)
@@ -145,7 +148,6 @@ def _run_all_scrapers(
     filter_stats = None
     if all_torrents:
         query_display = query if query else ''
-        filter_status = 'True' if has_query else 'False'
         combined = combine_all_scrapers_stats(all_filter_stats)
         if combined:
             filter_stats = combined
@@ -153,7 +155,7 @@ def _run_all_scrapers(
                 "%s  Query: '%s' | Filter: %s | Total: %s | Rejeitados: %s | Aprovados: %s",
                 log_prefix,
                 query_display,
-                filter_status,
+                filter_results,
                 filter_stats['total'],
                 filter_stats['filtered'],
                 filter_stats['approved'],
@@ -163,7 +165,7 @@ def _run_all_scrapers(
                 "%s  Query: '%s' | Filter: %s | Total: %s | Rejeitados: 0 | Aprovados: %s",
                 log_prefix,
                 query_display,
-                filter_status,
+                filter_results,
                 len(all_torrents),
                 len(all_torrents),
             )
@@ -208,14 +210,17 @@ def indexer_handler(site_name: str = None):
                 log_prefix,
                 query,
                 page,
-                has_query,
+                params['filter_results'],
                 use_flaresolverr,
             )
 
             torrents, filter_stats = _run_single_scraper(normalized_type, params)
 
             if torrents:
-                log_filter_stats(log_prefix, query, filter_stats, torrents)
+                log_filter_stats(
+                    log_prefix, query, filter_stats, torrents,
+                    filter_results=params['filter_results'],
+                )
         else:
             torrents, filter_stats = _run_all_scrapers(available_types, types_info, params)
 

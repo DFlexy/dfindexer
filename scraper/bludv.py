@@ -6,9 +6,10 @@ import logging
 from datetime import datetime
 from utils.parsing.date_extraction import parse_date_from_string
 from typing import List, Dict, Optional, Callable
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
+from utils.text.constants import STOP_WORDS
 from magnet.parser import MagnetParser
 from utils.parsing.magnet_utils import process_trackers
 from utils.text.utils import find_year_from_text, find_sizes_from_text
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class BludvScraper(BaseScraper):
     SCRAPER_TYPE = "bludv"
-    DEFAULT_BASE_URL = "https://bludv1.com/"
+    DEFAULT_BASE_URL = "https://bludv2.xyz/"
     DISPLAY_NAME = "Bludv"
     USE_FLARESOLVERR_DEFAULT = True
     
@@ -28,6 +29,122 @@ class BludvScraper(BaseScraper):
         super().__init__(base_url, use_flaresolverr)
         self.search_url = "?s="
         self.page_pattern = "page/{}/"
+
+    def _collect_post_links(self, doc: BeautifulSoup) -> List[str]:
+        """Extrai links de posts (listagem e busca) — tema WordPress bludv2."""
+        links: List[str] = []
+        seen: set = set()
+        article_selectors = ('article.post', 'article', '.post')
+        link_selectors = (
+            'header.entry-header h1.entry-title a',
+            'h1.entry-title a',
+            'header.entry-header a',
+            'div.title > a',
+            'h2 a',
+        )
+
+        for article_sel in article_selectors:
+            for item in doc.select(article_sel):
+                link_elem = None
+                for link_sel in link_selectors:
+                    link_elem = item.select_one(link_sel)
+                    if link_elem and link_elem.get('href'):
+                        break
+                if not link_elem:
+                    continue
+                href = (link_elem.get('href') or '').strip()
+                if not href or href.startswith('#'):
+                    continue
+                if not href.startswith('http'):
+                    href = urljoin(self.base_url, href)
+                if href not in seen:
+                    seen.add(href)
+                    links.append(href)
+            if links:
+                break
+        return links
+
+    @staticmethod
+    def _query_without_year(query: str) -> str:
+        words = query.split()
+        if (
+            len(words) >= 2
+            and words[-1].isdigit()
+            and len(words[-1]) == 4
+            and words[-1][:2] in ('19', '20')
+        ):
+            return ' '.join(words[:-1])
+        return query
+
+    def _build_search_query_variations(self, query: str) -> List[str]:
+        """Variações de busca; WordPress do Bludv falha com frases longas em inglês."""
+        variations: List[str] = []
+        seen: set = set()
+
+        def add(value: str) -> None:
+            text = (value or '').strip()
+            key = text.lower()
+            if text and key not in seen:
+                seen.add(key)
+                variations.append(text)
+
+        add(query)
+
+        words_no_stop = [w for w in query.split() if w.lower() not in STOP_WORDS]
+        if words_no_stop:
+            add(' '.join(words_no_stop))
+
+        without_year = self._query_without_year(query)
+        if without_year.lower() != query.strip().lower():
+            add(without_year)
+
+        shrink_base = [w for w in without_year.split() if w.lower() not in STOP_WORDS]
+        if not shrink_base:
+            shrink_base = without_year.split()
+
+        while len(shrink_base) >= 2:
+            add(' '.join(shrink_base))
+            shrink_base = shrink_base[:-1]
+
+        query_words = query.split()
+        if len(query_words) > 1 and len(query_words) < 3:
+            first_word = query_words[0].lower()
+            if first_word not in STOP_WORDS:
+                add(query_words[0])
+
+        return variations
+
+    @staticmethod
+    def _is_primary_search_variation(variation: str, query: str) -> bool:
+        """Filtro por título do card só na query principal (frases parciais mantêm todos os links)."""
+        v = variation.strip().lower()
+        q = query.strip().lower()
+        if v == q:
+            return True
+        without_year = BludvScraper._query_without_year(query).strip().lower()
+        return v == without_year
+
+    def _search_variations(self, query: str) -> List[str]:
+        links: List[str] = []
+        seen_urls: set = set()
+
+        for variation in self._build_search_query_variations(query):
+            search_url = f"{self.base_url}{self.search_url}{quote(variation)}"
+            doc = self.get_document(search_url, self.base_url)
+            if not doc:
+                continue
+
+            page_links = self._collect_post_links(doc)
+            if self._is_primary_search_variation(variation, query):
+                page_links = self._filter_links_by_result_titles(doc, page_links, variation)
+
+            for href in page_links:
+                absolute_url = urljoin(self.base_url, href)
+                if absolute_url not in seen_urls:
+                    links.append(absolute_url)
+                    seen_urls.add(absolute_url)
+
+        return links
     
     def search(
         self,
@@ -41,29 +158,13 @@ class BludvScraper(BaseScraper):
         )
     
     def _extract_links_from_page(self, doc: BeautifulSoup) -> List[str]:
-        links = []
-        
-        for item in doc.select('.post'):
-            link_elem = item.select_one('div.title > a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
-        
-        return links
+        return self._collect_post_links(doc)
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
         return self._default_get_page(page, max_items, is_test=is_test)
     
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
-        links = []
-        for item in doc.select('.post'):
-            link_elem = item.select_one('div.title > a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
-        return links
+        return self._collect_post_links(doc)
     
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
         from urllib.parse import urljoin

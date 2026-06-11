@@ -491,6 +491,24 @@
             border: 1px solid rgba(30, 20, 184, 0.2);
         }
 
+        .badge.info.ok {
+            background: rgba(22, 163, 74, 0.1);
+            color: #15803d;
+            border: 1px solid rgba(22, 163, 74, 0.35);
+        }
+
+        .badge.info.empty {
+            background: rgba(220, 38, 38, 0.08);
+            color: #b91c1c;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .result-value.info-badges {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
         .hash-value {
             font-family: 'Courier New', monospace;
             font-size: 0.75em;
@@ -895,6 +913,26 @@
             return (num === null || num === undefined || num === 'N/A') ? 'N/A' : num.toString();
         }
 
+        function hasPositiveCount(value) {
+            if (value === null || value === undefined || value === '' || value === 'N/A') {
+                return false;
+            }
+            const num = Number(value);
+            return !Number.isNaN(num) && num > 0;
+        }
+
+        function hasValidSize(size) {
+            if (!size || size === 'N/A') {
+                return false;
+            }
+            const normalized = String(size).trim().toLowerCase();
+            return normalized !== '0' && normalized !== '0 b' && normalized !== '0b';
+        }
+
+        function infoBadgeClass(hasValue) {
+            return hasValue ? 'badge info ok' : 'badge info empty';
+        }
+
         function formatUrl(url) {
             if (!url || url === '#') return 'N/A';
             try {
@@ -921,9 +959,14 @@
                 const detailsUrl = torrent.details || '#';
                 const magnetLink = torrent.magnet || torrent.magnet_link || '#';
                 const formattedUrl = formatUrl(detailsUrl);
-                const seeds = formatNumber(torrent.tracker_seed !== undefined ? torrent.tracker_seed : (torrent.seed_count !== undefined ? torrent.seed_count : 0));
-                const leech = formatNumber(torrent.tracker_leech !== undefined ? torrent.tracker_leech : (torrent.leech_count !== undefined ? torrent.leech_count : 0));
+                const seedRaw = torrent.tracker_seed !== undefined ? torrent.tracker_seed : torrent.seed_count;
+                const leechRaw = torrent.tracker_leech !== undefined ? torrent.tracker_leech : torrent.leech_count;
+                const seeds = formatNumber(seedRaw !== undefined ? seedRaw : 'N/A');
+                const leech = formatNumber(leechRaw !== undefined ? leechRaw : 'N/A');
                 const size = formatSize(torrent.size);
+                const seedBadgeClass = infoBadgeClass(hasPositiveCount(seedRaw));
+                const leechBadgeClass = infoBadgeClass(hasPositiveCount(leechRaw));
+                const sizeBadgeClass = infoBadgeClass(hasValidSize(torrent.size));
                 const hash = torrent.info_hash || 'N/A';
                 let releaseTitleMagnet = torrent.magnet_original;
                 if (!releaseTitleMagnet && magnetLink && magnetLink !== '#') {
@@ -942,7 +985,7 @@
                     <div class="result-line"><span class="result-label">LINK:</span><span class="result-value">${detailsUrl !== '#' ? `<a href="${detailsUrl}" target="_blank" class="result-link" title="${detailsUrl}">${formattedUrl}</a>` : 'N/A'}</span></div>
                     <div class="result-line"><span class="result-label">ÁUDIO:</span><span class="result-value">${idiomasStr !== 'N/A' ? `<span class="badge audio">${idiomasStr}</span>` : 'N/A'}</span></div>
                     <div class="result-line"><span class="result-label">LEGENDA:</span><span class="result-value">${legendaStr !== 'N/A' ? `<span class="badge audio">${legendaStr}</span>` : 'N/A'}</span></div>
-                    <div class="result-line"><span class="result-label">INFO:</span><span class="result-value"><span class="badge info">S: ${seeds}</span><span class="badge info">L: ${leech}</span><span class="badge info">${size}</span></span></div>
+                    <div class="result-line"><span class="result-label">INFO:</span><span class="result-value info-badges"><span class="${seedBadgeClass}">S: ${seeds}</span><span class="${leechBadgeClass}">L: ${leech}</span><span class="${sizeBadgeClass}">${size}</span></span></div>
                     <div class="result-line"><span class="result-label">HASH:</span><span class="result-value hash-value">${hash}</span></div>
                     <div class="result-line"><span class="result-label">MAGNET:</span><span class="result-value magnet-name">${releaseTitleMagnet}</span></div>
                     <div class="result-line"><span class="result-label">DOWNLOAD:</span><span class="result-value">${magnetLink !== '#' ? `<a href="${magnetLink}" class="magnet-button">Magnet</a>` : 'N/A'}</span></div>
@@ -985,7 +1028,7 @@
                         const checkbox = document.getElementById(`site_${site}`);
                         const useFlareSolverr = checkbox?.dataset.useFlaresolverr === 'true';
                         const flaresolverrParam = useFlareSolverr ? '&use_flaresolverr=true' : '&use_flaresolverr=false';
-                        const url = `/indexers/${site}?q=${encodeURIComponent(query)}&filter_results=true${flaresolverrParam}`;
+                        const url = `/indexers/${site}?q=${encodeURIComponent(query)}${flaresolverrParam}`;
                         const response = await fetch(url);
                         const data = await response.json();
                         return data.results || [];

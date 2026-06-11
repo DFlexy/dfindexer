@@ -219,7 +219,6 @@ def _apply_resolved_base_url(scraper: 'StarckScraper', resolved_url: str) -> Non
     current = _normalize_starck_base_url(scraper.base_url)
     if current and urlparse(new_base).netloc == urlparse(current).netloc:
         return
-    logger.info('[Starck] Atualizando base_url: %s → %s', scraper.base_url, new_base)
     scraper.base_url = new_base
 
 

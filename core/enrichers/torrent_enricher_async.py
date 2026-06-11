@@ -102,8 +102,9 @@ class TorrentEnricherAsync:
         if not torrents:
             return torrents, None
         
+        # Antes do filtro: só Redis/cross_data/cache local (sem HTTP no iTorrents).
         if not skip_metadata:
-            await self._ensure_titles_complete(torrents)
+            await self._ensure_titles_complete(torrents, fetch_remote=False)
         
         total_before_filter = len(torrents)
         if filter_func:
@@ -124,8 +125,15 @@ class TorrentEnricherAsync:
         if not torrents:
             return torrents, filter_stats
         
+        # Depois do filtro: metadata remota só para aprovados (DN incompleto, size, etc.).
         if not skip_metadata:
-            await self._fetch_metadata_batch(torrents)
+            self._current_scraper_name = scraper_name
+            try:
+                await self._ensure_titles_complete(torrents, fetch_remote=True)
+                await self._fetch_metadata_batch(torrents)
+            finally:
+                if hasattr(self, '_current_scraper_name'):
+                    delattr(self, '_current_scraper_name')
         
         self._apply_size_fallback(torrents, skip_metadata=skip_metadata)
         self._apply_date_fallback(torrents, skip_metadata=skip_metadata)
@@ -136,11 +144,14 @@ class TorrentEnricherAsync:
         
         return torrents, filter_stats
     
-    async def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
-        """Garante que títulos estão completos (async)."""
+    async def _ensure_titles_complete(
+        self,
+        torrents: List[Dict],
+        fetch_remote: bool = True,
+    ) -> None:
+        """Hidrata títulos via Redis/cache; opcionalmente busca iTorrents (fetch_remote)."""
         from cache.metadata_cache import MetadataCache
         
-        session = await self._get_session()
         metadata_cache = MetadataCache()
         cross_data_by_hash = self._bulk_get_cross_data(
             [str(t.get('info_hash') or '').lower() for t in torrents]
@@ -175,11 +186,13 @@ class TorrentEnricherAsync:
                 torrent['_metadata_fetched'] = True
                 upgrade_torrent_title_from_metadata(torrent, cached_metadata)
                 continue
-            to_upgrade.append(torrent)
+            if fetch_remote:
+                to_upgrade.append(torrent)
 
-        if not to_upgrade:
+        if not fetch_remote or not to_upgrade:
             return
 
+        session = await self._get_session()
         worker_limit = min(24, max(4, int(getattr(Config, 'METADATA_MAX_CONCURRENT', 32) / 4)))
 
         async def upgrade_one(torrent: Dict) -> None:

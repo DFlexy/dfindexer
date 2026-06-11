@@ -18,13 +18,17 @@ class TorrentEnricher:
             return torrents
         
         if not skip_metadata:
-            self._ensure_titles_complete(torrents)
+            self._ensure_titles_complete(torrents, fetch_remote=False)
         
         if filter_func:
             torrents = [t for t in torrents if filter_func(t)]
         
         if not torrents:
             return torrents
+        
+        if not skip_metadata:
+            self._current_scraper_name = scraper_name
+            self._ensure_titles_complete(torrents, fetch_remote=True)
         
         from concurrent.futures import ThreadPoolExecutor, wait
         
@@ -33,7 +37,6 @@ class TorrentEnricher:
         
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="enrich") as pool:
             if not skip_metadata:
-                self._current_scraper_name = scraper_name
                 metadata_future = pool.submit(self._fetch_metadata_batch, torrents)
             
             if not skip_trackers:
@@ -60,7 +63,7 @@ class TorrentEnricher:
         
         return torrents
     
-    def _ensure_titles_complete(self, torrents: List[Dict]) -> None:
+    def _ensure_titles_complete(self, torrents: List[Dict], fetch_remote: bool = True) -> None:
         from utils.text.cross_data import get_cross_data_from_redis
         
         for torrent in torrents:
@@ -88,7 +91,7 @@ class TorrentEnricher:
                     from cache.metadata_cache import MetadataCache
                     metadata_cache = MetadataCache()
                     metadata = metadata_cache.get(info_hash.lower())
-                    if not metadata or not metadata.get('name'):
+                    if fetch_remote and (not metadata or not metadata.get('name')):
                         scraper_name = getattr(self, '_current_scraper_name', None)
                         title_for_log = (
                             torrent.get('title_processed')

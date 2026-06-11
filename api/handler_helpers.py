@@ -46,7 +46,11 @@ def get_indexed_torrents_count() -> int:
 def parse_request_params(req: Request) -> Dict[str, Any]:
     query = req.args.get('q', '')
     page = req.args.get('page', '1')
-    filter_results = req.args.get('filter_results', 'false').lower() == 'true'
+    has_query = bool(query and query.strip())
+    debug_no_filter = req.args.get('debug_no_filter', 'false').lower() == 'true'
+    # Busca com termo sempre filtra por similaridade (Prowlarr, web, etc.).
+    # Só desliga com debug_no_filter=true (uso interno / script_api_check).
+    filter_results = has_query and not debug_no_filter
     use_flaresolverr = req.args.get('use_flaresolverr', 'false').lower() == 'true'
 
     max_results = None
@@ -66,7 +70,7 @@ def parse_request_params(req: Request) -> Dict[str, Any]:
         'use_flaresolverr': use_flaresolverr,
         'max_results': max_results,
         'is_prowlarr_test': not query,
-        'has_query': bool(query and query.strip()),
+        'has_query': has_query,
     }
 
 def count_unique_hashes(torrents: List[Dict]) -> int:
@@ -83,6 +87,7 @@ def log_filter_stats(
     filter_stats: Optional[Dict],
     torrents: List[Dict],
     scraper_label: Optional[str] = None,
+    filter_results: bool = False,
 ) -> None:
     """Registra estatísticas de filtro no formato padrão do projeto."""
     prefix = log_prefix
@@ -90,7 +95,6 @@ def log_filter_stats(
         prefix = f'{log_prefix} [{scraper_label}]'
 
     query_display = query if query else ''
-    filter_status = 'True' if query and query.strip() else 'False'
 
     if filter_stats:
         total_unique = count_unique_hashes(torrents)
@@ -101,7 +105,7 @@ def log_filter_stats(
             '%s  Query: \'%s\' | Filter: %s | Total: %s | Rejeitados: %s | Aprovados: %s',
             prefix,
             query_display,
-            filter_status,
+            filter_results,
             total_stats,
             filtered_stats,
             approved_stats,
@@ -112,7 +116,7 @@ def log_filter_stats(
             '%s  Query: \'%s\' | Filter: %s | Total: %s | Rejeitados: 0 | Aprovados: %s',
             prefix,
             query_display,
-            filter_status,
+            filter_results,
             total_unique,
             total_unique,
         )
