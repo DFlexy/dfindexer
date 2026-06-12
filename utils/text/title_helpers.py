@@ -115,13 +115,17 @@ def _split_technical_components(text: str) -> str:
     
     result = re.sub(r'(?<!\.)(x264|x265|H\.264|H\.265|AVC|HEVC)(?=-)', r'\1.', result, flags=re.IGNORECASE)
     
+    # Tokens curtos (SD, TC, TS, HD…) só quando delimitados — evita cortar títulos
+    # como "Misdirection" (sd) ou "Dutchman" (tc).
     patterns = [
-        (r'(?<!\.)(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|CAMRip|CAM|TSRip|TS|TC|R5|SCR|DVDScr)(?!\.)', r'.\1.', re.IGNORECASE),
-        (r'(?<!\.)(?<!E)(2160p|1080p|720p|480p|4K|UHD|FHD|FULLHD|HD|SD|HDR)(?!\.)', r'.\1.', re.IGNORECASE),
-        (r'(?<!\.)(x264|x265|H\.264|H\.265|H264|H265|AVC|HEVC)(?!\.)', r'.\1.', re.IGNORECASE),
+        (r'(?<!\.)(WEB-DL|WEBRip|BluRay|DVDRip|HDRip|HDTV|BDRip|BRRip|DVDScr)(?![A-Za-z])', r'.\1.', re.IGNORECASE),
+        (r'(?<![A-Za-z\.])(CAMRip|CAM|TSRip|TS|TC|R5|SCR)(?![A-Za-z])', r'.\1.', re.IGNORECASE),
+        (r'(?<!\.)(?<!E)(2160p|1080p|720p|480p|4K|UHD|FHD|FULLHD)(?![A-Za-z0-9])', r'.\1.', re.IGNORECASE),
+        (r'(?<![A-Za-z])(HD|SD|HDR)(?![A-Za-z])', r'.\1.', re.IGNORECASE),
+        (r'(?<!\.)(x264|x265|H\.264|H\.265|H264|H265|AVC|HEVC)(?![A-Za-z0-9])', r'.\1.', re.IGNORECASE),
 
-        (r'(?<!\.)(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado|DTS-HD|TrueHD)(?!\.)', r'.\1.', re.IGNORECASE),
-        (r'(?<!\.)(MKV|MP4|AVI|MPEG|MOV)(?!\.)', r'.\1.', re.IGNORECASE),
+        (r'(?<!\.)(DUAL|DUBLADO|DDP5\.1|Atmos|AC3|AAC|MP3|FLAC|DTS|NACIONAL|Legendado|DTS-HD|TrueHD)(?![A-Za-z])', r'.\1.', re.IGNORECASE),
+        (r'(?<![A-Za-z])(MKV|MP4|AVI|MPEG|MOV)(?![A-Za-z])', r'.\1.', re.IGNORECASE),
         (r'(?<!\.)(AAC|AC3|DTS|DDP)\d+\.\d+(?!\.)', r'.\1.', re.IGNORECASE),
 
         (r'(?<!\.)(\d+\.\d+)(?!\.)(?!\d)', r'.\1.', re.IGNORECASE),
