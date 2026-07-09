@@ -50,7 +50,11 @@ class BaseScraper(ABC):
     USE_FLARESOLVERR_DEFAULT: bool = False
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
-        resolved_url = (base_url or self.DEFAULT_BASE_URL or '').strip()
+        env_url = ''
+        if self.SCRAPER_TYPE:
+            import os
+            env_url = (os.getenv(f'SCRAPER_URL_{self.SCRAPER_TYPE.upper()}') or '').strip()
+        resolved_url = (base_url or env_url or self.DEFAULT_BASE_URL or '').strip()
         if resolved_url and not resolved_url.endswith('/'):
             resolved_url = f"{resolved_url}/"
         if not resolved_url:
@@ -62,9 +66,9 @@ class BaseScraper(ABC):
         
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=20,
-            max_retries=3,
+            pool_connections=Config.HTTP_POOL_CONNECTIONS,
+            pool_maxsize=Config.HTTP_POOL_MAXSIZE,
+            max_retries=Config.HTTP_RETRY_MAX_ATTEMPTS,
             pool_block=False
         )
         self.session.mount('http://', adapter)
@@ -81,6 +85,7 @@ class BaseScraper(ABC):
         self._is_test = False
         self._closed = False
         self._last_fetched_html: Optional[str] = None
+        self._active_search_query: str = ''
         
         self._cache_stats = {
             'html': {'hits': 0, 'misses': 0},
@@ -133,7 +138,7 @@ class BaseScraper(ABC):
         self.close()
     
     def _soup_from_html(self, html_content) -> Optional[BeautifulSoup]:
-        """Faz parse com lxml e armazena o HTML em texto para consumo por scrapers (ex.: Starck data-u)."""
+        """Faz parse do HTML e armazena o texto para consumo por scrapers (ex.: Starck data-u)."""
         if html_content is None:
             return None
         if isinstance(html_content, bytes):
@@ -142,7 +147,10 @@ class BaseScraper(ABC):
             html_str = str(html_content)
         _thread_fetched_html.html = html_str
         self._last_fetched_html = html_str
-        return BeautifulSoup(html_content, 'lxml')
+        try:
+            return BeautifulSoup(html_content, 'lxml')
+        except Exception:
+            return BeautifulSoup(html_content, 'html.parser')
 
     def _get_fetched_html(self) -> str:
         """HTML da última get_document nesta thread (seguro com process_links_parallel)."""
@@ -713,6 +721,32 @@ class BaseScraper(ABC):
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
         return []
     
+    def _should_skip_page_by_query(
+        self,
+        page_title: str = '',
+        original_title: str = '',
+        title_translated: str = '',
+        link: str = '',
+    ) -> bool:
+        """Ignora a página durante busca quando títulos não batem com a query ativa."""
+        query = self._active_search_query or ''
+        if not query.strip():
+            return False
+
+        from utils.text.query import check_query_match
+
+        if check_query_match(
+            query,
+            page_title or '',
+            original_title or '',
+            title_translated or '',
+        ):
+            return False
+
+        from utils.concurrency.scraper_helpers import mark_page_skipped_by_query
+        mark_page_skipped_by_query()
+        return True
+
     def _filter_search_links_by_query_year(self, query: str, links: List[str]) -> List[str]:
         """Filtro de ano só por link (slug), centralizado para todos os scrapers."""
         from app.config import Config
@@ -743,27 +777,32 @@ class BaseScraper(ABC):
     ) -> List[Dict]:
         from utils.concurrency.scraper_helpers import normalize_query_for_flaresolverr
         query = normalize_query_for_flaresolverr(query, self.use_flaresolverr)
-        links = self._search_variations(query)
-        links = self._filter_search_links_by_query_year(query, links)
+        self._active_search_query = query.strip() if query else ''
+        try:
+            links = self._search_variations(query)
+            links = self._filter_search_links_by_query_year(query, links)
 
-        scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
-        if links:
-            pages_list = '\n'.join([f"  - {link}" for link in links])
-            logger.debug(f"[{scraper_name}] Páginas encontradas ({len(links)}):\n{pages_list}")
-        else:
-            logger.debug(f"[{scraper_name}] Nenhuma página encontrada para a query: '{query}'")
-        
-        all_torrents = []
-        for link in links:
-            torrents = self._get_torrents_from_page(link)
-            all_torrents.extend(torrents)
-        
-        return self.enrich_torrents(
-            all_torrents,
-            filter_func=filter_func,
-            skip_trackers=skip_trackers,
-            skip_metadata=skip_metadata,
-        )
+            scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
+            if not links:
+                logger.debug(f"[{scraper_name}] Nenhuma página encontrada para a query: '{query}'")
+
+            from utils.concurrency.scraper_helpers import process_links_parallel
+            all_torrents = process_links_parallel(
+                links,
+                self._get_torrents_from_page,
+                None,
+                scraper_name=getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', None),
+                use_flaresolverr=self.use_flaresolverr,
+            )
+
+            return self.enrich_torrents(
+                all_torrents,
+                filter_func=filter_func,
+                skip_trackers=skip_trackers,
+                skip_metadata=skip_metadata,
+            )
+        finally:
+            self._active_search_query = ''
     
     @abstractmethod
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
@@ -773,10 +812,28 @@ class BaseScraper(ABC):
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
         pass
 
+    def _log_structure_miss(self, url: str, what: str) -> None:
+        """Loga possível mudança de estrutura do site: página carregou mas um seletor crítico falhou.
+
+        Primeira ocorrência por seletor sai como WARNING (visível em produção);
+        repetições saem como DEBUG para não inundar o log.
+        """
+        scraper_name = self.DISPLAY_NAME or self.SCRAPER_TYPE or self.__class__.__name__
+        if not hasattr(self, '_structure_miss_counts'):
+            self._structure_miss_counts = {}
+        self._structure_miss_counts[what] = self._structure_miss_counts.get(what, 0) + 1
+        log = logger.warning if self._structure_miss_counts[what] == 1 else logger.debug
+        log(
+            f"[{scraper_name}] Estrutura inesperada: '{what}' não encontrado em "
+            f"{url[:80]} (possível mudança no layout do site)"
+        )
+
     def _resolve_link(self, href: str) -> Optional[str]:
         """Resolve automaticamente qualquer link (magnet direto ou protegido)"""
         if not href:
             return None
+
+        href = html.unescape(href.strip())
         
         if href.startswith('magnet:'):
             href = href.replace('&amp;', '&').replace('&#038;', '&')

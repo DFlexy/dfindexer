@@ -115,7 +115,7 @@ async def _record_timeout():
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
-                logger.warning(
+                logger.debug(
                     f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )
@@ -136,7 +136,7 @@ async def _record_503():
                 disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
                 redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
                 redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
-                logger.warning(
+                logger.debug(
                     f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
                     f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
                 )

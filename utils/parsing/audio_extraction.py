@@ -6,6 +6,36 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+def detect_audio_from_idioma_text(idioma_text: str) -> Optional[str]:
+    """Detecta audio_info a partir de um texto de Idioma/Áudio (lógica idiomas_detectados).
+
+    Usado por scrapers que já extraíram o campo Idioma manualmente (bludv, rede).
+    Retorna 'dual', 'português', 'inglês', 'japonês' ou None.
+    """
+    if not idioma_text:
+        return None
+    lower = idioma_text.lower()
+
+    detectados = []
+    if 'português' in lower or 'portugues' in lower or 'pt-br' in lower or 'ptbr' in lower or 'pt br' in lower:
+        detectados.append('português')
+    if 'inglês' in lower or 'ingles' in lower or 'english' in lower:
+        detectados.append('inglês')
+    if 'japonês' in lower or 'japones' in lower or 'japanese' in lower or 'jap' in lower:
+        detectados.append('japonês')
+
+    detectados = detectados[:3]
+    if len(detectados) >= 2:
+        if 'português' in detectados and 'inglês' in detectados:
+            return 'dual'
+        if 'português' in detectados:
+            return 'dual'
+        return detectados[0]
+    if len(detectados) == 1:
+        return detectados[0]
+    return None
+
+
 def detect_audio_from_html(html_content: str) -> Optional[str]:
     """Detecta informações de áudio a partir do conteúdo HTML"""
     if not html_content:

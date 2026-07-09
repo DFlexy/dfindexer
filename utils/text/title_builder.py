@@ -174,13 +174,22 @@ def prepare_release_title(
         else:
             pass
 
-    if final_missing_dn and original_release_title and 'web-dl' not in original_release_title.lower():
-        if '.' in original_release_title:
-            original_release_title = f"{original_release_title}.WEB-DL".strip()
-        else:
-            original_release_title = f"{original_release_title} WEB-DL".strip()
-    else:
-        pass
+    if final_missing_dn and original_release_title:
+        lower_title = original_release_title.lower()
+        already_web_dl = 'web-dl' in lower_title or 'webrip' in lower_title
+        has_other_source = re.search(
+            r'(?:^|[^a-z])(camrip|cam|tsrip|ts|tc|r5|scr|dvdscr|dvdrip|hdrip|bdrip|brrip|bluray|hdtv)(?:[^a-z]|$)',
+            lower_title,
+        ) is not None
+        if not already_web_dl and not has_other_source:
+            if '.' in original_release_title:
+                original_release_title = f"{original_release_title}.WEB-DL".strip()
+            else:
+                original_release_title = f"{original_release_title} WEB-DL".strip()
+        elif already_web_dl and has_other_source:
+            original_release_title = re.sub(r'(?i)\.?WEB-?DL\.?', '.', original_release_title)
+            original_release_title = re.sub(r'(?i)\.?WEBRip\.?', '.', original_release_title)
+            original_release_title = re.sub(r'\.{2,}', '.', original_release_title).strip(' .')
 
     result = original_release_title.strip()
     return result
@@ -208,10 +217,6 @@ def create_standardized_title(title_original_html: str, year: str, magnet_proces
             base_title = '.'.join(word.capitalize() if word else '' for word in base_title.split('.'))
             
         else:
-            raw_to_check = magnet_original if magnet_original else magnet_processed
-            release_has_non_latin = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f\u0900-\u09ff\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0c00-\u0c7f\u0b80-\u0bff\u0c80-\u0cff\u0d00-\u0d7f\u0a80-\u0aff\u0b00-\u0b7f]', raw_to_check or ''))
-            
-
             if title_translated_html and title_translated_html.strip():
                 base_title = clean_title(title_translated_html)
                 base_title = remove_accents(base_title)

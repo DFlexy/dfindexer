@@ -3,6 +3,7 @@
 import html
 import json
 import re
+import time
 import logging
 from datetime import datetime
 from utils.parsing.date_extraction import parse_date_from_string
@@ -14,15 +15,14 @@ from app.config import Config
 from scraper.base import BaseScraper
 from utils.http.proxy import get_proxy_dict, get_proxy_url, is_proxy_local
 from magnet.parser import MagnetParser
-from utils.parsing.magnet_utils import process_trackers
-from utils.text.cleaning import clean_title, remove_accents
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.text.title_builder import create_standardized_title, prepare_release_title
-from utils.parsing.audio_extraction import add_audio_tag_if_needed, detect_audio_from_html
-from utils.logging import format_error, format_link_preview
+from utils.parsing.audio_extraction import detect_audio_from_html
+from utils.logging import format_error, format_link_preview, ScraperLogContext
 from utils.parsing.link_resolver import decode_data_u
 
 logger = logging.getLogger(__name__)
+
+_log_ctx = ScraperLogContext("Starck", logger)
 
 _RE_STARCK_DATA_U_DQ = re.compile(r'data-u\s*=\s*"([^"]*)"', re.I)
 _RE_STARCK_DATA_U_SQ = re.compile(r"data-u\s*=\s*'([^']*)'", re.I)
@@ -101,20 +101,51 @@ def _post_starck_verification_requests(
     referer: str,
     time_monit: str,
 ) -> Optional[str]:
-    response = session.post(
-        verify_url,
-        data=json.dumps({'timeMonit': time_monit}),
-        headers={
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Accept': '*/*',
-            'Origin': origin,
-            'Referer': referer,
-        },
-        timeout=Config.HTTP_REQUEST_TIMEOUT,
-    )
+    headers = {
+        'Content-Type': 'application/json; charset=UTF-8',
+        'Accept': '*/*',
+        'Origin': origin,
+        'Referer': referer,
+    }
+    payload = json.dumps({'timeMonit': time_monit})
+    # Endpoint protegido costuma ser lento sob SOCKS; tolerance maior + retry.
+    base_timeout = max(Config.HTTP_REQUEST_TIMEOUT, 30)
+    max_attempts = 3
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = session.post(
+                verify_url,
+                data=payload,
+                headers=headers,
+                timeout=base_timeout,
+            )
+            break
+        except requests.exceptions.ReadTimeout as e:
+            if attempt < max_attempts:
+                _log_ctx.warning(
+                    'Timeout na verificação de acesso (tentativa {}/{}), retentando: {}',
+                    attempt, max_attempts, type(e).__name__,
+                )
+                time.sleep(1.0 * attempt)
+                continue
+            _log_ctx.warning(
+                'Timeout na verificação de acesso após {} tentativas para {}',
+                max_attempts, verify_url,
+            )
+            return None
+        except requests.exceptions.RequestException as e:
+            _log_ctx.warning(
+                'Erro de rede na verificação de acesso: {} para {}',
+                type(e).__name__, verify_url,
+            )
+            return None
+    else:
+        return None
+
     if not response.ok:
-        logger.warning(
-            '[Starck] Verificação de acesso retornou HTTP %s para %s',
+        _log_ctx.warning(
+            'Verificação de acesso retornou HTTP {} para {}',
             response.status_code,
             verify_url,
         )
@@ -155,15 +186,15 @@ def _post_starck_verification_flaresolverr(
         response.raise_for_status()
         result = response.json()
         if result.get('status') != 'ok':
-            logger.warning(
-                '[Starck] FlareSolverr falhou na verificação: %s',
+            _log_ctx.warning(
+                'FlareSolverr falhou na verificação: {}',
                 result.get('message', 'erro desconhecido'),
             )
             return None
         body = result.get('solution', {}).get('response', '')
         return _unshuffle_string(body) if body else None
     except Exception as e:
-        logger.warning('[Starck] Erro na verificação via FlareSolverr: %s', type(e).__name__)
+        _log_ctx.warning('Erro na verificação via FlareSolverr: {}', type(e).__name__)
         return None
 
 
@@ -244,7 +275,7 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
 
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://starckfilmes-v20.com/"
+    DEFAULT_BASE_URL = "https://www.starckfilmes-v21.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -262,7 +293,7 @@ class StarckScraper(BaseScraper):
 
         gate_key = url.rstrip('/').lower()
         if gate_key in self._gate_bypass_attempted:
-            logger.warning('[Starck] Página de verificação persistente após bypass: %s', url[:80])
+            _log_ctx.warning('Página de verificação persistente após bypass: {}', url[:80])
             return None
         self._gate_bypass_attempted.add(gate_key)
 
@@ -278,7 +309,7 @@ class StarckScraper(BaseScraper):
             is_test=self._is_test,
         )
         if resolved is None:
-            logger.warning('[Starck] Falha ao passar pela verificação de acesso')
+            _log_ctx.warning('Falha ao passar pela verificação de acesso')
             return None
 
         if resolved:
@@ -336,7 +367,7 @@ class StarckScraper(BaseScraper):
                         links.append(href)
                         seen_hrefs.add(href)
         
-        logger.debug(f"[Starck] Encontrados {len(items)} itens na página e extraídos {len(links)} links únicos")
+        _log_ctx.debug(f"Encontrados {len(items)} itens na página e extraídos {len(links)} links únicos")
         return links
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
@@ -403,7 +434,7 @@ class StarckScraper(BaseScraper):
                 continue
             
             page_links = self._extract_search_results(doc)
-            
+
             for href in page_links:
                 absolute_url = urljoin(self.base_url, href)
                 
@@ -425,10 +456,12 @@ class StarckScraper(BaseScraper):
         torrents = []
         post = doc.find('div', class_='post')
         if not post:
+            self._log_structure_miss(absolute_link, 'div.post')
             return []
         
         capa = post.find('div', class_='capa')
         if not capa:
+            self._log_structure_miss(absolute_link, 'div.capa')
             return []
         
         page_title = ''
@@ -473,6 +506,11 @@ class StarckScraper(BaseScraper):
             from utils.text.cleaning import clean_title_translated_processed
             title_translated_processed = clean_title_translated_processed(title_translated_processed)
         
+        if self._should_skip_page_by_query(
+            page_title, original_title, title_translated_processed, absolute_link,
+        ):
+            return []
+
         year = ''
         sizes = []
         imdb = ''
@@ -495,7 +533,7 @@ class StarckScraper(BaseScraper):
             audio_html_content = ' '.join(all_paragraphs_html)
         
         all_links = post.select('a[href]')
-        
+
         magnet_links: List[str] = []
         seen_hashes: set = set()
         seen_data_u: set = set()
@@ -512,23 +550,6 @@ class StarckScraper(BaseScraper):
             seen_hashes.add(key)
             magnet_links.append(magnet)
 
-        for link in all_links:
-            href = link.get('href', '')
-            if not href:
-                continue
-            resolved_magnet = self._resolve_link(href)
-            if resolved_magnet:
-                _add_magnet(resolved_magnet)
-
-        if not magnet_links:
-            for link in post.select('a[href]'):
-                href = link.get('href', '')
-                if not href:
-                    continue
-                resolved_magnet = self._resolve_link(href)
-                if resolved_magnet:
-                    _add_magnet(resolved_magnet)
-
         def _append_decoded_magnets_from_data_u_values(values: List[str]) -> None:
             for data_u_value in values:
                 v = html.unescape(data_u_value.strip())
@@ -539,6 +560,11 @@ class StarckScraper(BaseScraper):
                 if decoded_magnet:
                     _add_magnet(decoded_magnet)
 
+        # Starck expõe o magnet ofuscado no atributo data-u (decodificação local,
+        # estável). O href é um get.php protegido server-side que hoje não
+        # decodifica offline (AES com rastrear=Stark) nem via HTTP — gerava os
+        # logs "Falha ao decodificar get.php". Priorizamos o data-u e só
+        # tentamos o href quando a âncora não tem data-u.
         page_html = self._get_fetched_html()
         _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(page_html))
 
@@ -552,127 +578,43 @@ class StarckScraper(BaseScraper):
             if decoded_magnet:
                 _add_magnet(decoded_magnet)
 
+        # Fallback: âncoras sem data-u (magnets diretos ou links protegidos
+        # resolvíveis via href). Pula get.php do Starck, que nunca resolve.
+        for link in all_links:
+            if link.get('data-u'):
+                continue
+            href = link.get('href', '')
+            if not href or 'get.php' in href.lower():
+                continue
+            resolved_magnet = self._resolve_link(href)
+            if resolved_magnet:
+                _add_magnet(resolved_magnet)
+
         if not magnet_links:
 
             return []
         
-        for idx, magnet_link in enumerate(magnet_links):
-            try:
-                magnet_data = MagnetParser.parse(magnet_link)
-                info_hash = magnet_data['info_hash']
-                
-                cross_data = None
-                try:
-                    from utils.text.cross_data import get_cross_data_from_redis
-                    cross_data = get_cross_data_from_redis(info_hash)
-                except Exception:
-                    pass
-                
-                if cross_data:
-                    if not original_title and cross_data.get('title_original_html'):
-                        original_title = cross_data['title_original_html']
-                    
-                    if not title_translated_processed and cross_data.get('title_translated_html'):
-                        title_translated_processed = cross_data['title_translated_html']
-                    
-                    if not imdb and cross_data.get('imdb'):
-                        imdb = cross_data['imdb']
-                
-                magnet_original = magnet_data.get('display_name', '')
-                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
-                
-                if not missing_dn and magnet_original:
-                    try:
-                        from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, magnet_original)
-                    except Exception:
-                        pass
-                
-                fallback_title = page_title or original_title or ''
-                original_release_title = prepare_release_title(
-                    magnet_original,
-                    fallback_title,
-                    year,
-                    missing_dn=missing_dn,
-                    info_hash=info_hash if missing_dn else None,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original=magnet_original
-                )
-                
-                final_title = add_audio_tag_if_needed(standardized_title, original_release_title, info_hash=info_hash, skip_metadata=self._skip_metadata, audio_info_from_html=audio_info, audio_html_content=audio_html_content if audio_html_content else None)
-                
-                origem_audio_tag = 'N/A'
-                if audio_info:
-                    origem_audio_tag = f'HTML da página (detect_audio_from_html)'
-                elif magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
-                    origem_audio_tag = 'magnet_processed'
-                elif missing_dn and info_hash:
-                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
-                
-                from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
-                legenda = extract_legenda_from_page(doc, scraper_type='starck')
-                
-                legend_info = determine_legend_info(legenda) if legenda else None
-                
-                from utils.parsing.legend_extraction import determine_legend_presence
-                has_legenda = determine_legend_presence(
-                    legend_info_from_html=legend_info,
-                    audio_html_content=audio_html_content,
-                    magnet_processed=original_release_title,
-                    info_hash=info_hash,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                size = ''
-                if sizes and idx < len(sizes):
-                    size = sizes[idx]
-                
-                try:
-                    from utils.text.cross_data import save_cross_data_to_redis
-                    cross_data_to_save = {
-                        'title_original_html': original_title if original_title else None,
-                        'magnet_processed': original_release_title if original_release_title else None,
-                        'magnet_original': magnet_original if magnet_original else None,
-                        'title_translated_html': title_translated_processed if title_translated_processed else None,
-                        'imdb': imdb if imdb else None,
-                        'missing_dn': missing_dn,
-                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
-                        'size': size if size and size.strip() else None,
-                        'has_legenda': has_legenda,
-                        'legend': legend_info if legend_info else None
-                    }
-                    save_cross_data_to_redis(info_hash, cross_data_to_save)
-                except Exception:
-                    pass
-                
-                torrent = {
-                    'title_processed': final_title,
-                    'original_title': original_title if original_title else page_title,
-                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
-                    'details': absolute_link,
-                    'year': year,
-                    'imdb': imdb,
-                    'audio': [],
-                    'magnet_link': magnet_link,
-                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
-                    'info_hash': info_hash,
-                    'trackers': process_trackers(magnet_data),
-                    'size': size,
-                    'leech_count': 0,
-                    'seed_count': 0,
-                    'similarity': 1.0,
-                    'magnet_original': magnet_original if magnet_original else None,
-                    'legend': legend_info if legend_info else None,
-                    'has_legenda': has_legenda
-                }
-                torrents.append(torrent)
-            
-            except Exception as e:
-                logger.error(f"Magnet error: {format_error(e)} (link: {format_link_preview(magnet_link)})")
-                continue
-        
-        return torrents
+        from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
+        legenda = extract_legenda_from_page(doc, scraper_type='starck')
+        legend_info = determine_legend_info(legenda) if legenda else None
+
+        from core.builders import build_torrents_from_magnets
+        return build_torrents_from_magnets(
+            magnet_links=magnet_links,
+            sizes=sizes,
+            page_title=page_title,
+            original_title=original_title,
+            title_translated_processed=title_translated_processed,
+            year=year,
+            imdb=imdb,
+            audio_info=audio_info,
+            audio_html_content=audio_html_content if audio_html_content else None,
+            absolute_link=absolute_link,
+            date=date,
+            legend_info=legend_info,
+            skip_metadata=self._skip_metadata,
+            doc=doc,
+            scraper_type=self.SCRAPER_TYPE,
+            log_ctx=_log_ctx,
+        )
 

@@ -10,14 +10,12 @@ from urllib.parse import quote, urljoin
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from utils.text.constants import STOP_WORDS
-from magnet.parser import MagnetParser
-from utils.parsing.magnet_utils import process_trackers
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.parsing.audio_extraction import add_audio_tag_if_needed
-from utils.text.title_builder import create_standardized_title, prepare_release_title
-from utils.logging import format_error, format_link_preview
+from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
+
+_log_ctx = ScraperLogContext("Bludv", logger)
 
 class BludvScraper(BaseScraper):
     SCRAPER_TYPE = "bludv"
@@ -191,6 +189,8 @@ class BludvScraper(BaseScraper):
             content_div = doc.find('div', class_='entry-content')
         if not content_div:
             content_div = doc.find('article')
+        if not content_div:
+            self._log_structure_miss(absolute_link, 'div.content / div.entry-content / article')
         
         if content_div:
             
@@ -251,6 +251,11 @@ class BludvScraper(BaseScraper):
         if not original_title:
             original_title = page_title
         
+        if self._should_skip_page_by_query(
+            page_title, original_title, title_translated_processed, absolute_link,
+        ):
+            return []
+
         audio_info = None
         audio_html_content = ''
         all_paragraphs_html = []
@@ -323,30 +328,8 @@ class BludvScraper(BaseScraper):
                     audio_html_content += f' Legenda: {legenda}'
             
             if audio_text:
-                audio_lower = audio_text.lower()
-                
-                idiomas_detectados = []
-                
-                if ('português' in audio_lower or 'portugues' in audio_lower or 
-                    'pt-br' in audio_lower or 'ptbr' in audio_lower or 
-                    'pt br' in audio_lower):
-                    idiomas_detectados.append('português')
-                if 'inglês' in audio_lower or 'ingles' in audio_lower or 'english' in audio_lower or 'en' in audio_lower:
-                    idiomas_detectados.append('inglês')
-                if 'japonês' in audio_lower or 'japones' in audio_lower or 'japanese' in audio_lower or 'jap' in audio_lower:
-                    idiomas_detectados.append('japonês')
-                
-                idiomas_detectados = idiomas_detectados[:3]
-                
-                if len(idiomas_detectados) >= 2:
-                    if 'português' in idiomas_detectados and 'inglês' in idiomas_detectados:
-                        audio_info = 'dual'
-                    elif 'português' in idiomas_detectados:
-                        audio_info = 'dual'
-                    else:
-                        audio_info = idiomas_detectados[0]
-                elif len(idiomas_detectados) == 1:
-                    audio_info = idiomas_detectados[0]
+                from utils.parsing.audio_extraction import detect_audio_from_idioma_text
+                audio_info = detect_audio_from_idioma_text(audio_text) or audio_info
         
         if content_div:
             for p in content_div.select('p, span, div'):
@@ -358,41 +341,14 @@ class BludvScraper(BaseScraper):
                     year = y
                 
                 sizes.extend(find_sizes_from_text(html_content))
-                
 
-                if not imdb:
-                    imdb_em = p.find('em', string=re.compile(r'IMDb:', re.I))
-                    if imdb_em:
-                        parent = imdb_em.parent
-                        if parent:
-                            for a in parent.select('a[href*="imdb.com"]'):
-                                href = a.get('href', '')
-                                imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                                if imdb_match:
-                                    imdb = imdb_match.group(1)
-                                    break
-                                imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                                if imdb_match:
-                                    imdb = imdb_match.group(1)
-                                    break
-                    
-                    if not imdb:
-                        text_lower = text.lower()
-                        has_imdb_label = 'imdb' in text_lower or 'imdb:' in text_lower
-                        for a in p.select('a[href*="imdb.com"]'):
-                            href = a.get('href', '')
-                            imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                            if imdb_match:
-                                imdb = imdb_match.group(1)
-                                if has_imdb_label:
-                                    break
-                                continue
-                            imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                            if imdb_match:
-                                imdb = imdb_match.group(1)
-                                if has_imdb_label:
-                                    break
-                                continue
+        from utils.parsing.imdb_extraction import extract_imdb_from_soup
+        imdb = extract_imdb_from_soup(
+            content_div or article,
+            content_div=content_div,
+            label_tag='em',
+            label_regex=r'IMDb:',
+        ) if content_div else extract_imdb_from_soup(article)
         
         all_links = doc.select('a[href]')
         
@@ -412,127 +368,26 @@ class BludvScraper(BaseScraper):
         
         sizes = list(dict.fromkeys(sizes))
         
-        for idx, magnet_link in enumerate(magnet_links):
-            try:
-                magnet_data = MagnetParser.parse(magnet_link)
-                info_hash = magnet_data['info_hash']
-                
-                cross_data = None
-                try:
-                    from utils.text.cross_data import get_cross_data_from_redis
-                    cross_data = get_cross_data_from_redis(info_hash)
-                except Exception:
-                    pass
-                
-                if cross_data:
-                    if not original_title and cross_data.get('title_original_html'):
-                        original_title = cross_data['title_original_html']
-                    
-                    if not title_translated_processed and cross_data.get('title_translated_html'):
-                        title_translated_processed = cross_data['title_translated_html']
-                    
-                    if not imdb and cross_data.get('imdb'):
-                        imdb = cross_data['imdb']
-                
-                magnet_original = magnet_data.get('display_name', '')
-                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
-                
-                if not missing_dn and magnet_original:
-                    try:
-                        from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, magnet_original)
-                    except Exception:
-                        pass
-                
-                fallback_title = original_title or title_translated_processed or page_title or ''
-                original_release_title = prepare_release_title(
-                    magnet_original,
-                    fallback_title,
-                    year,
-                    missing_dn=missing_dn,
-                    info_hash=info_hash if missing_dn else None,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                title_translated_processed_str = str(title_translated_processed) if title_translated_processed else None
-                if title_translated_processed_str and not isinstance(title_translated_processed_str, str):
-                    title_translated_processed_str = None
-                
-                standardized_title = create_standardized_title(
-                    str(original_title) if original_title else '', year, original_release_title, title_translated_html=title_translated_processed_str, magnet_original=magnet_original
-                )
-                
-                final_title = add_audio_tag_if_needed(
-                    standardized_title, 
-                    original_release_title, 
-                    info_hash=info_hash, 
-                    skip_metadata=self._skip_metadata,
-                    audio_info_from_html=audio_info,
-                    audio_html_content=audio_html_content
-                )
-                
-                origem_audio_tag = 'N/A'
-                if magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
-                    origem_audio_tag = 'magnet_processed'
-                elif missing_dn and info_hash:
-                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
-                
-                size = ''
-                if sizes and idx < len(sizes):
-                    size = sizes[idx]
-                
-                from utils.parsing.legend_extraction import determine_legend_presence
-                has_legenda = determine_legend_presence(
-                    legend_info_from_html=legend_info,
-                    audio_html_content=audio_html_content,
-                    magnet_processed=original_release_title,
-                    info_hash=info_hash,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                try:
-                    from utils.text.cross_data import save_cross_data_to_redis
-                    cross_data_to_save = {
-                        'title_original_html': str(original_title) if original_title else None,
-                        'magnet_processed': original_release_title if original_release_title else None,
-                        'magnet_original': magnet_original if magnet_original else None,
-                        'title_translated_html': str(title_translated_processed) if title_translated_processed else None,
-                        'imdb': imdb if imdb else None,
-                        'missing_dn': missing_dn,
-                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
-                        'size': size if size and size.strip() else None,
-                        'has_legenda': has_legenda,
-                        'legend': legend_info if legend_info else None
-                    }
-                    save_cross_data_to_redis(info_hash, cross_data_to_save)
-                except Exception:
-                    pass
-                
-                torrent = {
-                    'title_processed': final_title,
-                    'original_title': original_title if original_title else (title_translated_processed if title_translated_processed else page_title),
-                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
-                    'details': absolute_link,
-                    'year': year,
-                    'imdb': imdb if imdb else '',
-                    'audio': [],
-                    'magnet_link': magnet_link,
-                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
-                    'info_hash': info_hash,
-                    'trackers': process_trackers(magnet_data),
-                    'size': size,
-                    'leech_count': 0,
-                    'seed_count': 0,
-                    'similarity': 1.0,
-                    'magnet_original': magnet_original if magnet_original else None,
-                    'legend': legend_info if legend_info else None,
-                    'has_legenda': has_legenda
-                }
-                torrents.append(torrent)
-            
-            except Exception as e:
-                logger.error(f"Magnet error: {format_error(e)} (link: {format_link_preview(magnet_link)})")
-                continue
-        
-        return torrents
+        from core.builders import build_torrents_from_magnets
+        return build_torrents_from_magnets(
+            magnet_links=magnet_links,
+            sizes=sizes,
+            page_title=page_title,
+            original_title=original_title,
+            title_translated_processed=title_translated_processed,
+            year=year,
+            imdb=imdb,
+            audio_info=audio_info,
+            audio_html_content=audio_html_content,
+            absolute_link=absolute_link,
+            date=date,
+            legend_info=legend_info,
+            skip_metadata=self._skip_metadata,
+            doc=doc,
+            scraper_type=self.SCRAPER_TYPE,
+            log_ctx=_log_ctx,
+            fallback_title_priority='original_first',
+            original_title_fallbacks=[title_translated_processed],
+            imdb_default='',
+        )
 

@@ -7,6 +7,7 @@ import threading
 from typing import Optional, Dict, Any
 from cache.redis_client import get_redis_client
 from cache.redis_keys import metadata_key, metadata_failure_key, metadata_failure503_key
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class MetadataCache:
                 key = metadata_key(info_hash_lower)
                 exists = self.redis.exists(key)
                 metadata_json = json.dumps(metadata, separators=(',', ':'))
-                self.redis.setex(key, 7 * 24 * 3600, metadata_json)
+                self.redis.setex(key, Config.METADATA_CACHE_TTL, metadata_json)
                 return
             except Exception as e:
                 logger.debug(f"[MetadataCache] Erro ao salvar Redis: {type(e).__name__} - {info_hash_lower[:16]}...")

@@ -92,18 +92,17 @@ def save_cross_data_to_redis(info_hash: str, data: Dict[str, Any]) -> None:
         
         redis.hset(key, mapping=to_save)
         
+        from app.config import Config
         has_tracker_data = 'tracker_seed' in to_save or 'tracker_leech' in to_save
         
         current_ttl = redis.ttl(key)
         
         if has_tracker_data:
-
-            if current_ttl == -1 or current_ttl > 24 * 3600:
-                redis.expire(key, 24 * 3600)
+            if current_ttl == -1 or current_ttl > Config.CROSS_DATA_TTL_WITH_TRACKER:
+                redis.expire(key, Config.CROSS_DATA_TTL_WITH_TRACKER)
         else:
-
-            if current_ttl == -1 or current_ttl < 30 * 24 * 3600:
-                redis.expire(key, 30 * 24 * 3600)
+            if current_ttl == -1 or current_ttl < Config.CROSS_DATA_TTL_DEFAULT:
+                redis.expire(key, Config.CROSS_DATA_TTL_DEFAULT)
     except Exception:
         pass
 

@@ -9,17 +9,16 @@ from urllib.parse import unquote, urljoin
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from magnet.parser import MagnetParser
-from utils.parsing.magnet_utils import process_trackers
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.parsing.audio_extraction import add_audio_tag_if_needed
-from utils.text.title_builder import create_standardized_title, prepare_release_title
-from utils.logging import format_error, format_link_preview
+from utils.logging import format_error, format_link_preview, ScraperLogContext
 
 logger = logging.getLogger(__name__)
 
+_log_ctx = ScraperLogContext("Comand", logger)
+
 class ComandScraper(BaseScraper):
     SCRAPER_TYPE = "comand"
-    DEFAULT_BASE_URL = "https://comando.la/"
+    DEFAULT_BASE_URL = "https://comando1.com/"
     DISPLAY_NAME = "Comando"
     USE_FLARESOLVERR_DEFAULT = True
     
@@ -128,6 +127,7 @@ class ComandScraper(BaseScraper):
         torrents = []
         article = doc.find('article')
         if not article:
+            self._log_structure_miss(absolute_link, 'article')
             return []
         
         page_title = ''
@@ -167,7 +167,7 @@ class ComandScraper(BaseScraper):
                         original_title = original_title[:idx].strip()
                         break
                 if 'sinopse' in original_title.lower():
-                    logger.warning(f"[Comand] Título descartado por conter 'Sinopse' após processamento: {original_title[:100]}...")
+                    _log_ctx.warning(f"Título descartado por conter 'Sinopse' após processamento: {original_title[:100]}...")
                     original_title = ''
                 elif len(original_title) > 200:
                     original_title = original_title[:200].strip()
@@ -194,7 +194,7 @@ class ComandScraper(BaseScraper):
                             original_title = original_title[:idx].strip()
                             break
                     if 'sinopse' in original_title.lower():
-                        logger.warning(f"[Comand] Título descartado (Padrão 2) por conter 'Sinopse': {original_title[:100]}...")
+                        _log_ctx.warning(f"Título descartado (Padrão 2) por conter 'Sinopse': {original_title[:100]}...")
                         original_title = ''
                     elif len(original_title) > 200:
                         original_title = original_title[:200].strip()
@@ -221,7 +221,7 @@ class ComandScraper(BaseScraper):
                             original_title = original_title[:idx].strip()
                             break
                     if 'sinopse' in original_title.lower():
-                        logger.warning(f"[Comand] Título descartado (Padrão 3) por conter 'Sinopse': {original_title[:100]}...")
+                        _log_ctx.warning(f"Título descartado (Padrão 3) por conter 'Sinopse': {original_title[:100]}...")
                         original_title = ''
                     if original_title:
                         original_title = original_title.rstrip(' .,:;-')
@@ -253,7 +253,7 @@ class ComandScraper(BaseScraper):
                                     original_title = original_title[:idx].strip()
                                     break
                             if 'sinopse' in original_title.lower():
-                                logger.warning(f"[Comand] Título descartado (Padrão 4) por conter 'Sinopse': {original_title[:100]}...")
+                                _log_ctx.warning(f"Título descartado (Padrão 4) por conter 'Sinopse': {original_title[:100]}...")
                                 original_title = ''
                             elif len(original_title) > 200:
                                 original_title = original_title[:200].strip()
@@ -280,7 +280,7 @@ class ComandScraper(BaseScraper):
                             original_title = original_title[:idx].strip()
                             break
                     if 'sinopse' in original_title.lower():
-                        logger.warning(f"[Comand] Título descartado (Padrão 5) por conter 'Sinopse': {original_title[:100]}...")
+                        _log_ctx.warning(f"Título descartado (Padrão 5) por conter 'Sinopse': {original_title[:100]}...")
                         original_title = ''
                     elif len(original_title) > 200:
                         original_title = original_title[:200].strip()
@@ -326,33 +326,8 @@ class ComandScraper(BaseScraper):
             
             sizes = list(dict.fromkeys(sizes))
             
-            imdb_strong = entry_content.find('strong', string=re.compile(r'IMDb', re.I))
-            if imdb_strong:
-                parent = imdb_strong.parent
-                if parent:
-                    for a in parent.select('a[href*="imdb.com"]'):
-                        href = a.get('href', '')
-                        imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                        if imdb_match:
-                            imdb = imdb_match.group(1)
-                            break
-                        imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                        if imdb_match:
-                            imdb = imdb_match.group(1)
-                            break
-            
-            if not imdb:
-                imdb_links = entry_content.select('a[href*="imdb.com"]')
-                for imdb_link in imdb_links:
-                    href = imdb_link.get('href', '')
-                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
-                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
+            from utils.parsing.imdb_extraction import extract_imdb_from_soup
+            imdb = extract_imdb_from_soup(entry_content, content_div=entry_content) if entry_content else ''
         
         title_translated_processed = ''
         if entry_content:
@@ -407,19 +382,24 @@ class ComandScraper(BaseScraper):
         if original_title:
             original_title_lower = original_title.lower().strip()
             if original_title_lower.startswith('sinopse'):
-                logger.warning(f"[Comand] Título descartado por começar com 'Sinopse': {original_title[:100]}...")
+                _log_ctx.warning(f"Título descartado por começar com 'Sinopse': {original_title[:100]}...")
                 original_title = ''
             elif len(original_title) > 100:
                 sinopse_indicators = ['mauro', 'michel', 'joelsas', 'garoto', 'mineiro', 'adora', 'futebol', 'jogo', 'botao', 'vida', 'muda', 'completamente', 'pais', 'saem', 'ferias', 'inesperada', 'um dia', 'sua vida', 'que adora', 'anos que']
                 title_lower = original_title_lower
                 indicator_count = sum(1 for indicator in sinopse_indicators if indicator in title_lower)
                 if indicator_count >= 3:
-                    logger.warning(f"[Comand] Título descartado por conter {indicator_count} indicadores de sinopse: {original_title[:100]}...")
+                    _log_ctx.warning(f"Título descartado por conter {indicator_count} indicadores de sinopse: {original_title[:100]}...")
                     original_title = ''
         
         if not original_title:
             original_title = page_title
         
+        if self._should_skip_page_by_query(
+            page_title, original_title, title_translated_processed, absolute_link,
+        ):
+            return []
+
         audio_info = ''
         audio_html_content = ''
         all_paragraphs_html = []
@@ -474,127 +454,24 @@ class ComandScraper(BaseScraper):
         if not magnet_links:
             return []
         
-        for idx, magnet_link in enumerate(magnet_links):
-            try:
-                magnet_data = MagnetParser.parse(magnet_link)
-                info_hash = magnet_data['info_hash']
-                
-                cross_data = None
-                try:
-                    from utils.text.cross_data import get_cross_data_from_redis
-                    cross_data = get_cross_data_from_redis(info_hash)
-                except Exception:
-                    pass
-                
-                if cross_data:
-                    if not original_title and cross_data.get('title_original_html'):
-                        original_title = cross_data['title_original_html']
-                    
-                    if not title_translated_processed and cross_data.get('title_translated_html'):
-                        title_translated_processed = cross_data['title_translated_html']
-                    
-                    if not imdb and cross_data.get('imdb'):
-                        imdb = cross_data['imdb']
-                
-                magnet_original = magnet_data.get('display_name', '')
-                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
-                
-                if not missing_dn and magnet_original:
-                    try:
-                        from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, magnet_original)
-                    except Exception:
-                        pass
-                
-                fallback_title = original_title if original_title else page_title
-                original_release_title = prepare_release_title(
-                    magnet_original,
-                    fallback_title,
-                    year,
-                    missing_dn=missing_dn,
-                    info_hash=info_hash if missing_dn else None,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original=magnet_original
-                )
-                
-                final_title = add_audio_tag_if_needed(
-                    standardized_title, 
-                    original_release_title, 
-                    info_hash=info_hash, 
-                    skip_metadata=self._skip_metadata,
-                    audio_info_from_html=audio_info,
-                    audio_html_content=audio_html_content
-                )
-                
-                origem_audio_tag = 'N/A'
-                if audio_info:
-                    origem_audio_tag = f'HTML da página (detect_audio_from_html)'
-                elif magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
-                    origem_audio_tag = 'magnet_processed'
-                elif missing_dn and info_hash:
-                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
-                
-                size = ''
-                if sizes and idx < len(sizes):
-                    size = sizes[idx]
-                
-                trackers = process_trackers(magnet_data)
-                
-                try:
-                    from utils.text.cross_data import save_cross_data_to_redis
-                    from utils.parsing.legend_extraction import determine_legend_presence
-                    has_legenda = determine_legend_presence(
-                        legend_info_from_html=legend_info,
-                        audio_html_content=audio_html_content,
-                        magnet_processed=original_release_title,
-                        info_hash=info_hash,
-                        skip_metadata=self._skip_metadata
-                    )
-                    
-                    cross_data_to_save = {
-                        'title_original_html': original_title if original_title else None,
-                        'magnet_processed': original_release_title if original_release_title else None,
-                        'magnet_original': magnet_original if magnet_original else None,
-                        'title_translated_html': title_translated_processed if title_translated_processed else None,
-                        'imdb': imdb if imdb else None,
-                        'missing_dn': missing_dn,
-                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
-                        'size': size if size and size.strip() else None,
-                        'has_legenda': has_legenda,
-                        'legend': legend_info if legend_info else None
-                    }
-                    save_cross_data_to_redis(info_hash, cross_data_to_save)
-                except Exception:
-                    pass
-                
-                torrent = {
-                    'title_processed': final_title,
-                    'original_title': original_title if original_title else page_title,
-                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
-                    'details': absolute_link,
-                    'year': year,
-                    'imdb': imdb,
-                    'audio': [],
-                    'magnet_link': magnet_link,
-                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
-                    'info_hash': info_hash,
-                    'trackers': trackers,
-                    'size': size,
-                    'leech_count': 0,
-                    'seed_count': 0,
-                    'similarity': 1.0,
-                    'magnet_original': magnet_original if magnet_original else None,
-                    'legend': legend_info if legend_info else None,
-                    'has_legenda': has_legenda
-                }
-                torrents.append(torrent)
-            
-            except Exception as e:
-                logger.error(f"Magnet error: {format_error(e)} (link: {format_link_preview(magnet_link)})")
-                continue
-        
-        return torrents
+        from core.builders import build_torrents_from_magnets
+        return build_torrents_from_magnets(
+            magnet_links=magnet_links,
+            sizes=sizes,
+            page_title=page_title,
+            original_title=original_title,
+            title_translated_processed=title_translated_processed,
+            year=year,
+            imdb=imdb,
+            audio_info=audio_info,
+            audio_html_content=audio_html_content,
+            absolute_link=absolute_link,
+            date=date,
+            legend_info=legend_info,
+            skip_metadata=self._skip_metadata,
+            doc=doc,
+            scraper_type=self.SCRAPER_TYPE,
+            log_ctx=_log_ctx,
+            fallback_title_priority='original_then_page',
+        )
 

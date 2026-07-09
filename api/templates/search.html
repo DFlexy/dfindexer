@@ -969,11 +969,18 @@
                 const sizeBadgeClass = infoBadgeClass(hasValidSize(torrent.size));
                 const hash = torrent.info_hash || 'N/A';
                 let releaseTitleMagnet = torrent.magnet_original;
+                const looksProcessedMagnet = (name) => /^-S\d{1,2}E\d{1,2}-/.test((name || '').trim()) && (name || '').split('.').length >= 4;
+                if (looksProcessedMagnet(releaseTitleMagnet)) {
+                    releaseTitleMagnet = null;
+                }
                 if (!releaseTitleMagnet && magnetLink && magnetLink !== '#') {
                     try {
                         const dnMatch = magnetLink.match(/[&?]dn=([^&]+)/i);
                         if (dnMatch) {
-                            releaseTitleMagnet = decodeURIComponent(dnMatch[1]);
+                            const dnValue = decodeURIComponent(dnMatch[1]);
+                            if (!looksProcessedMagnet(dnValue)) {
+                                releaseTitleMagnet = dnValue;
+                            }
                         }
                     } catch (e) {
                         // Ignora erros de decodificação

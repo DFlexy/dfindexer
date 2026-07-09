@@ -4,6 +4,7 @@ import logging
 from typing import List, Optional, TypeVar, Callable, Dict
 from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 from utils.text.constants import STOP_WORDS
 
@@ -16,6 +17,20 @@ DEFAULT_MAX_ITEMS_FOR_TEST: int = 0
 # Configurações de paralelização
 DEFAULT_MAX_WORKERS = 16
 DEFAULT_PAGE_TIMEOUT = 30
+
+_page_query_skip_local = threading.local()
+
+
+def _clear_page_query_skip() -> None:
+    _page_query_skip_local.skipped = False
+
+
+def mark_page_skipped_by_query() -> None:
+    _page_query_skip_local.skipped = True
+
+
+def _was_page_skipped_by_query() -> bool:
+    return bool(getattr(_page_query_skip_local, 'skipped', False))
 
 def format_page_index(current: int) -> str:
     return f"{current:02d}"
@@ -99,19 +114,26 @@ def process_links_parallel(
     scraper_prefix = f"[{scraper_name}] " if scraper_name else ""
     
     results_by_index: Dict[int, List[Dict]] = {}
+    page_status_by_index: Dict[int, str] = {}
+
+    def _run_process(link: str) -> tuple[List[Dict], bool]:
+        _clear_page_query_skip()
+        result = process_func(link)
+        return result, _was_page_skipped_by_query()
     
     if use_flaresolverr:
         logger.debug(f"{scraper_prefix}Processando {total_links} links SEQUENCIALMENTE (FlareSolverr ativo)")
         for idx, link in enumerate(original_order):
-            logger.debug(f"{scraper_prefix}[{format_page_index(idx + 1)}] {link}")
             try:
-                torrents = process_func(link)
+                torrents, skipped = _run_process(link)
                 results_by_index[idx] = torrents
+                page_status_by_index[idx] = 'ignored' if skipped else 'processed'
             except Exception as e:
                 error_type = type(e).__name__
                 error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
                 logger.warning(f"{scraper_prefix}Page error [{format_page_index(idx + 1)}]: {error_type} - {error_msg}")
                 results_by_index[idx] = []
+                page_status_by_index[idx] = 'processed'
     else:
         if max_workers is None:
             try:
@@ -121,15 +143,13 @@ def process_links_parallel(
                 max_workers = DEFAULT_MAX_WORKERS
         
         logger.debug(f"{scraper_prefix}Processando {total_links} links em PARALELO")
-        for idx, link in enumerate(original_order):
-            logger.debug(f"{scraper_prefix}[{format_page_index(idx + 1)}] {link}")
         
         link_to_index = {link: idx for idx, link in enumerate(original_order)}
         actual_max_workers = min(max(1, total_links), max_workers)
         
         with ThreadPoolExecutor(max_workers=actual_max_workers) as executor:
             future_to_link = {
-                executor.submit(process_func, link): link
+                executor.submit(_run_process, link): link
                 for link in original_order
             }
             
@@ -138,8 +158,9 @@ def process_links_parallel(
                 original_index = link_to_index[link]
                 
                 try:
-                    torrents = future.result(timeout=timeout)
+                    torrents, skipped = future.result(timeout=timeout)
                     results_by_index[original_index] = torrents
+                    page_status_by_index[original_index] = 'ignored' if skipped else 'processed'
                 except Exception as e:
                     error_type = type(e).__name__
                     error_msg = str(e).split('\n')[0][:100] if str(e) else str(e)
@@ -149,6 +170,13 @@ def process_links_parallel(
                         f"{error_type} - {error_msg} (link: {link_preview}...)"
                     )
                     results_by_index[original_index] = []
+                    page_status_by_index[original_index] = 'processed'
+
+    for idx in range(total_links):
+        link = original_order[idx]
+        status = page_status_by_index.get(idx, 'processed')
+        label = 'Página ignorada' if status == 'ignored' else 'Página processada'
+        logger.debug(f"{scraper_prefix}[{format_page_index(idx + 1)}] {label} | {link}")
     
     all_torrents = []
     for idx in range(total_links):
@@ -157,16 +185,39 @@ def process_links_parallel(
             for t in torrents:
                 t['_original_order'] = idx
             all_torrents.extend(torrents)
-    
-    logger.info(f"{scraper_prefix}Processamento completo: {len(all_torrents)} torrents de {total_links} links. Páginas processadas na ordem:")
-    for idx in range(total_links):
-        if idx in results_by_index:
-            link = original_order[idx]
-            torrents_count = len(results_by_index[idx])
-            logger.info(
-                f"{scraper_prefix}Página processada [{format_page_progress(idx + 1, total_links)}]: "
-                f"{link} - {torrents_count} magnets encontrados"
-            )
+
+    processed_indices = [
+        idx for idx in range(total_links)
+        if page_status_by_index.get(idx, 'processed') != 'ignored'
+    ]
+    processed_count = len(processed_indices)
+
+    if processed_count < total_links:
+        logger.info(
+            f"{scraper_prefix}Processamento completo: {len(all_torrents)} torrents de "
+            f"{processed_count} páginas processadas ({total_links} links)"
+        )
+    else:
+        logger.info(
+            f"{scraper_prefix}Processamento completo: {len(all_torrents)} torrents de "
+            f"{total_links} links. Páginas processadas na ordem:"
+        )
+
+    for seq, idx in enumerate(processed_indices, start=1):
+        link = original_order[idx]
+        torrents_count = len(results_by_index.get(idx, []))
+        logger.info(
+            f"{scraper_prefix}Página processada [{format_page_progress(seq, processed_count)}]: "
+            f"{link} - {torrents_count} magnets encontrados"
+        )
+
+    # Várias páginas abriram mas nenhuma rendeu torrent: forte indício de mudança
+    # na estrutura do site (seletores quebrados), não de ausência de conteúdo.
+    if processed_count >= 2 and not all_torrents:
+        logger.warning(
+            f"{scraper_prefix}Nenhum torrent extraído de {processed_count} páginas processadas — "
+            f"possível mudança na estrutura do site"
+        )
     
     return all_torrents
 

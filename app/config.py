@@ -64,7 +64,13 @@ class Config:
     MAX_EPISODE_NUMBER: int = 99
     MAX_EPISODE_DIFF: int = 20
     INFO_HASH_LENGTH: int = 40
-    RELEASE_TITLE_CACHE_TTL: int = 7 * 24 * 3600
+    RELEASE_TITLE_CACHE_TTL: int = _parse_duration(os.getenv('RELEASE_TITLE_CACHE_TTL', '7d'))
+    METADATA_CACHE_TTL: int = _parse_duration(os.getenv('METADATA_CACHE_TTL', '7d'))
+    TRACKER_CACHE_TTL: int = _parse_duration(os.getenv('TRACKER_CACHE_TTL', '24h'))
+    IMDB_CACHE_TTL: int = _parse_duration(os.getenv('IMDB_CACHE_TTL', '7d'))
+    RESOLVED_LINK_CACHE_TTL: int = _parse_duration(os.getenv('RESOLVED_LINK_CACHE_TTL', '7d'))
+    CROSS_DATA_TTL_WITH_TRACKER: int = _parse_duration(os.getenv('CROSS_DATA_TTL_WITH_TRACKER', '24h'))
+    CROSS_DATA_TTL_DEFAULT: int = _parse_duration(os.getenv('CROSS_DATA_TTL_DEFAULT', '30d'))
     
     HTTP_RETRY_MAX_ATTEMPTS: int = int(os.getenv('HTTP_RETRY_MAX_ATTEMPTS', '3'))
     HTTP_RETRY_BACKOFF_BASE: float = float(os.getenv('HTTP_RETRY_BACKOFF_BASE', '1.0'))

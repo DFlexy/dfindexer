@@ -54,7 +54,7 @@ _RE_LOCATION_REPLACE_HTML = re.compile(
     r'location\.replace\(["\']((?:[^"\'\\]|\\.)+)["\']\)', re.IGNORECASE
 )
 _RE_GO_PHP_REDIRECT = re.compile(
-    r'const\s+redirect\s*=\s*["\']([^"\']+)["\']',
+    r'(?:const|var|let)\s+redirect\s*=\s*["\']([^"\']+)["\']',
     re.IGNORECASE,
 )
 
@@ -104,7 +104,8 @@ def _try_b64_decode_magnet(value: str) -> Optional[str]:
 def _cache_result(redis_client, protlink_url: str, magnet: str):
     if redis_client:
         try:
-            redis_client.setex(protlink_key(protlink_url), 7 * 24 * 3600, magnet)
+            from app.config import Config
+            redis_client.setex(protlink_key(protlink_url), Config.RESOLVED_LINK_CACHE_TTL, magnet)
         except Exception:
             pass
     else:
@@ -143,6 +144,12 @@ def _unescape_js_string(s: str) -> str:
 
 def _make_headers(referer: str) -> dict:
     return {**_DEFAULT_HEADERS, 'Referer': referer}
+
+def _make_soup(html_content: str) -> BeautifulSoup:
+    try:
+        return BeautifulSoup(html_content, 'lxml')
+    except Exception:
+        return BeautifulSoup(html_content, 'html.parser')
 
 def _extract_magnet_from_html(doc: BeautifulSoup, html_content: str) -> Optional[str]:
     for a in doc.select('a[href^="magnet:"], a[href*="magnet:"]'):
@@ -360,6 +367,8 @@ def is_protected_link(href: str, protected_patterns: Optional[List[str]] = None)
         protected_patterns = [
             'go.php',
             'get.php',
+            'links.php',
+            'videosad.net',
             '?go=',
             '&go=',
             'seuvideo.xyz',
@@ -515,17 +524,16 @@ def resolve_go_php_link(
     base_url: str = '',
     redis=None,
 ) -> Optional[str]:
-    """Resolve go.php: uma única GET na página (sem seguir Location), lê const redirect"""
+    """Resolve go.php: decodifica id offline quando possível; senão GET e lê const redirect."""
     redis_client = redis or get_redis_client()
     cached = _get_cached(redis_client, go_url)
     if cached:
         return cached
 
-    if 'get.php' in go_url.lower():
-        decoded = decode_ad_link(go_url)
-        if decoded:
-            _cache_result(redis_client, go_url, decoded)
-            return decoded
+    decoded = decode_ad_link(go_url)
+    if decoded:
+        _cache_result(redis_client, go_url, decoded)
+        return decoded
 
     if is_redirect_chain_link(go_url):
         decoded = decode_redirect_chain_id(go_url)
@@ -542,6 +550,18 @@ def resolve_go_php_link(
                 timeout=12,
                 headers=_make_headers(referer),
             )
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = html.unescape((response.headers.get('Location') or '').strip())
+            if location.startswith('magnet:'):
+                _cache_result(redis_client, go_url, location)
+                return location
+            if location:
+                next_url = urljoin(go_url, location)
+                if next_url.startswith('http://'):
+                    next_url = 'https://' + next_url[7:]
+                return resolve_protected_link(next_url, session, go_url, redis_client)
+            return None
+
         if response.status_code != 200:
             logger.debug(
                 "go.php status %s para %s",
@@ -551,20 +571,29 @@ def resolve_go_php_link(
             return None
 
         redirect_url = _extract_go_php_redirect_url(response.text)
-        if not redirect_url:
+        if redirect_url:
+            magnet = decode_redirect_chain_id(redirect_url)
+            if not magnet:
+                magnet = decode_ad_link(redirect_url)
+            if magnet:
+                _cache_result(redis_client, go_url, magnet)
+                return magnet
+            logger.debug(
+                "go.php redirect sem magnet decodificável: %s → %s",
+                go_url[:60],
+                redirect_url[:80],
+            )
+        else:
             logger.debug("go.php sem const redirect embutido: %s", go_url[:80])
-            return None
 
-        magnet = decode_redirect_chain_id(redirect_url)
-        if magnet:
-            _cache_result(redis_client, go_url, magnet)
-            return magnet
-
-        logger.debug(
-            "go.php redirect sem magnet decodificável: %s → %s",
-            go_url[:60],
-            redirect_url[:80],
-        )
+        try:
+            doc = _make_soup(response.text)
+            magnet = _extract_magnet_from_html(doc, response.text)
+            if magnet:
+                _cache_result(redis_client, go_url, magnet)
+                return magnet
+        except Exception:
+            pass
     except Exception as e:
         logger.debug("go.php resolve error: %s", type(e).__name__)
 
@@ -675,8 +704,9 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
         if decoded_magnet:
             _cache_result(redis_client, protlink_url, decoded_magnet)
             return decoded_magnet
-        logger.debug("Falha ao decodificar get.php offline: %s", protlink_url[:100])
-        return None
+        logger.debug("Falha ao decodificar get.php offline, tentando via HTTP: %s", protlink_url[:100])
+        # Cai para o fluxo HTTP abaixo (get.php pode redirecionar para uma
+        # página com o magnet, como systemads.xyz/go.php faz).
 
     redirect_count = 0
 
@@ -737,7 +767,7 @@ def resolve_protected_link(protlink_url: str, session: requests.Session, base_ur
 
                 try:
                     html_content = response.text
-                    doc = BeautifulSoup(html_content, 'lxml')
+                    doc = _make_soup(html_content)
                 except Exception as e:
                     logger.error(f"Erro ao processar resposta HTML: {e}")
                     break

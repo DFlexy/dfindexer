@@ -11,6 +11,9 @@ from core.processors.torrent_processor import TorrentProcessor
 
 logger = logging.getLogger(__name__)
 
+def format_log_flag(value: bool) -> str:
+    return 'ON' if value else 'OFF'
+
 _indexed_count_cache = {'value': 0, 'ts': 0.0}
 
 def get_indexed_torrents_count() -> int:

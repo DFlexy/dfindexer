@@ -49,7 +49,7 @@ class TrackerCache:
                 self.redis.hset(key, 'peers', json.dumps(tracker_data, separators=(',', ':')))
                 self.redis.hset(key, 'last_scrape', str(int(time.time())))
                 self.redis.hset(key, 'created', str(int(time.time())))
-                self.redis.expire(key, 24 * 3600)
+                self.redis.expire(key, Config.TRACKER_CACHE_TTL)
                 return
             except Exception as e:
                 logger.debug(f"[TrackerCache] Erro ao salvar cache Redis: {type(e).__name__}")

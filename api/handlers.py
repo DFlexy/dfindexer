@@ -8,6 +8,7 @@ from flask import jsonify, request
 from api.handler_helpers import (
     combine_all_scrapers_stats,
     count_unique_hashes,
+    format_log_flag,
     get_indexed_torrents_count,
     log_filter_stats,
     log_response_diagnostics,
@@ -23,6 +24,7 @@ from api.services.indexer_service_async import (
     run_async,
 )
 from scraper import available_scraper_types
+from utils.http.proxy import is_proxy_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +113,13 @@ def _run_all_scrapers(
 
     log_prefix = '[TODOS]'
     logger.info(
-        "%s Query: '%s' | Page: %s | Filter: %s | FlareSolverr: %s",
+        "%s Query: '%s' | Page: %s | Filter: %s | Proxy: %s | FlareSolverr: %s",
         log_prefix,
         query,
         page,
-        filter_results,
-        use_flaresolverr,
+        format_log_flag(filter_results),
+        format_log_flag(is_proxy_enabled()),
+        format_log_flag(use_flaresolverr),
     )
 
     all_torrents, all_filter_stats, rows = run_async(
@@ -206,12 +209,13 @@ def indexer_handler(site_name: str = None):
             display_label = types_info[normalized_type].get('display_name', site_name)
             log_prefix = f'[{display_label}]'
             logger.info(
-                "%s Query: '%s' | Page: %s | Filter: %s | FlareSolverr: %s",
+                "%s Query: '%s' | Page: %s | Filter: %s | Proxy: %s | FlareSolverr: %s",
                 log_prefix,
                 query,
                 page,
-                params['filter_results'],
-                use_flaresolverr,
+                format_log_flag(params['filter_results']),
+                format_log_flag(is_proxy_enabled()),
+                format_log_flag(use_flaresolverr),
             )
 
             torrents, filter_stats = _run_single_scraper(normalized_type, params)

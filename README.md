@@ -124,6 +124,12 @@ Com `--network=host` não é necessário `-p` para publicar portas: o processo e
 | `REDIS_DB`                              | Banco lógico do Redis                                                    | `0`                |
 | `HTML_CACHE_TTL_SHORT`                  | TTL do cache curto de HTML (páginas)                                     | `10m`              |
 | `HTML_CACHE_TTL_LONG`                   | TTL do cache longo de HTML (páginas)                                     | `12h`              |
+| `METADATA_CACHE_TTL`                    | TTL do cache de metadata do iTorrents (nome/size do .torrent)            | `7d`               |
+| `TRACKER_CACHE_TTL`                     | TTL do cache de seeds/leechers dos trackers                              | `24h`              |
+| `IMDB_CACHE_TTL`                        | TTL do cache de IDs IMDB (por hash e por título)                         | `7d`               |
+| `RESOLVED_LINK_CACHE_TTL`               | TTL do cache de links protegidos resolvidos (protlink → magnet)          | `7d`               |
+| `CROSS_DATA_TTL_WITH_TRACKER`           | TTL do cross-data quando contém seeds/leechers                           | `24h`              |
+| `CROSS_DATA_TTL_DEFAULT`                | TTL do cross-data sem dados de tracker (títulos, size, etc.)             | `30d`              |
 | `FLARESOLVERR_SESSION_TTL`              | TTL das sessões FlareSolverr                                              | `8h`               |
 | `EMPTY_QUERY_MAX_LINKS`                 | Limite de links individuais a processar da página 1                      | `16`             |
 | `FLARESOLVERR_ADDRESS`                  | Endereço do FlareSolverr (Docker host: `http://localhost:8191`)          | `None` (opcional)  |
@@ -134,6 +140,7 @@ Com `--network=host` não é necessário `-p` para publicar portas: o processo e
 | `PROXY_PORT`                            | Porta do proxy (opcional)                                                | `None`             |
 | `PROXY_USER`                            | Usuário do proxy (opcional, requer PROXY_PASS)                           | `None`             |
 | `PROXY_PASS`                            | Senha do proxy (opcional, requer PROXY_USER)                             | `None`             |
+| `SCRAPER_URL_<TIPO>`                    | Sobrescreve a URL base de um scraper sem rebuild (ex.: `SCRAPER_URL_BLUDV`, `SCRAPER_URL_COMAND`, `SCRAPER_URL_REDE`, `SCRAPER_URL_STARCK`, `SCRAPER_URL_TFILME`) | URL padrão do scraper |
 
 #### Opções de PROXY_TYPE:
 - **`http`**: Proxy HTTP padrão (padrão)
@@ -236,6 +243,15 @@ http://localhost:7006/api
 ** Principamente com os sites que usam Cloudflare
 
 <img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
+
+## 🧪 Testes
+
+O projeto inclui testes automatizados (pytest) para os helpers de títulos, magnet parser e enrichers. Os testes rodam sem Redis nem rede:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
 
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.

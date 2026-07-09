@@ -10,16 +10,22 @@ from urllib.parse import unquote, urljoin
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from magnet.parser import MagnetParser
-from utils.parsing.magnet_utils import process_trackers
 from utils.text.utils import find_year_from_text, find_sizes_from_text
-from utils.parsing.audio_extraction import add_audio_tag_if_needed
-from utils.text.title_builder import create_standardized_title, prepare_release_title
 from app.config import Config
 from utils.logging import ScraperLogContext
 
 logger = logging.getLogger(__name__)
 
 _log_ctx = ScraperLogContext("TFilme", logger)
+
+_TORRENT_LINK_HINTS = (
+    'magnet:', 'go.php', 'get.php', '?go=', '&go=', 'protlink', 'systemads',
+)
+from utils.parsing.field_extraction import extract_labeled_value as _extract_labeled_value
+from utils.parsing.field_extraction import extract_labeled_value_from_text as _extract_labeled_value_from_text
+
+_RE_MAGNET_IN_HTML = re.compile(r'magnet:\?[^"\'\s<>]+', re.IGNORECASE)
+
 
 class TfilmeScraper(BaseScraper):
     SCRAPER_TYPE = "tfilme"
@@ -89,6 +95,80 @@ class TfilmeScraper(BaseScraper):
                     current = current.find_next_sibling()
         
         return (filmes_links, series_links)
+
+    def _collect_post_links(self, doc: BeautifulSoup) -> Tuple[List[str], List[str]]:
+        """Fallback: extrai links de div.post (listagens de categoria e busca)."""
+        filmes_links: List[str] = []
+        series_links: List[str] = []
+        seen: set = set()
+
+        for item in doc.select('div.post'):
+            link_elem = item.select_one('div.title > a') or item.select_one('a[href]')
+            if not link_elem:
+                continue
+            href = (link_elem.get('href') or '').strip()
+            if not href or href.startswith('#') or href in seen:
+                continue
+            seen.add(href)
+            classes = item.get('class', [])
+            if 'blue' in classes:
+                series_links.append(href)
+            else:
+                filmes_links.append(href)
+
+        return (filmes_links, series_links)
+
+    def _is_probable_torrent_link(self, href: str) -> bool:
+        href_lower = href.lower()
+        return any(hint in href_lower for hint in _TORRENT_LINK_HINTS)
+
+    def _collect_magnet_links(self, doc: BeautifulSoup, article: BeautifulSoup) -> List[str]:
+        """Coleta magnets: prioriza links de download, depois varre a página e o HTML bruto."""
+        magnet_links: List[str] = []
+        seen_hashes: set = set()
+
+        def _add_magnet(magnet: str) -> None:
+            if not magnet or not magnet.startswith('magnet:'):
+                return
+            try:
+                key = MagnetParser.parse(magnet)['info_hash'].lower()
+            except Exception:
+                key = magnet
+            if key in seen_hashes:
+                return
+            seen_hashes.add(key)
+            magnet_links.append(magnet)
+
+        def _scan_links(root) -> None:
+            candidates = []
+            other = []
+            for link in root.select('a[href]'):
+                href = html.unescape((link.get('href') or '').strip())
+                if not href:
+                    continue
+                if self._is_probable_torrent_link(href):
+                    candidates.append(href)
+                else:
+                    other.append(href)
+            for href in candidates + other:
+                resolved = self._resolve_link(href)
+                if resolved:
+                    _add_magnet(resolved)
+
+        text_content = article.find('div', class_='content')
+        if text_content:
+            _scan_links(text_content)
+        if not magnet_links:
+            _scan_links(article)
+        if not magnet_links:
+            _scan_links(doc)
+
+        if not magnet_links:
+            page_html = self._get_fetched_html()
+            for match in _RE_MAGNET_IN_HTML.findall(page_html or ''):
+                _add_magnet(html.unescape(match))
+
+        return magnet_links
     
     def get_page(self, page: str = '1', max_items: Optional[int] = None, is_test: bool = False) -> List[Dict]:
         is_using_default_limit, skip_metadata, skip_trackers = self._prepare_page_flags(max_items, is_test=is_test)
@@ -105,6 +185,13 @@ class TfilmeScraper(BaseScraper):
                 return []
             
             filmes_links, series_links = self._extract_links_from_page(doc)
+
+            if not filmes_links and not series_links:
+                filmes_links, series_links = self._collect_post_links(doc)
+                if filmes_links or series_links:
+                    _log_ctx.info(
+                        f"Fallback div.post: {len(filmes_links)} filmes, {len(series_links)} séries"
+                    )
             
             effective_max = get_effective_max_items(max_items)
             
@@ -138,14 +225,8 @@ class TfilmeScraper(BaseScraper):
             self._is_test = False
     
     def _extract_search_results(self, doc: BeautifulSoup) -> List[str]:
-        links = []
-        for item in doc.select('.post'):
-            link_elem = item.select_one('div.title > a')
-            if link_elem:
-                href = link_elem.get('href')
-                if href:
-                    links.append(href)
-        return links
+        filmes_links, series_links = self._collect_post_links(doc)
+        return filmes_links + series_links
     
     def _get_torrents_from_page(self, link: str) -> List[Dict]:
         absolute_link = urljoin(self.base_url, link) if link and not link.startswith('http') else link
@@ -159,6 +240,7 @@ class TfilmeScraper(BaseScraper):
         torrents = []
         article = doc.find('article')
         if not article:
+            self._log_structure_miss(absolute_link, 'article')
             return []
         
         page_title = ''
@@ -169,83 +251,38 @@ class TfilmeScraper(BaseScraper):
                 page_title = h1.get_text(strip=True).replace(' - Download', '')
         
         if not page_title:
+            # Layout do título mudou: tenta qualquer h1 da página antes de descartar.
+            h1 = article.find('h1') or doc.find('h1')
+            if h1:
+                page_title = h1.get_text(strip=True).replace(' - Download', '')
+        
+        if not page_title:
+            self._log_structure_miss(absolute_link, 'div.title > h1')
             return []
         
         original_title = ''
+        title_labels = ['Título Original', 'Titulo Original']
+        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse']
         for content_div in article.select('div.content'):
             html_content = str(content_div)
-            
-            title_regex = re.compile(r'(?i)t[íi]tulo\s+original:\s*</b>\s*([^<\n\r]+)')
-            match = title_regex.search(html_content)
-            if match:
-                original_title = match.group(1).strip()
-            else:
-                text = content_div.get_text()
-                if 'Título Original:' in text:
-                    parts = text.split('Título Original:')
-                    if len(parts) > 1:
-                        title_part = parts[1].strip()
-                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse']
-                        for stop_word in stop_words:
-                            if stop_word in title_part:
-                                idx = title_part.index(stop_word)
-                                title_part = title_part[:idx]
-                                break
-                        lines = title_part.split('\n')
-                        if lines:
-                            original_title = lines[0].strip()
-                elif 'Titulo Original:' in text:
-                    parts = text.split('Titulo Original:')
-                    if len(parts) > 1:
-                        title_part = parts[1].strip()
-                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse']
-                        for stop_word in stop_words:
-                            if stop_word in title_part:
-                                idx = title_part.index(stop_word)
-                                title_part = title_part[:idx]
-                                break
-                        lines = title_part.split('\n')
-                        if lines:
-                            original_title = lines[0].strip()
+            original_title = _extract_labeled_value(html_content, title_labels)
+            if not original_title:
+                original_title = _extract_labeled_value_from_text(
+                    content_div.get_text(), title_labels, stop_words
+                )
+            if original_title:
+                break
         
         title_translated_processed = ''
+        translated_labels = ['Título Traduzido', 'Titulo Traduzido']
+        translated_stop = stop_words + ['Título Original', 'Titulo Original']
         for content_div in article.select('div.content'):
             html_content = str(content_div)
-            
-            title_regex = re.compile(r'(?i)t[íi]tulo\s+traduzido:\s*</b>\s*([^<\n\r]+)')
-            match = title_regex.search(html_content)
-            if match:
-                title_translated_processed = match.group(1).strip()
-                title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
-                title_translated_processed = html.unescape(title_translated_processed)
-            else:
-                text = content_div.get_text()
-                if 'Título Traduzido:' in text:
-                    parts = text.split('Título Traduzido:')
-                    if len(parts) > 1:
-                        title_part = parts[1].strip()
-                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse', 'Título Original']
-                        for stop_word in stop_words:
-                            if stop_word in title_part:
-                                idx = title_part.index(stop_word)
-                                title_part = title_part[:idx]
-                                break
-                        lines = title_part.split('\n')
-                        if lines:
-                            title_translated_processed = lines[0].strip()
-                elif 'Titulo Traduzido:' in text:
-                    parts = text.split('Titulo Traduzido:')
-                    if len(parts) > 1:
-                        title_part = parts[1].strip()
-                        stop_words = ['Lançamento', 'Gênero', 'IMDB', 'Duração', 'Qualidade', 'Áudio', 'Sinopse', 'Título Original']
-                        for stop_word in stop_words:
-                            if stop_word in title_part:
-                                idx = title_part.index(stop_word)
-                                title_part = title_part[:idx]
-                                break
-                        lines = title_part.split('\n')
-                        if lines:
-                            title_translated_processed = lines[0].strip()
+            title_translated_processed = _extract_labeled_value(html_content, translated_labels)
+            if not title_translated_processed:
+                title_translated_processed = _extract_labeled_value_from_text(
+                    content_div.get_text(), translated_labels, translated_stop
+                )
             if title_translated_processed:
                 title_translated_processed = re.sub(r'<[^>]+>', '', title_translated_processed)
                 title_translated_processed = html.unescape(title_translated_processed)
@@ -253,6 +290,11 @@ class TfilmeScraper(BaseScraper):
                 title_translated_processed = clean_title_translated_processed(title_translated_processed)
                 break
         
+        if self._should_skip_page_by_query(
+            page_title, original_title, title_translated_processed, absolute_link,
+        ):
+            return []
+
         year = ''
         sizes = []
         audio_info = None
@@ -266,18 +308,28 @@ class TfilmeScraper(BaseScraper):
             content_html = str(content_div)
             all_paragraphs_html.append(content_html)
             
-            idioma_match = re.search(r'(?i)<b>Idioma:</b>\s*([^<]+?)(?:<br|</div|</p|$)', content_html)
-            if idioma_match:
-                idioma = idioma_match.group(1).strip()
-                idioma = html.unescape(idioma)
-                idioma = re.sub(r'<[^>]+>', '', idioma).strip()
-            
-            if not idioma:
-                idioma_match = re.search(r'(?i)Idioma\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)', content_html)
+            for field_label in ('Idioma', 'Áudio', 'Audio'):
+                idioma_match = re.search(
+                    rf'(?i)<b>{field_label}\s*:</b>\s*([^<]+?)(?:<br|</div|</p|$)',
+                    content_html,
+                )
                 if idioma_match:
                     idioma = idioma_match.group(1).strip()
                     idioma = html.unescape(idioma)
                     idioma = re.sub(r'<[^>]+>', '', idioma).strip()
+                    break
+            
+            if not idioma:
+                for field_label in ('Idioma', 'Áudio', 'Audio'):
+                    idioma_match = re.search(
+                        rf'(?i){field_label}\s*:\s*([^<\n\r]+?)(?:<br|</div|</p|$)',
+                        content_html,
+                    )
+                    if idioma_match:
+                        idioma = idioma_match.group(1).strip()
+                        idioma = html.unescape(idioma)
+                        idioma = re.sub(r'<[^>]+>', '', idioma).strip()
+                        break
         
         if idioma:
             idioma_lower = idioma.lower()
@@ -316,193 +368,38 @@ class TfilmeScraper(BaseScraper):
         if all_paragraphs_html:
             audio_html_content = ' '.join(all_paragraphs_html)
         
-        text_content = article.find('div', class_='content')
-        
-        magnet_links = []
-        if text_content:
-            for link in text_content.select('a[href]'):
-                href = link.get('href', '')
-                if not href:
-                    continue
-                
-                resolved_magnet = self._resolve_link(href)
-                if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                    if resolved_magnet not in magnet_links:
-                        magnet_links.append(resolved_magnet)
-        
-        if not magnet_links:
-            all_links = doc.select('a[href]')
-            for link in all_links:
-                href = link.get('href', '')
-                if not href:
-                    continue
-                
-                resolved_magnet = self._resolve_link(href)
-                if resolved_magnet and resolved_magnet.startswith('magnet:'):
-                    if resolved_magnet not in magnet_links:
-                        magnet_links.append(resolved_magnet)
+        magnet_links = self._collect_magnet_links(doc, article)
         
         if not magnet_links:
             return []
         
-        imdb = ''
-        imdb_strong = article.find('strong', string=re.compile(r'IMDb', re.I))
-        if imdb_strong:
-            parent = imdb_strong.parent
-            if parent:
-                for a in parent.select('a[href*="imdb.com"]'):
-                    href = a.get('href', '')
-                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
-                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
-        
-        if not imdb:
-            content_div = article.find('div', class_='content')
-            if content_div:
-                for a in content_div.select('a[href*="imdb.com"]'):
-                    href = a.get('href', '')
-                    imdb_match = re.search(r'imdb\.com/pt/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
-                    imdb_match = re.search(r'imdb\.com/title/(tt\d+)', href)
-                    if imdb_match:
-                        imdb = imdb_match.group(1)
-                        break
-        
+        from utils.parsing.imdb_extraction import extract_imdb_from_soup
+        content_div = article.find('div', class_='content')
+        imdb = extract_imdb_from_soup(article, content_div=content_div)
+
         sizes = list(dict.fromkeys(sizes))
-        
-        for idx, magnet_link in enumerate(magnet_links):
-            try:
-                magnet_data = MagnetParser.parse(magnet_link)
-                info_hash = magnet_data['info_hash']
-                
-                cross_data = None
-                try:
-                    from utils.text.cross_data import get_cross_data_from_redis
-                    cross_data = get_cross_data_from_redis(info_hash)
-                except Exception:
-                    pass
-                
-                if cross_data:
-                    if not original_title and cross_data.get('title_original_html'):
-                        original_title = cross_data['title_original_html']
-                    
-                    if not title_translated_processed and cross_data.get('title_translated_html'):
-                        title_translated_processed = cross_data['title_translated_html']
-                    
-                    if not imdb and cross_data.get('imdb'):
-                        imdb = cross_data['imdb']
-                
-                magnet_original = magnet_data.get('display_name', '')
-                missing_dn = not magnet_original or len(magnet_original.strip()) < 3
-                
-                if not missing_dn and magnet_original:
-                    try:
-                        from utils.text.storage import save_release_title_to_redis
-                        save_release_title_to_redis(info_hash, magnet_original)
-                    except Exception:
-                        pass
-                
-                fallback_title = page_title or original_title or ''
-                original_release_title = prepare_release_title(
-                    magnet_original,
-                    fallback_title,
-                    year,
-                    missing_dn=missing_dn,
-                    info_hash=info_hash if missing_dn else None,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                standardized_title = create_standardized_title(
-                    original_title, year, original_release_title, title_translated_html=title_translated_processed if title_translated_processed else None, magnet_original=magnet_original
-                )
-                
-                final_title = add_audio_tag_if_needed(
-                    standardized_title, 
-                    original_release_title, 
-                    info_hash=info_hash, 
-                    skip_metadata=self._skip_metadata,
-                    audio_info_from_html=audio_info,
-                    audio_html_content=audio_html_content
-                )
-                
-                origem_audio_tag = 'N/A'
-                if audio_info:
-                    origem_audio_tag = f'HTML da página (detect_audio_from_html)'
-                elif magnet_original and ('dual' in magnet_original.lower() or 'dublado' in magnet_original.lower() or 'legendado' in magnet_original.lower()):
-                    origem_audio_tag = 'magnet_processed'
-                elif missing_dn and info_hash:
-                    origem_audio_tag = 'metadata (iTorrents.org) - usado durante processamento'
-                
-                from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
-                legenda = extract_legenda_from_page(doc, scraper_type='tfilme')
-                
-                legend_info = determine_legend_info(legenda) if legenda else None
-                
-                from utils.parsing.legend_extraction import determine_legend_presence
-                has_legenda = determine_legend_presence(
-                    legend_info_from_html=legend_info,
-                    audio_html_content=audio_html_content,
-                    magnet_processed=original_release_title,
-                    info_hash=info_hash,
-                    skip_metadata=self._skip_metadata
-                )
-                
-                size = ''
-                if sizes and idx < len(sizes):
-                    size = sizes[idx]
-                
-                trackers = process_trackers(magnet_data)
-                
-                try:
-                    from utils.text.cross_data import save_cross_data_to_redis
-                    cross_data_to_save = {
-                        'title_original_html': original_title if original_title else None,
-                        'magnet_processed': original_release_title if original_release_title else None,
-                        'magnet_original': magnet_original if magnet_original else None,
-                        'title_translated_html': title_translated_processed if title_translated_processed else None,
-                        'imdb': imdb if imdb else None,
-                        'missing_dn': missing_dn,
-                        'origem_audio_tag': origem_audio_tag if origem_audio_tag != 'N/A' else None,
-                        'size': size if size and size.strip() else None,
-                        'has_legenda': has_legenda,
-                        'legend': legend_info if legend_info else None
-                    }
-                    save_cross_data_to_redis(info_hash, cross_data_to_save)
-                except Exception:
-                    pass
-                
-                torrent = {
-                    'title_processed': final_title,
-                    'original_title': original_title if original_title else page_title,
-                    'title_translated_processed': title_translated_processed if title_translated_processed else None,
-                    'details': absolute_link,
-                    'year': year,
-                    'imdb': imdb,
-                    'audio': [],
-                    'magnet_link': magnet_link,
-                    'date': date.strftime('%Y-%m-%dT%H:%M:%SZ') if date else '',
-                    'info_hash': info_hash,
-                    'trackers': trackers,
-                    'size': size,
-                    'leech_count': 0,
-                    'seed_count': 0,
-                    'magnet_original': magnet_original if magnet_original else None,
-                    'similarity': 1.0,
-                    'legend': legend_info if legend_info else None,
-                    'has_legenda': has_legenda
-                }
-                torrents.append(torrent)
-            
-            except Exception as e:
-                _log_ctx.error_magnet(magnet_link, e)
-                continue
-        
-        return torrents
+
+        from utils.parsing.legend_extraction import extract_legenda_from_page, determine_legend_info
+        legenda = extract_legenda_from_page(doc, scraper_type='tfilme')
+        legend_info = determine_legend_info(legenda) if legenda else None
+
+        from core.builders import build_torrents_from_magnets
+        return build_torrents_from_magnets(
+            magnet_links=magnet_links,
+            sizes=sizes,
+            page_title=page_title,
+            original_title=original_title,
+            title_translated_processed=title_translated_processed,
+            year=year,
+            imdb=imdb,
+            audio_info=audio_info,
+            audio_html_content=audio_html_content,
+            absolute_link=absolute_link,
+            date=date,
+            legend_info=legend_info,
+            skip_metadata=self._skip_metadata,
+            doc=doc,
+            scraper_type=self.SCRAPER_TYPE,
+            log_ctx=_log_ctx,
+        )
 

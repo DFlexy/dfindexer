@@ -41,6 +41,9 @@ def get_proxy_url() -> Optional[str]:
     
     return proxy_url
 
+def is_proxy_enabled() -> bool:
+    return get_proxy_url() is not None
+
 def get_proxy_dict() -> Optional[dict]:
     proxy_url = get_proxy_url()
     if not proxy_url:
