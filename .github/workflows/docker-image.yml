@@ -3,6 +3,7 @@ name: Build and Publish Multi-Arch Docker Image
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*", "*.*.*" ]
   workflow_dispatch:
 
 jobs:
@@ -30,11 +31,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve image name
+      - name: Resolve image tags
         id: image
         run: |
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "name=ghcr.io/${OWNER_LC}/dfindexer:latest" >> "$GITHUB_OUTPUT"
+          IMAGE="ghcr.io/${OWNER_LC}/dfindexer"
+          REF="${{ github.ref }}"
+
+          if [[ "$REF" == refs/tags/* ]]; then
+            VERSION="${REF#refs/tags/}"
+            # Aceita 1.4.8 ou v1.4.8 → tag da imagem sem o "v" opcional no início
+            VERSION_STRIPPED="${VERSION#v}"
+            TAGS="${IMAGE}:${VERSION_STRIPPED}"
+            # Em tag, também atualiza :latest
+            TAGS="${TAGS},${IMAGE}:latest"
+          else
+            TAGS="${IMAGE}:latest"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Publicando: ${TAGS}"
 
       - name: Build and push multi-arch image
         uses: docker/build-push-action@v7
@@ -42,4 +58,4 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.image.outputs.name }}
+          tags: ${{ steps.image.outputs.tags }}
