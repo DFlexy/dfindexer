@@ -244,15 +244,6 @@ http://localhost:7006/api
 
 <img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
 
-## 🧪 Testes
-
-O projeto inclui testes automatizados (pytest) para os helpers de títulos, magnet parser e enrichers. Os testes rodam sem Redis nem rede:
-
-```bash
-pip install -r requirements-dev.txt
-python -m pytest
-```
-
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
 
