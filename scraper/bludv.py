@@ -86,17 +86,19 @@ class BludvScraper(BaseScraper):
                 seen.add(key)
                 variations.append(text)
 
+        from utils.text.query import strip_stop_words_keep_season
+
         add(query)
 
-        words_no_stop = [w for w in query.split() if w.lower() not in STOP_WORDS]
-        if words_no_stop:
-            add(' '.join(words_no_stop))
+        stripped = strip_stop_words_keep_season(query)
+        if stripped:
+            add(stripped)
 
         without_year = self._query_without_year(query)
         if without_year.lower() != query.strip().lower():
             add(without_year)
 
-        shrink_base = [w for w in without_year.split() if w.lower() not in STOP_WORDS]
+        shrink_base = strip_stop_words_keep_season(without_year).split()
         if not shrink_base:
             shrink_base = without_year.split()
 

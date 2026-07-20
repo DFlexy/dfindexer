@@ -39,19 +39,21 @@ def format_page_progress(current: int, total: int) -> str:
     return f"{format_page_index(current)}/{format_page_index(total)}"
 
 def generate_search_variations(query: str, include_stop_words_removal: bool = True) -> List[str]:
+    from utils.text.query import strip_stop_words_keep_season
+
     variations = [query]
-    
+
     if include_stop_words_removal:
-        words = [w for w in query.split() if w.lower() not in STOP_WORDS]
-        if words and ' '.join(words) != query:
-            variations.append(' '.join(words))
-    
+        stripped = strip_stop_words_keep_season(query)
+        if stripped and stripped != query:
+            variations.append(stripped)
+
     query_words = query.split()
     if len(query_words) > 1:
         first_word = query_words[0].lower()
         if first_word not in STOP_WORDS:
             variations.append(query_words[0])
-    
+
     return variations
 
 def normalize_query_for_flaresolverr(query: str, use_flaresolverr: bool) -> str:

@@ -612,15 +612,16 @@ class BaseScraper(ABC):
         """Implementação base de busca com variações"""
         from urllib.parse import urljoin, quote
         from utils.text.constants import STOP_WORDS
-        
+        from utils.text.query import strip_stop_words_keep_season
+
         links = []
         seen_urls = set()
         variations = [query]
-        
-        words = [w for w in query.split() if w.lower() not in STOP_WORDS]
-        if words and ' '.join(words) != query:
-            variations.append(' '.join(words))
-        
+
+        stripped = strip_stop_words_keep_season(query)
+        if stripped and stripped != query:
+            variations.append(stripped)
+
         query_words = query.split()
 
         if len(query_words) >= 2 and query_words[-1].isdigit() and len(query_words[-1]) == 4 and query_words[-1][:2] in ('19', '20'):
@@ -632,13 +633,13 @@ class BaseScraper(ABC):
             first_word = query_words[0].lower()
             if first_word not in STOP_WORDS:
                 variations.append(query_words[0])
-        
+
         for variation in variations:
             search_url = f"{self.base_url}{self.search_url}{quote(variation)}"
             doc = self.get_document(search_url, self.base_url)
             if not doc:
                 continue
-            
+
             page_links = self._extract_search_results(doc)
             page_links = self._filter_links_by_result_titles(doc, page_links, variation)
             for href in page_links:
@@ -646,7 +647,7 @@ class BaseScraper(ABC):
                 if absolute_url not in seen_urls:
                     links.append(absolute_url)
                     seen_urls.add(absolute_url)
-        
+
         return links
 
     def _normalize_search_result_url(self, href: str) -> str:
@@ -768,6 +769,21 @@ class BaseScraper(ABC):
             )
         return filtered
 
+    def _filter_search_links_by_query_season(self, query: str, links: List[str]) -> List[str]:
+        """Filtro de temporada só por link (slug), antes de abrir páginas."""
+        from utils.text.query import extract_query_season, filter_urls_by_query_season
+
+        links_before = len(links)
+        filtered = filter_urls_by_query_season(query, links)
+        scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
+        if links_before != len(filtered):
+            season = extract_query_season(query)
+            logger.debug(
+                f"[{scraper_name}] Filtro por temporada no link (S{season}): "
+                f"{links_before} → {len(filtered)} páginas"
+            )
+        return filtered
+
     def _default_search(
         self,
         query: str,
@@ -781,6 +797,7 @@ class BaseScraper(ABC):
         try:
             links = self._search_variations(query)
             links = self._filter_search_links_by_query_year(query, links)
+            links = self._filter_search_links_by_query_season(query, links)
 
             scraper_name = getattr(self, 'DISPLAY_NAME', '') or getattr(self, 'SCRAPER_TYPE', 'UNKNOWN')
             if not links:

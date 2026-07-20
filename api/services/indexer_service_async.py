@@ -1,8 +1,10 @@
 # Copyright (c) 2025 DFlexy · https://github.com/DFlexy
 
+import copy
 import logging
 import asyncio
 import threading
+import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import List, Dict, Optional, Callable, Tuple
 from app.config import Config
@@ -15,11 +17,76 @@ from api.services.indexer_common import get_scraper_info, validate_scraper_type
 
 logger = logging.getLogger(__name__)
 
+# Cache + coalesce de buscas idênticas (Sonarr/Prowlarr reenvia a mesma q).
+_search_cache_lock = threading.Lock()
+_search_result_cache: Dict[Tuple, Tuple[float, List[Dict], Optional[Dict]]] = {}
+_search_inflight: Dict[Tuple, asyncio.Future] = {}
+
+
+def _normalize_search_query(query: str) -> str:
+    return ' '.join((query or '').lower().split())
+
+
+def _search_cache_key(
+    scraper_type: str,
+    query: str,
+    use_flaresolverr: bool,
+    filter_results: bool,
+    max_results: Optional[int],
+) -> Tuple:
+    return (
+        (scraper_type or '').lower().strip(),
+        _normalize_search_query(query),
+        bool(use_flaresolverr),
+        bool(filter_results),
+        max_results if max_results and max_results > 0 else None,
+    )
+
+
+def _clone_search_result(
+    torrents: List[Dict],
+    filter_stats: Optional[Dict],
+) -> Tuple[List[Dict], Optional[Dict]]:
+    return copy.deepcopy(torrents or []), copy.deepcopy(filter_stats) if filter_stats else None
+
+
+def _get_cached_search(key: Tuple) -> Optional[Tuple[List[Dict], Optional[Dict]]]:
+    ttl = getattr(Config, 'SEARCH_RESULT_CACHE_TTL', 0) or 0
+    if ttl <= 0:
+        return None
+    now = time.monotonic()
+    with _search_cache_lock:
+        entry = _search_result_cache.get(key)
+        if not entry:
+            return None
+        expires_at, torrents, stats = entry
+        if expires_at <= now:
+            _search_result_cache.pop(key, None)
+            return None
+        return _clone_search_result(torrents, stats)
+
+
+def _store_cached_search(
+    key: Tuple,
+    torrents: List[Dict],
+    filter_stats: Optional[Dict],
+) -> None:
+    ttl = getattr(Config, 'SEARCH_RESULT_CACHE_TTL', 0) or 0
+    if ttl <= 0:
+        return
+    with _search_cache_lock:
+        _search_result_cache[key] = (
+            time.monotonic() + ttl,
+            copy.deepcopy(torrents or []),
+            copy.deepcopy(filter_stats) if filter_stats else None,
+        )
+
+
 class IndexerServiceAsync:
     def __init__(self):
         self.enricher = TorrentEnricherAsync()
         self.processor = TorrentProcessor()
-    
+
     async def search(
         self,
         scraper_type: str,
@@ -28,13 +95,81 @@ class IndexerServiceAsync:
         filter_results: bool = False,
         max_results: Optional[int] = None
     ) -> tuple[List[Dict], Optional[Dict]]:
+        ttl = getattr(Config, 'SEARCH_RESULT_CACHE_TTL', 0) or 0
+        if ttl <= 0 or not (query or '').strip():
+            return await self._search_uncached(
+                scraper_type, query, use_flaresolverr, filter_results, max_results
+            )
+
+        key = _search_cache_key(
+            scraper_type, query, use_flaresolverr, filter_results, max_results
+        )
+        cached = _get_cached_search(key)
+        if cached is not None:
+            logger.info(
+                '[SearchCache] HIT scraper=%s query=%r results=%s',
+                scraper_type,
+                query,
+                len(cached[0]),
+            )
+            return cached
+
+        loop = asyncio.get_running_loop()
+        leader = False
+        inflight: Optional[asyncio.Future] = None
+        with _search_cache_lock:
+            cached_entry = _search_result_cache.get(key)
+            if cached_entry and cached_entry[0] > time.monotonic():
+                return _clone_search_result(cached_entry[1], cached_entry[2])
+            existing = _search_inflight.get(key)
+            if existing is not None and not existing.done():
+                inflight = existing
+            else:
+                inflight = loop.create_future()
+                _search_inflight[key] = inflight
+                leader = True
+
+        if not leader:
+            logger.info(
+                '[SearchCache] COALESCE scraper=%s query=%r',
+                scraper_type,
+                query,
+            )
+            torrents, stats = await asyncio.shield(inflight)
+            return _clone_search_result(torrents, stats)
+
+        try:
+            result = await self._search_uncached(
+                scraper_type, query, use_flaresolverr, filter_results, max_results
+            )
+            _store_cached_search(key, result[0], result[1])
+            if not inflight.done():
+                inflight.set_result(_clone_search_result(result[0], result[1]))
+            return result
+        except Exception as exc:
+            if not inflight.done():
+                inflight.set_exception(exc)
+            raise
+        finally:
+            with _search_cache_lock:
+                if _search_inflight.get(key) is inflight:
+                    _search_inflight.pop(key, None)
+
+    async def _search_uncached(
+        self,
+        scraper_type: str,
+        query: str,
+        use_flaresolverr: bool = False,
+        filter_results: bool = False,
+        max_results: Optional[int] = None
+    ) -> tuple[List[Dict], Optional[Dict]]:
         scraper = create_scraper(scraper_type, use_flaresolverr=use_flaresolverr)
-        
+
         try:
             filter_func = None
             if filter_results and query:
                 filter_func = QueryFilter.create_filter(query)
-            
+
             torrents = await asyncio.to_thread(
                 scraper.search,
                 query,
@@ -43,37 +178,37 @@ class IndexerServiceAsync:
                 skip_metadata=True,
             )
             torrents = self._dedupe_by_info_hash(torrents)
-            
+
             if max_results and max_results > 0:
                 torrents = torrents[:max_results]
-            
+
             enriched_torrents, filter_stats = await self._enrich_torrents_async(
                 torrents,
                 scraper_type,
                 filter_func
             )
-            
+
             if filter_stats is None and filter_func and enriched_torrents:
                 total_before_filter = len(enriched_torrents)
                 filtered_count = sum(1 for t in enriched_torrents if not filter_func(t))
                 approved_count = total_before_filter - filtered_count
-                
+
                 filter_stats = {
                     'total': total_before_filter,
                     'filtered': filtered_count,
                     'approved': approved_count,
                     'scraper_name': scraper.SCRAPER_TYPE if hasattr(scraper, 'SCRAPER_TYPE') else ''
                 }
-            
+
             self.processor.sanitize_torrents(enriched_torrents)
             self.processor.remove_internal_fields(enriched_torrents)
             self.processor.sort_by_date(enriched_torrents)
-            
+
             return enriched_torrents, filter_stats
         finally:
             scraper.close()
             cleanup_request_caches()
-    
+
     async def get_page(
         self,
         scraper_type: str,

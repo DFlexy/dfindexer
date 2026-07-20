@@ -7,7 +7,7 @@ import time
 import logging
 from datetime import datetime
 from utils.parsing.date_extraction import parse_date_from_string
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Tuple
 from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
@@ -27,23 +27,29 @@ _log_ctx = ScraperLogContext("Starck", logger)
 _RE_STARCK_DATA_U_DQ = re.compile(r'data-u\s*=\s*"([^"]*)"', re.I)
 _RE_STARCK_DATA_U_SQ = re.compile(r"data-u\s*=\s*'([^']*)'", re.I)
 
-_GATE_MARKERS = (
+# Fallback de UI/JS legado — só usado se o protocolo (timeMonit / endpoint) sumir.
+_GATE_SOFT_MARKERS = (
     'createGenericNotification',
-    '/current-address',
     'Análise de acesso',
     'Comunicado Importante',
     'Ir para o novo site',
     'sendVerification',
     'unshuffleString',
+    'Verificação de Segurança',
+    'Confirmo que sou um usuário humano',
+    'Continuar para o site',
+    'Verificação Automática',
+    'Verificação concluída',
 )
 _DEFAULT_TIME_MONIT = '14542588'
-_TIME_MONIT_RE = re.compile(r'timeMonit\s*:\s*["\']([^"\']+)["\']', re.I)
-
-
-def _is_starck_gate_page(html_content: str) -> bool:
-    if not html_content:
-        return False
-    return sum(1 for marker in _GATE_MARKERS if marker in html_content) >= 2
+_DEFAULT_VERIFY_PATH = '/current-address'
+# Aceita timeMonit:"..." / timeMonit: "..." / "timeMonit":"..."
+_TIME_MONIT_RE = re.compile(
+    r'["\']?timeMonit["\']?\s*:\s*["\']([^"\']+)["\']',
+    re.I,
+)
+# Literais JS curtos (path ofuscado ou não) candidatos a virar o endpoint.
+_RE_JS_PATH_LITERAL = re.compile(r'["\'](/?[A-Za-z0-9_./-]{6,64})["\']')
 
 
 def _unshuffle_string(text: str) -> str:
@@ -67,9 +73,132 @@ def _unshuffle_string(text: str) -> str:
     return ''.join(out)
 
 
+def _normalize_verify_path(path: str) -> Optional[str]:
+    if not path:
+        return None
+    p = str(path).strip()
+    if (len(p) >= 2) and ((p[0] == p[-1]) and p[0] in '"\''):
+        p = p[1:-1].strip()
+    if not p:
+        return None
+    if not p.startswith('/'):
+        p = '/' + p
+    # Só aceita path relativo simples (evita URLs absolutas acidentais).
+    if '://' in p or '?' in p or '#' in p or ' ' in p:
+        return None
+    return p
+
+
+def _is_current_address_path(path: str) -> bool:
+    norm = _normalize_verify_path(path)
+    return bool(norm) and norm.rstrip('/').lower() == _DEFAULT_VERIFY_PATH
+
+
+def _scan_verify_path_candidates(chunk: str) -> Tuple[Optional[str], Optional[str]]:
+    """Retorna (path_conhecido, path_api_fallback) a partir de literais JS."""
+    if not chunk:
+        return None, None
+    fallback = None
+    seen: set = set()
+    for match in _RE_JS_PATH_LITERAL.finditer(chunk):
+        raw = match.group(1)
+        if raw in seen:
+            continue
+        seen.add(raw)
+        for candidate in (raw, _unshuffle_string(raw)):
+            if not candidate:
+                continue
+            if _is_current_address_path(candidate):
+                return _DEFAULT_VERIFY_PATH, None
+            norm = _normalize_verify_path(candidate)
+            if not norm:
+                continue
+            leaf = norm.rsplit('/', 1)[-1]
+            if '.' in leaf:
+                continue
+            if fallback is None and 6 <= len(norm) <= 48:
+                fallback = norm
+    return None, fallback
+
+
+def _discover_starck_verify_path(html_content: str) -> Optional[str]:
+    """Descobre o path do POST mesmo com literal embaralhado ou renomeado."""
+    if not html_content:
+        return None
+    if _DEFAULT_VERIFY_PATH in html_content:
+        return _DEFAULT_VERIFY_PATH
+
+    known, _ = _scan_verify_path_candidates(html_content)
+    if known:
+        return known
+
+    # Endpoint renomeado: pega path ofuscado na vizinhança do payload timeMonit.
+    idx = html_content.find('timeMonit')
+    if idx >= 0:
+        window = html_content[max(0, idx - 400): idx + 3000]
+        known, near = _scan_verify_path_candidates(window)
+        if known:
+            return known
+        if near:
+            return near
+    return None
+
+
+def _has_starck_catalog_html(html_content: str) -> bool:
+    """Página real (home/busca/detalhe) — nunca tratar como gate."""
+    if not html_content:
+        return False
+    if 'post-catalog' in html_content and '/catalog/' in html_content:
+        return True
+    if 'sub-item' in html_content and '/catalog/' in html_content:
+        return True
+    if 'post-buttons' in html_content or 'data-u=' in html_content:
+        return True
+    if 'class="post"' in html_content or "class='post'" in html_content:
+        return True
+    return False
+
+
+def _soft_gate_score(html_content: str) -> int:
+    score = sum(1 for marker in _GATE_SOFT_MARKERS if marker in html_content)
+    low = html_content.lower()
+    # UI genérica de challenge (textos mudam, mas costumam manter "verifica" + humano/segurança).
+    if 'verifica' in low and (
+        'humano' in low or 'segurança' in low or 'seguranca' in low or 'acesso' in low
+    ):
+        score += 1
+    return score
+
+
+def _is_starck_gate_page(html_content: str) -> bool:
+    """
+    Detecção resiliente: prioriza o protocolo da gate (timeMonit + endpoint),
+    não o texto da UI — que o site troca com frequência.
+    """
+    if not html_content:
+        return False
+    if _has_starck_catalog_html(html_content):
+        return False
+
+    has_time_monit = 'timeMonit' in html_content
+    verify_path = _discover_starck_verify_path(html_content)
+
+    # Assinatura do protocolo — sobrevive a redesign de HTML/CSS/copy.
+    if has_time_monit or verify_path:
+        return True
+
+    # Último recurso: UI legada / genérica sem catálogo.
+    return _soft_gate_score(html_content) >= 2
+
+
 def _extract_time_monit(html_content: str) -> str:
     match = _TIME_MONIT_RE.search(html_content or '')
     return match.group(1) if match else _DEFAULT_TIME_MONIT
+
+
+def _resolve_starck_verify_url(origin: str, html_content: str) -> str:
+    path = _discover_starck_verify_path(html_content) or _DEFAULT_VERIFY_PATH
+    return urljoin(f'{origin.rstrip("/")}/', path.lstrip('/'))
 
 
 def _invalidate_starck_gate_cache(redis, url: str) -> None:
@@ -209,9 +338,14 @@ def _bypass_starck_access(
 ) -> Optional[str]:
     parsed = urlparse(url)
     origin = f'{parsed.scheme}://{parsed.netloc}'
-    verify_url = urljoin(f'{origin}/', 'current-address')
+    verify_url = _resolve_starck_verify_url(origin, html_content)
     page_referer = referer or url
     time_monit = _extract_time_monit(html_content)
+    _log_ctx.debug(
+        'Bypass gate: verify_url={} timeMonit={}',
+        verify_url,
+        time_monit,
+    )
 
     resolved: Optional[str] = None
     if flaresolverr_client and flaresolverr_base_url:
@@ -275,7 +409,7 @@ def _starck_raw_data_u_values(page_html: str) -> List[str]:
 
 class StarckScraper(BaseScraper):
     SCRAPER_TYPE = "starck"
-    DEFAULT_BASE_URL = "https://www.starckfilmes-v21.com/"
+    DEFAULT_BASE_URL = "https://www.starckfilmes-v23.com/"
     DISPLAY_NAME = "Starck"
     
     def __init__(self, base_url: Optional[str] = None, use_flaresolverr: bool = False):
@@ -403,18 +537,82 @@ class StarckScraper(BaseScraper):
         
         return links
     
+    def _collect_search_result_titles(self, doc: BeautifulSoup) -> Dict[str, str]:
+        """Starck: título do card via attr title / h3 a (além do coletor base)."""
+        title_by_url = super()._collect_search_result_titles(doc)
+        catalog_div = doc.select_one('div.post-catalog, div.home.post-catalog') or doc
+        for item in catalog_div.select('.item'):
+            sub_item = item.select_one('div.sub-item')
+            if not sub_item:
+                continue
+            link_elem = sub_item.find(
+                'a',
+                href=lambda h: h and 'catalog' in h,
+                title=lambda t: t and str(t).strip(),
+            )
+            if not link_elem:
+                h3_link = sub_item.select_one('h3 a[href]')
+                if h3_link and 'catalog' in (h3_link.get('href') or ''):
+                    link_elem = h3_link
+            if not link_elem:
+                continue
+            href = (link_elem.get('href') or '').strip()
+            title_text = (link_elem.get('title') or link_elem.get_text(strip=True) or '').strip()
+            normalized = self._normalize_search_result_url(href)
+            if normalized and title_text and normalized not in title_by_url:
+                title_by_url[normalized] = title_text
+        return title_by_url
+
+    def _filter_links_by_result_titles(self, doc: BeautifulSoup, links: List[str], query: str) -> List[str]:
+        """Filtra cards Starck; aceita título PT quando a season da query bate."""
+        from utils.text.query import (
+            check_query_match,
+            extract_query_season,
+            slug_has_season,
+            title_has_season,
+        )
+
+        if not links or not query or not query.strip():
+            return links
+
+        title_by_url = self._collect_search_result_titles(doc)
+        season = extract_query_season(query)
+        filtered: List[str] = []
+        for href in links:
+            if season is not None:
+                verdict = slug_has_season(href, season)
+                if verdict is False:
+                    continue
+                if verdict is True:
+                    filtered.append(href)
+                    continue
+
+            normalized = self._normalize_search_result_url(href)
+            title_text = title_by_url.get(normalized)
+            if not title_text:
+                filtered.append(href)
+                continue
+            if check_query_match(query, title_text, '', ''):
+                filtered.append(href)
+                continue
+            # Query EN vs card PT: mantém se a season do título confere.
+            if season is not None and title_has_season(title_text, season):
+                filtered.append(href)
+        return filtered
+
     def _search_variations(self, query: str) -> List[str]:
         from urllib.parse import urljoin, quote
         from utils.text.constants import STOP_WORDS
-        
+        from utils.text.query import strip_stop_words_keep_season
+
         links = []
         seen_urls = set()
         variations = [query]
-        
-        words = [w for w in query.split() if w.lower() not in STOP_WORDS]
-        if words and ' '.join(words) != query:
-            variations.append(' '.join(words))
-        
+
+        stripped = strip_stop_words_keep_season(query)
+        if stripped and stripped != query:
+            variations.append(stripped)
+
         query_words = query.split()
 
         if len(query_words) >= 2 and query_words[-1].isdigit() and len(query_words[-1]) == 4 and query_words[-1][:2] in ('19', '20'):
@@ -426,22 +624,23 @@ class StarckScraper(BaseScraper):
             first_word = query_words[0].lower()
             if first_word not in STOP_WORDS:
                 variations.append(query_words[0])
-        
+
         for variation in variations:
             search_url = f"{self.base_url}{self.search_url}{quote(variation)}"
             doc = self.get_document(search_url, self.base_url)
             if not doc:
                 continue
-            
-            page_links = self._extract_search_results(doc)
 
+            page_links = self._extract_search_results(doc)
+            # Filtra pelo título do card (PT) — páginas EN ainda passam pelo
+            # skip em _get_torrents_from_page via original_title.
+            page_links = self._filter_links_by_result_titles(doc, page_links, variation)
             for href in page_links:
                 absolute_url = urljoin(self.base_url, href)
-                
                 if absolute_url not in seen_urls:
                     links.append(absolute_url)
                     seen_urls.add(absolute_url)
-        
+
         return links
     
     def _get_torrents_from_page(self, link: str) -> List[Dict]:

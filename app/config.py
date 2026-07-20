@@ -84,4 +84,7 @@ class Config:
     RUN_ASYNC_TIMEOUT: float = float(os.getenv('RUN_ASYNC_TIMEOUT', '600'))
     ALL_SCRAPERS_MAX_CONCURRENT: int = max(1, int(os.getenv('ALL_SCRAPERS_MAX_CONCURRENT', '4')))
     INDEXED_COUNT_CACHE_TTL: float = float(os.getenv('INDEXED_COUNT_CACHE_TTL', '60'))
+    # Cache de resultado de busca idêntica (Sonarr/Prowlarr reenvia a mesma q).
+    # 0 desliga. In-flight coalesce continua ativo quando TTL > 0.
+    SEARCH_RESULT_CACHE_TTL: int = _parse_duration(os.getenv('SEARCH_RESULT_CACHE_TTL', '90s'))
     
