@@ -244,10 +244,9 @@ O comportamento varia conforme o tipo de requisição:
 http://localhost:7006/api
 
 ** Atenção - Selecionar todos pode demorar ou travar devido a demora de requisições.
-
 ** Principamente com os sites que usam Cloudflare
 
-<img width="1252" height="819" alt="image" src="https://github.com/user-attachments/assets/423073ad-33eb-4459-ae29-1cd720bbee2e" />
+<img width="1257" height="872" alt="image" src="https://github.com/user-attachments/assets/7311a3a5-1b78-44a6-8c3a-7103e7cc0aa3" />
 
 ## 📄 Licença
 Este projeto é mantido por **DFlexy**.
