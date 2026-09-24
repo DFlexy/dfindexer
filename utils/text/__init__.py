@@ -815,6 +815,21 @@ def filter_urls_by_query_year(
             filtered.append(url)
     return filtered
 
+def _query_word_spans_title_words(title_normalized: str, query_word: str) -> bool:
+    query_compact = re.sub(r'[^a-z0-9]', '', remove_accents(query_word.lower()))
+    if len(query_compact) < 4:
+        return False
+    words = re.findall(r'[a-z0-9]+', title_normalized)
+    for start in range(len(words)):
+        joined = ''
+        for word in words[start:start + 4]:
+            joined += word
+            if joined == query_compact:
+                return True
+            if len(joined) > len(query_compact):
+                break
+    return False
+
 def check_query_match(query: str, title: str, title_original_html: str = '', title_translated_html: str = '') -> bool:
     query = str(query) if query is not None else ''
     title = str(title) if title is not None else ''
@@ -944,7 +959,9 @@ def check_query_match(query: str, title: str, title_original_html: str = '', tit
 
 
     if len(clean_query_words) == 1:
-        return matches == 1
+        if matches == 1:
+            return True
+        return _query_word_spans_title_words(title_normalized, clean_query_words[0])
     elif len(clean_query_words) == 2:
         return matches == 2
     else:

@@ -164,7 +164,7 @@ Com `--network=host` não é necessário `-p` para publicar portas: o processo e
    - `<Prowlarr_Config_Directory>/Definitions/Custom/`
 3. Coloque o arquivo `prowlarr.yml` que você baixou dentro do diretório `Custom` criado no passo anterior
 4. Reinicie o Prowlarr para aplicar as alterações
-5. Extra(Tutorial servarr https://wiki.servarr.com/prowlarr/indexers#adding-a-custom-yml-definition)
+5. Extra(Tutorial servar https://wiki.servarr.com/prowlarr/indexers#adding-a-custom-yml-definition)
 
 ### Prowlarr - Adicionar o Indexador
 1. Vá até a página **Indexers** no Prowlarr

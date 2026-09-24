@@ -12,6 +12,7 @@ from api.indexer_service import (
     fetch_all_scrapers_index,
     get_scraper_info,
     is_removed_legacy_id,
+    poll_search,
     run_async,
     validate_scraper_type,
 )
@@ -416,17 +417,39 @@ def indexer_handler(site_name: str = None):
 
             display_label = types_info[normalized_type].get('display_name', site_name)
             log_prefix = f'[{display_label}]'
-            logger.info(
-                "%s Query: '%s' | Page: %s | Filter: %s | Proxy: %s | FlareSolverr: %s",
-                log_prefix,
-                query,
-                page,
-                format_log_flag(params['filter_results']),
-                format_log_flag(is_proxy_enabled()),
-                format_log_flag(use_flaresolverr),
-            )
-
-            torrents, filter_stats = _run_single_scraper(normalized_type, params)
+            poll_mode = request.args.get('wait') == 'poll' and has_query
+            if poll_mode:
+                outcome = poll_search(
+                    normalized_type,
+                    query,
+                    use_flaresolverr,
+                    params['filter_results'],
+                    params['max_results'],
+                )
+                if outcome['pending']:
+                    if outcome['just_started']:
+                        logger.info(
+                            "%s Query: '%s' | Page: %s | Filter: %s | Proxy: %s | FlareSolverr: %s",
+                            log_prefix,
+                            query,
+                            page,
+                            format_log_flag(params['filter_results']),
+                            format_log_flag(is_proxy_enabled()),
+                            format_log_flag(use_flaresolverr),
+                        )
+                    return jsonify({'pending': True, 'results': [], 'count': 0})
+                torrents, filter_stats = outcome['result']
+            else:
+                logger.info(
+                    "%s Query: '%s' | Page: %s | Filter: %s | Proxy: %s | FlareSolverr: %s",
+                    log_prefix,
+                    query,
+                    page,
+                    format_log_flag(params['filter_results']),
+                    format_log_flag(is_proxy_enabled()),
+                    format_log_flag(use_flaresolverr),
+                )
+                torrents, filter_stats = _run_single_scraper(normalized_type, params)
 
             if torrents:
                 log_filter_stats(

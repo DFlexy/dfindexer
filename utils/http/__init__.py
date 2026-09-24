@@ -145,6 +145,42 @@ def is_proxy_local() -> bool:
 
 logger = logging.getLogger(__name__)
 
+_fs_warn_at: Dict[str, float] = {}
+
+def _flaresolverr_error_reason(error_detail: str) -> str:
+    detail = (error_detail or '').lower()
+    if 'connection refused' in detail or 'max retries exceeded' in detail or 'newconnectionerror' in detail:
+        return 'conexão recusada'
+    if 'timeout' in detail or 'timed out' in detail:
+        return 'tempo esgotado'
+    if 'tab crashed' in detail or 'chromedriver' in detail or "can't start new thread" in detail:
+        return 'navegador caiu'
+    text = (error_detail or 'erro desconhecido').split('\n', 1)[0].strip()
+    return text[:80]
+
+def _log_flaresolverr_http_error(url: str, status, error_detail: str) -> None:
+    reason = _flaresolverr_error_reason(error_detail)
+    parsed = urlparse(url)
+    host = parsed.netloc or url
+    slug = (parsed.path or '').strip('/').split('/')[-1]
+    if len(slug) > 48:
+        slug = slug[:45] + '...'
+    target = f'{host}/{slug}' if slug else host
+    message = f'FlareSolverr erro {status}: {target} ({reason})'
+    now = time.time()
+    if now - _fs_warn_at.get(url, 0) < 60:
+        logger.debug(message)
+        return
+    _fs_warn_at[url] = now
+    if len(_fs_warn_at) > 200:
+        cutoff = now - 60
+        for key, seen in list(_fs_warn_at.items()):
+            if seen < cutoff:
+                _fs_warn_at.pop(key, None)
+    logger.warning(message)
+    if error_detail:
+        logger.debug('FlareSolverr detalhe: %s', error_detail[:300])
+
 _request_cache = threading.local()
 
 _shared_sessions_cache = {}
@@ -573,10 +609,7 @@ class FlareSolverrClient:
                         should_invalidate = False
 
                 if not is_temporary_error:
-                    logger.warning(
-                        f"FlareSolverr retornou erro 500 para {url}. "
-                        f"Sessão: {session_id[:20]}... Detalhes: {error_detail}"
-                    )
+                    _log_flaresolverr_http_error(url, 500, error_detail)
 
                 if should_invalidate:
                     self._invalidate_session(session_id, base_url, skip_redis)
@@ -597,7 +630,7 @@ class FlareSolverrClient:
             else:
                 error_msg = result.get("message", "Erro desconhecido")
                 status = result.get("status", "unknown")
-                logger.warning(f"FlareSolverr retornou erro para {url[:50]}...: status={status}, message={error_msg[:100]}")
+                _log_flaresolverr_http_error(url, status, error_msg)
 
                 should_invalidate = False
                 if base_url and error_msg:

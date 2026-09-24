@@ -414,6 +414,57 @@ def run_async(coro):
             f'A busca excedeu o tempo limite de {timeout:g}s'
         ) from None
 
+_poll_futures: Dict[Tuple, object] = {}
+_poll_service: Optional[IndexerServiceAsync] = None
+
+def poll_search(
+    scraper_type: str,
+    query: str,
+    use_flaresolverr: bool,
+    filter_results: bool,
+    max_results: Optional[int],
+) -> Dict[str, object]:
+    key = _search_cache_key(
+        scraper_type, query, use_flaresolverr, filter_results, max_results
+    )
+    cached = _get_cached_search(key)
+    if cached is not None:
+        with _search_cache_lock:
+            _poll_futures.pop(key, None)
+        return {'pending': False, 'just_started': False, 'result': cached}
+
+    just_started = False
+    with _search_cache_lock:
+        future = _poll_futures.get(key)
+        if future is None or future.cancelled():
+            global _poll_service
+            if _poll_service is None:
+                _poll_service = IndexerServiceAsync()
+            future = asyncio.run_coroutine_threadsafe(
+                _poll_service.search(
+                    scraper_type,
+                    query,
+                    use_flaresolverr,
+                    filter_results,
+                    max_results,
+                ),
+                _get_async_loop(),
+            )
+            _poll_futures[key] = future
+            just_started = True
+
+    if not future.done():
+        return {'pending': True, 'just_started': just_started, 'result': None}
+
+    with _search_cache_lock:
+        if _poll_futures.get(key) is future:
+            _poll_futures.pop(key, None)
+
+    error = future.exception()
+    if error is not None:
+        raise error
+    return {'pending': False, 'just_started': False, 'result': future.result()}
+
 async def fetch_all_scrapers_index(
     scraper_types: List[str],
     query: str,

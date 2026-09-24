@@ -3,800 +3,499 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DF Indexer - Busca de Torrents</title>
+    <title>DF Indexer - Busca</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary: #2f80ff;
+            --primary-dark: #1a5fd4;
+            --primary-soft: rgba(47, 128, 255, 0.16);
+            --glow: rgba(47, 128, 255, 0.45);
+            --bg: #05070d;
+            --card: #0b1220;
+            --text: #d5e4ff;
+            --heading: #f2f7ff;
+            --muted: #7f96be;
+            --line: rgba(80, 140, 255, 0.32);
+            --bar: #070b14;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #ffffff;
+            font-family: Rajdhani, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(900px 420px at 8% -10%, rgba(47, 128, 255, 0.22), transparent 60%),
+                radial-gradient(700px 380px at 100% 0%, rgba(20, 70, 180, 0.2), transparent 55%),
+                var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            padding: 12px;
-            color: #2d2d3a;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(70, 130, 255, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(70, 130, 255, 0.06) 1px, transparent 1px);
+            background-size: 46px 46px;
+            mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
         }
 
-        .top-bar {
+        .topbar {
+            background: rgba(5, 8, 16, 0.92);
+            color: #fff;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 14px;
-            flex-wrap: wrap;
+            gap: 18px;
+            min-height: 68px;
+            padding: 10px 22px;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            border-bottom: 1px solid var(--line);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(47, 128, 255, 0.35);
+            backdrop-filter: blur(8px);
         }
 
-        .header {
-            text-align: left;
-            padding: 4px 0;
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .stat-pill {
-            background: #f0effa;
-            border: 1px solid rgba(12, 6, 111, 0.12);
-            border-radius: 999px;
-            padding: 6px 14px;
-            font-size: 0.82rem;
-            color: #6b6f85;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .stat-pill strong {
-            color: #0c066f;
-            font-weight: 700;
-        }
-
-        .header h1 {
-            font-size: 1.8em;
-            margin-bottom: 5px;
-            color: #0c066f;
-            font-weight: 700;
-        }
-
-        .header p {
-            font-size: 0.9em;
-            color: #6b6f85;
-        }
-
-        .support-banner {
+        .brand {
             display: flex;
-            flex-direction: row;
             align-items: center;
-            justify-content: space-between;
-            text-align: left;
-            gap: 12px;
-            margin-bottom: 12px;
-            padding: 10px 14px;
-            background: #f0effa;
-            border: 1px solid rgba(12, 6, 111, 0.12);
-            border-left: 4px solid #0c066f;
-            border-radius: 12px;
-            box-shadow: 0 4px 18px rgba(12, 6, 111, 0.08);
-        }
-
-        .support-banner-text {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .support-banner-title {
-            font-size: 1.05em;
-            font-weight: 700;
-            color: #0c066f;
-            margin-bottom: 4px;
-        }
-
-        .support-banner-desc {
-            font-size: 0.82em;
-            line-height: 1.45;
-            color: #6b6f85;
-            white-space: nowrap;
-        }
-
-        .btn-support {
+            gap: 10px;
             flex-shrink: 0;
+            color: inherit;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .brand:hover .brand-name { color: #9ec4ff; }
+        .brand:hover .brand-mark { box-shadow: 0 0 18px #3d8bff; }
+
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(160deg, #3d8bff, #123a86);
+            color: #fff;
+            display: grid;
+            place-items: center;
+            font-family: "Chakra Petch", Rajdhani, sans-serif;
+            font-weight: 700;
+            font-size: 0.85rem;
+            clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+            box-shadow: 0 0 16px var(--glow);
+        }
+
+        .brand-name {
+            font-family: "Chakra Petch", Rajdhani, sans-serif;
+            font-weight: 700;
+            color: #fff;
+            font-size: 1rem;
+            letter-spacing: 0.6px;
+        }
+        .brand-sub { color: #8eabdb; font-size: 0.78rem; margin-top: 1px; letter-spacing: 0.4px; }
+
+        .nav { display: flex; align-items: center; gap: 4px; }
+        .nav-link {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
-            padding: 7px 14px;
-            background: #16a34a;
-            color: #fff;
-            font-size: 0.9em;
-            font-weight: 600;
+            padding: 8px 12px;
+            color: #c5d7f5;
             text-decoration: none;
-            border-radius: 999px;
-            border: none;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
-            white-space: nowrap;
-        }
-
-        .btn-support:hover {
-            background: #15803d;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(22, 163, 74, 0.4);
-        }
-
-        .btn-support:active {
-            transform: translateY(0);
-        }
-
-        .search-box {
-            background: #ffffff;
-            border: 1px solid rgba(12, 6, 111, 0.12);
-            border-top: 3px solid #0c066f;
-            border-radius: 12px;
-            padding: 14px;
-            margin-bottom: 14px;
-            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
-        }
-
-        .search-form {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 10px;
-            align-items: end;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .form-group label {
-            color: #0c066f;
             font-weight: 600;
-            font-size: 0.85em;
+            font-size: 0.98rem;
             letter-spacing: 0.3px;
+            border: 1px solid transparent;
+        }
+        .nav-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .nav-link.active, .nav-link:hover {
+            color: #fff;
+            border-color: var(--line);
+            background: var(--primary-soft);
+            box-shadow: inset 0 0 12px rgba(47, 128, 255, 0.18);
         }
 
-        .input-wrapper {
+        .support-btn {
+            margin-left: auto;
+            background: transparent;
+            color: #d7e8ff;
+            text-decoration: none;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            padding: 8px 14px;
+            font-size: 0.92rem;
+            white-space: nowrap;
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 14px rgba(47, 128, 255, 0.25);
+        }
+        .support-btn:hover { background: var(--primary); color: #fff; }
+        .support-btn { animation: apoiar-pulso 1.15s ease-in-out infinite; }
+        @keyframes apoiar-pulso {
+            0%, 100% {
+                background: transparent;
+                box-shadow: 0 0 8px rgba(47, 128, 255, 0.2);
+                border-color: rgba(47, 128, 255, 0.55);
+            }
+            50% {
+                background: var(--primary);
+                color: #fff;
+                box-shadow: 0 0 18px rgba(47, 128, 255, 0.85);
+                border-color: #9ec4ff;
+            }
+        }
+
+        .page-head { margin-bottom: 16px; }
+        .page-head h1 {
+            font-family: "Chakra Petch", Rajdhani, sans-serif;
+            font-size: 1.45rem;
+            color: var(--heading);
+            font-weight: 700;
+            letter-spacing: 0.8px;
+        }
+        .page-head p { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+
+        .content { padding: 24px; position: relative; z-index: 1; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .stat-card, .card, .result-item {
             position: relative;
+            background: linear-gradient(180deg, rgba(16, 32, 62, 0.92), rgba(8, 12, 22, 0.96));
+            border: 1px solid var(--line);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 0 22px rgba(20, 70, 180, 0.12);
+        }
+        .stat-card::before, .card::before, .result-item::before,
+        .stat-card::after, .card::after, .result-item::after {
+            content: "";
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-color: #6aabff;
+            border-style: solid;
+            pointer-events: none;
+        }
+        .stat-card::before, .card::before, .result-item::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+        .stat-card::after, .card::after, .result-item::after { right: -1px; bottom: -1px; border-width: 0 2px 2px 0; }
+        .stat-card { padding: 10px 16px; }
+        .stat-label {
+            color: var(--muted);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+        .stat-value {
+            color: #7eb6ff;
+            font-family: "Chakra Petch", Rajdhani, sans-serif;
+            font-size: 1.45rem;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-top: 2px;
+            text-shadow: 0 0 16px rgba(47, 128, 255, 0.45);
+        }
+        .stat-hint { color: #9ec4ff; font-size: 0.78rem; margin-top: 2px; font-weight: 600; line-height: 1.1; }
+
+        .card { padding: 20px; margin-bottom: 16px; }
+        .card-title {
+            color: var(--heading);
+            font-family: "Chakra Petch", Rajdhani, sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            margin-bottom: 14px;
         }
 
+        .search-form { display: flex; flex-direction: column; gap: 14px; }
+        .form-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label, .sites-section > label {
+            color: var(--heading);
+            font-weight: 600;
+            font-size: 0.82rem;
+        }
+        .input-wrapper { position: relative; }
         .form-group input {
             width: 100%;
-            padding: 9px 38px 9px 12px;
-            background: #f6f7fc;
-            border: 1px solid rgba(12, 6, 111, 0.15);
-            border-radius: 8px;
-            font-size: 0.95em;
-            color: #0c066f;
-            transition: all 0.3s ease;
+            height: 38px;
+            padding: 6px 40px 6px 14px;
+            border: 1px solid var(--line);
+            background: #070d18;
+            color: var(--heading);
+            font: inherit;
+            font-size: 1.02rem;
         }
-
+        .form-group input::placeholder { color: #6d84ab; }
         .form-group input:focus {
             outline: none;
-            border-color: #0c066f;
-            background: #ffffff;
-            box-shadow: 0 0 0 3px rgba(12, 6, 111, 0.12);
+            border-color: var(--primary);
+            background: #0a1426;
+            box-shadow: 0 0 0 3px rgba(47, 128, 255, 0.22);
         }
-
-        .form-group input::placeholder {
-            color: #9ca3b8;
-        }
-
         .clear-button {
             position: absolute;
-            right: 12px;
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
-            background: none;
             border: none;
-            color: #888;
+            background: transparent;
+            color: var(--muted);
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
             cursor: pointer;
-            font-size: 1.3em;
-            width: 24px;
-            height: 24px;
             display: none;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
-            border-radius: 50%;
+            font-size: 1.1rem;
         }
-
-        .clear-button:hover {
-            color: #0c066f;
-            background: rgba(12, 6, 111, 0.08);
-        }
-
+        .clear-button:hover { background: var(--primary-soft); color: var(--primary); }
         .btn-search {
-            padding: 9px 20px;
-            background: #0c066f;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.9em;
-            font-weight: 600;
+            height: 38px;
+            padding: 0 22px;
+            border: 1px solid #6aabff;
+            background: linear-gradient(180deg, #3b8cff, #1a5ed0);
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            letter-spacing: 0.6px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            box-shadow: 0 3px 12px rgba(12, 6, 111, 0.35);
-            white-space: nowrap;
+            box-shadow: 0 0 16px rgba(47, 128, 255, 0.35);
         }
-
-        .btn-search:hover {
-            background: #1e14b8;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(12, 6, 111, 0.45);
-        }
-
-        .btn-search:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .sites-section label {
-            color: #0c066f;
-            font-weight: 600;
-            font-size: 0.85em;
-            letter-spacing: 0.3px;
-            margin-bottom: 8px;
-            display: block;
-        }
+        .btn-search:hover { background: linear-gradient(180deg, #5aa0ff, #174fae); }
+        .btn-search:disabled { opacity: 0.55; cursor: not-allowed; }
 
         .scrapers-container {
-            background: #f6f7fc;
-            border: 1px solid rgba(12, 6, 111, 0.1);
-            border-radius: 8px;
-            padding: 10px;
+            margin-top: 8px;
+            background: rgba(5, 10, 20, 0.65);
+            border: 1px solid var(--line);
+            padding: 12px;
         }
-
-        .scrapers-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
+        .scrapers-grid { display: flex; flex-wrap: wrap; gap: 8px; }
         .select-all-wrapper {
-            width: 100%;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
-            border-bottom: 1px solid rgba(12, 6, 111, 0.1);
+            margin-right: 4px;
         }
-
         .checkbox-wrapper {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            padding: 6px 12px;
-            background: #ffffff;
-            border: 1px solid rgba(12, 6, 111, 0.15);
-            border-radius: 6px;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #08101c;
+            border: 1px solid var(--line);
             cursor: pointer;
-            transition: all 0.3s ease;
-            user-select: none;
         }
-
-        .checkbox-wrapper:hover {
-            background: #f0effa;
-            border-color: #0c066f;
-            transform: translateY(-1px);
+        .checkbox-wrapper:hover { border-color: var(--primary); background: var(--primary-soft); }
+        .checkbox-wrapper:has(input:checked) {
+            border-color: #6aabff;
+            background: rgba(47, 128, 255, 0.18);
+            box-shadow: 0 0 12px rgba(47, 128, 255, 0.28);
         }
+        .checkbox-wrapper input { width: 16px; height: 16px; accent-color: var(--primary); margin: 0; }
+        .checkbox-wrapper label { cursor: pointer; color: var(--heading); font-size: 0.88rem; font-weight: 500; margin: 0; }
 
-        .checkbox-wrapper input[type="checkbox"] {
-            width: 17px;
-            height: 17px;
-            cursor: pointer;
-            accent-color: #0c066f;
-            margin: 0;
-        }
-
-        .checkbox-wrapper label {
-            cursor: pointer;
-            color: #0c066f;
-            font-size: 0.88em;
-            font-weight: 500;
-            margin: 0;
-            white-space: nowrap;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 36px 16px;
+        .error {
             display: none;
+            background: rgba(80, 16, 24, 0.72);
+            border: 1px solid rgba(255, 110, 130, 0.45);
+            color: #ffc1cb;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-weight: 600;
         }
+        .error.active { display: block; }
 
-        .loading.active {
-            display: block;
-        }
-
+        .loading { display: none; text-align: center; padding: 28px 12px; }
+        .loading.active { display: block; }
         .spinner {
-            border: 4px solid rgba(12, 6, 111, 0.1);
-            border-top: 4px solid #0c066f;
+            width: 42px;
+            height: 42px;
+            border: 4px solid var(--primary-soft);
+            border-top-color: var(--primary);
             border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
             margin: 0 auto 12px;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { color: var(--muted); }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading p {
-            color: #6b6f85;
-            font-size: 1em;
-        }
-
-        .results {
-            background: #ffffff;
-            border: 1px solid rgba(12, 6, 111, 0.12);
-            border-radius: 12px;
-            padding: 16px;
-            display: none;
-            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
-            max-width: 1600px;
-            margin: 0 auto;
-        }
-
-        .results.active {
-            display: block;
-        }
-
+        .results { display: none; }
+        .results.active { display: block; }
         .results-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
             padding-bottom: 10px;
-            border-bottom: 2px solid rgba(12, 6, 111, 0.15);
+            border-bottom: 1px solid var(--line);
         }
-
-        .results-header h2 {
-            font-size: 1.3em;
-            font-weight: 700;
-            color: #0c066f;
-        }
-
-        .results-count {
-            color: #6b6f85;
-            font-size: 0.9em;
-            font-weight: 500;
-        }
+        .results-header h2 { font-size: 1rem; color: var(--heading); }
+        .results-count { color: var(--muted); font-size: 0.85rem; }
 
         .result-item {
-            background: #f6f7fc;
-            border: 1px solid rgba(12, 6, 111, 0.1);
-            border-radius: 10px;
-            padding: 12px 14px;
-            margin: 0 auto 10px;
-            width: 100%;
-            border-left: 3px solid #0c066f;
-            transition: all 0.3s ease;
+            padding: 14px;
+            margin-bottom: 10px;
         }
-
         .result-item:hover {
-            background: #f0effa;
-            border-left-color: #1e14b8;
-            transform: translateX(4px);
-            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.12);
+            border-color: #6aabff;
+            box-shadow: 0 0 18px rgba(47, 128, 255, 0.22);
         }
-
-        .result-content {
-            display: grid;
-            grid-template-columns: 70% 30%;
-            gap: 8px 16px;
-            width: 100%;
-        }
-
-        .result-line {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-        }
-
-        .result-line .result-value {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .result-value:has(.badge) {
-            justify-content: center;
-        }
-
-        @supports not selector(:has(*)) {
-            .result-value {
-                text-align: center;
-            }
-        }
-
+        .result-content { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 8px 18px; }
+        .result-line { display: flex; gap: 8px; align-items: center; }
         .result-label {
-            color: #6b6f85;
-            font-size: 0.78em;
+            color: var(--muted);
+            font-size: 0.72rem;
             font-weight: 600;
+            letter-spacing: 0.4px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
+            min-width: 92px;
+            line-height: 1;
             flex-shrink: 0;
         }
-
-        .result-value {
-            color: #2d2d3a;
-            font-size: 0.88em;
-            word-break: break-word;
-        }
-
-        .result-value .badge {
-            margin: 0 2px;
-        }
-
-        .result-title {
-            font-size: 0.95em;
-            font-weight: 600;
-            color: #0c066f;
-            line-height: 1.3;
-        }
-
-        .result-link {
-            color: #1e14b8;
-            text-decoration: none;
-            font-size: 0.85em;
-            transition: color 0.2s;
-        }
-
-        .result-link:hover {
-            color: #0c066f;
-            text-decoration: underline;
-        }
-
+        .result-value { color: var(--text); font-size: 0.88rem; word-break: break-word; line-height: 1.25; }
+        .result-title { color: var(--heading); font-weight: 600; }
+        .result-link { color: var(--primary); text-decoration: none; }
+        .result-link:hover { text-decoration: underline; }
         .badge {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            padding: 2px 7px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            font-weight: 600;
-            margin: 0;
-            white-space: nowrap;
-            line-height: 1.3;
-        }
-
-        .badge.audio {
-            background: rgba(12, 6, 111, 0.08);
-            color: #0c066f;
-            border: 1px solid rgba(12, 6, 111, 0.2);
-        }
-
-        .badge.info {
-            background: rgba(30, 20, 184, 0.08);
-            color: #1e14b8;
-            border: 1px solid rgba(30, 20, 184, 0.2);
-        }
-
-        .badge.info.ok {
-            background: rgba(22, 163, 74, 0.1);
-            color: #15803d;
-            border: 1px solid rgba(22, 163, 74, 0.35);
-        }
-
-        .badge.info.empty {
-            background: rgba(220, 38, 38, 0.08);
-            color: #b91c1c;
-            border: 1px solid rgba(220, 38, 38, 0.3);
-        }
-
-        .result-value.info-badges {
-            display: inline-flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .hash-value {
-            font-family: 'Courier New', monospace;
-            font-size: 0.75em;
-            color: #6b6f85;
-            word-break: break-all;
-        }
-
-        .magnet-name {
-            font-size: 0.65em;
-            color: #2d2d3a;
-            word-break: break-word;
-        }
-
-        .magnet-button {
-            display: inline-block;
-            padding: 4px 14px;
-            background: #0c066f;
-            color: white;
-            text-decoration: none;
+            height: 22px;
+            padding: 0 8px;
             border-radius: 6px;
-            font-size: 0.75em;
+            font-size: 0.75rem;
             font-weight: 600;
             line-height: 1;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            box-shadow: 0 2px 10px rgba(12, 6, 111, 0.25);
             white-space: nowrap;
         }
-
-        .magnet-button:hover {
-            background: #1e14b8;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(12, 6, 111, 0.35);
-        }
-
-        .no-results {
-            text-align: center;
-            padding: 36px 16px;
-        }
-
-        .no-results h3 {
-            font-size: 1.4em;
-            margin-bottom: 12px;
-            color: #0c066f;
-        }
-
-        .no-results p {
-            color: #6b6f85;
-            font-size: 0.95em;
-        }
-
-        .error {
-            background: #fff5f5;
-            border: 1px solid #fecaca;
-            border-radius: 10px;
-            padding: 12px 14px;
-            margin-bottom: 14px;
-            color: #b91c1c;
-            display: none;
-            font-weight: 500;
-        }
-
-        .error.active {
-            display: block;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 28px;
-            padding: 14px;
-            color: #6b6f85;
-            font-size: 0.85em;
-            border-top: 1px solid rgba(12, 6, 111, 0.1);
-        }
-
-        .footer-content {
-            display: flex;
-            justify-content: center;
+        .badge.audio { background: var(--primary-soft); color: #9ec4ff; border: 1px solid var(--line); }
+        .badge.info { background: rgba(20, 40, 80, 0.8); color: #b9d4ff; border: 1px solid var(--line); }
+        .badge.info.ok { background: rgba(20, 70, 160, 0.45); color: #d6e8ff; }
+        .badge.info.empty { background: rgba(90, 20, 32, 0.55); color: #ffc4ce; border-color: rgba(255, 120, 140, 0.35); }
+        .badge.seed { background: rgba(14, 92, 48, 0.85); color: #b8f7cf; border: 1px solid rgba(72, 210, 120, 0.65); }
+        .badge.leech { background: rgba(122, 42, 18, 0.85); color: #ffd0b4; border: 1px solid rgba(255, 146, 78, 0.6); }
+        .badge.size { background: rgba(16, 78, 132, 0.85); color: #c8e8ff; border: 1px solid rgba(96, 176, 236, 0.6); }
+        .badge.seed.empty, .badge.leech.empty, .badge.size.empty { opacity: 0.5; }
+        .info-badges, .result-value.info-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+        .hash-value { font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; color: var(--muted); word-break: break-all; }
+        .magnet-name { font-size: 0.78rem; color: var(--text); }
+        .magnet-button {
+            display: inline-flex;
             align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
+            height: 22px;
+            background: linear-gradient(180deg, #3dce74, #178a42);
+            color: #fff;
+            text-decoration: none;
+            padding: 0 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.4px;
+            border: 1px solid #8eecc0;
+            border-radius: 6px;
         }
+        .magnet-button:hover { background: #146e36; }
+        .no-results { text-align: center; padding: 28px 10px; color: var(--muted); }
+        .no-results h3 { color: var(--heading); margin-bottom: 6px; }
 
-        @media (max-width: 1024px) {
-            .header h1 {
-                font-size: 1.6em;
-            }
-            .result-label {
-                min-width: 100px;
-            }
-        }
+        .page-foot { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 8px 0 12px; }
+        .page-foot a { color: inherit; text-decoration: none; }
+        .page-foot a:hover { color: #9ec4ff; }
 
-        @media (max-width: 768px) {
-            body {
-                padding: 8px;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .header {
-                margin-bottom: 0;
-            }
-
-            .stat-pill {
-                width: 100%;
-                text-align: center;
-            }
-            .header h1 {
-                font-size: 1.5em;
-            }
-            .header p {
-                font-size: 0.85em;
-            }
-            .search-box {
-                padding: 12px;
-            }
-            .form-row {
-                grid-template-columns: 1fr;
-                gap: 10px;
-            }
-            .btn-search {
-                width: 100%;
-                padding: 10px;
-            }
-            .form-group input {
-                font-size: 16px;
-                padding: 10px 38px 10px 12px;
-            }
-            .result-content {
-                grid-template-columns: 1fr;
-                gap: 8px;
-            }
-            .result-line {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 5px;
-            }
-            .result-label {
-                font-size: 0.75em;
-            }
-            .result-value {
-                font-size: 0.85em;
-                width: 100%;
-            }
-            .result-title {
-                font-size: 0.92em;
-            }
-            .badge {
-                font-size: 0.72em;
-                padding: 2px 6px;
-                margin: 2px;
-            }
-            .hash-value {
-                font-size: 0.7em;
-            }
-            .magnet-name {
-                font-size: 0.8em;
-            }
-            .magnet-button {
-                width: 100%;
-                text-align: center;
-                padding: 10px;
-                font-size: 0.85em;
-            }
-            .results-header {
-                flex-direction: column;
-                gap: 8px;
-                align-items: flex-start;
-            }
-            .results-header h2 {
-                font-size: 1.2em;
-            }
-            .support-banner {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .support-banner-desc {
-                white-space: normal;
-            }
-            .btn-support {
-                width: 100%;
-                justify-content: center;
-            }
-        }
-
-        @media (max-width: 480px) {
-            body {
-                padding: 6px;
-            }
-            .header h1 {
-                font-size: 1.3em;
-            }
-            .search-box {
-                padding: 10px;
-            }
-            .results {
-                padding: 12px;
-            }
-            .result-item {
-                padding: 10px;
-            }
-            .checkbox-wrapper {
-                padding: 6px 10px;
-            }
-            .support-banner {
-                padding: 8px 10px;
-            }
+        @media (max-width: 980px) {
+            .stats, .result-content, .form-row { grid-template-columns: 1fr; }
+            .content { padding: 16px; }
+            .topbar { flex-wrap: wrap; gap: 10px; }
+            .support-btn { margin-left: 0; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="top-bar">
-            <div class="header">
-                <h1>🔍 DF Indexer</h1>
-                <p>Busca Inteligente de Torrents Brasileiros</p>
+    <header class="topbar">
+        <a class="brand" href="https://github.com/DFlexy/dfindexer" target="_blank" rel="noopener noreferrer">
+            <div class="brand-mark">DF</div>
+            <div>
+                <div class="brand-name">DF Indexer</div>
+                <div class="brand-sub">Busca de torrents</div>
             </div>
-            <div class="stat-pill">
-                Indexados: <strong id="indexedCountTop">Carregando...</strong>
-            </div>
+        </a>
+        <a class="support-btn" href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000" target="_blank" rel="noopener noreferrer">Apoiar projeto</a>
+    </header>
+    <div class="content">
+        <div class="page-head">
+            <h1>Busca</h1>
+            <p>Torrents brasileiros para Prowlarr, Sonarr e Radarr</p>
         </div>
+                <section class="stats">
+                    <article class="stat-card">
+                        <div class="stat-label">Indexados</div>
+                        <div class="stat-value" id="indexedCountTop">...</div>
+                        <div class="stat-hint">No cache</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-label">Sites</div>
+                        <div class="stat-value" id="sitesCount">...</div>
+                        <div class="stat-hint">Disponíveis</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-label">Resultados</div>
+                        <div class="stat-value" id="resultsStat">—</div>
+                        <div class="stat-hint">Última busca</div>
+                    </article>
+                </section>
 
-        <aside class="support-banner" aria-label="Apoie o projeto">
-            <div class="support-banner-text">
-                <div class="support-banner-title">💖 Apoie este projeto</div>
-                <p class="support-banner-desc">Projeto 100% independente e open-source. Seu apoio mantém o desenvolvimento ativo.</p>
-            </div>
-            <a
-                class="btn-support"
-                href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000"
-                target="_blank"
-                rel="noopener noreferrer"
-            >Apoiar projeto</a>
-        </aside>
-
-        <div class="search-box">
-            <form id="searchForm" class="search-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="query">O que você procura?</label>
-                        <div class="input-wrapper">
-                            <input type="text" id="query" name="query" placeholder="Digite o nome do filme ou série..." required>
-                            <button type="button" class="clear-button" id="clearButton" title="Limpar">×</button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn-search" id="searchBtn">Buscar</button>
-                </div>
-
-                <div class="sites-section">
-                    <label>Selecione os sites de busca:</label>
-                    <div class="scrapers-container">
-                        <div class="scrapers-grid">
-                            <div class="checkbox-wrapper select-all-wrapper">
-                                <input type="checkbox" id="selectAll">
-                                <label for="selectAll">Selecionar Todos</label>
+                <section class="card">
+                    <h2 class="card-title">Nova busca</h2>
+                    <form id="searchForm" class="search-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="query">O que você procura?</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="query" name="query" placeholder="Digite o nome do filme ou série..." required>
+                                    <button type="button" class="clear-button" id="clearButton" title="Limpar">×</button>
+                                </div>
                             </div>
-                            <div id="scrapersList" style="display: contents;"></div>
+                            <button type="submit" class="btn-search" id="searchBtn">Buscar</button>
                         </div>
-                    </div>
+                        <div class="sites-section">
+                            <label>Sites</label>
+                            <div class="scrapers-container">
+                                <div class="scrapers-grid">
+                                    <div class="checkbox-wrapper select-all-wrapper">
+                                        <input type="checkbox" id="selectAll">
+                                        <label for="selectAll">Selecionar todos</label>
+                                    </div>
+                                    <div id="scrapersList" style="display: contents;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <div class="error" id="errorBox"></div>
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p id="loadingText">Buscando torrents...</p>
                 </div>
-            </form>
-        </div>
 
-        <div class="error" id="errorBox"></div>
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Buscando torrents...</p>
-        </div>
+                <section class="card results" id="results">
+                    <div class="results-header">
+                        <h2>Resultados</h2>
+                        <div class="results-count" id="resultsCount"></div>
+                    </div>
+                    <div id="resultsList"></div>
+                </section>
 
-        <div class="results" id="results">
-            <div class="results-header">
-                <h2>Resultados</h2>
-                <div class="results-count" id="resultsCount"></div>
-            </div>
-            <div id="resultsList"></div>
-        </div>
-
-        <div class="footer">
-            <div class="footer-content">
-                <span>DF Indexer © 2025</span>
-            </div>
-        </div>
+                <div class="page-foot"><a href="https://github.com/DFlexy/dfindexer" target="_blank" rel="noopener noreferrer">DF Indexer</a></div>
     </div>
 
     <script>
+
         async function loadSites() {
             try {
                 const response = await fetch('/');
@@ -826,6 +525,8 @@
                         wrapper.appendChild(label);
                         scrapersList.appendChild(wrapper);
                     });
+                    const sitesCount = document.getElementById('sitesCount');
+                    if (sitesCount) sitesCount.textContent = String(data.available_types.length);
                     updateSelectAllState();
                     selectAllCheckbox.addEventListener('change', (e) => {
                         document.querySelectorAll('input[name="scraper"]').forEach(cb => cb.checked = e.target.checked);
@@ -929,10 +630,6 @@
             return normalized !== '0' && normalized !== '0 b' && normalized !== '0b';
         }
 
-        function infoBadgeClass(hasValue) {
-            return hasValue ? 'badge info ok' : 'badge info empty';
-        }
-
         function formatUrl(url) {
             if (!url || url === '#') return 'N/A';
             try {
@@ -947,6 +644,8 @@
             const resultsList = document.getElementById('resultsList');
             const resultsCount = document.getElementById('resultsCount');
             resultsCount.textContent = `${torrents.length} resultado(s) encontrado(s)`;
+            const resultsStat = document.getElementById('resultsStat');
+            if (resultsStat) resultsStat.textContent = torrents.length.toLocaleString('pt-BR');
             if (torrents.length === 0) {
                 resultsList.innerHTML = '<div class="no-results"><h3>Nenhum resultado encontrado</h3><p>Tente buscar com outros termos ou verifique a ortografia.</p></div>';
                 return;
@@ -964,9 +663,9 @@
                 const seeds = formatNumber(seedRaw !== undefined ? seedRaw : 'N/A');
                 const leech = formatNumber(leechRaw !== undefined ? leechRaw : 'N/A');
                 const size = formatSize(torrent.size);
-                const seedBadgeClass = infoBadgeClass(hasPositiveCount(seedRaw));
-                const leechBadgeClass = infoBadgeClass(hasPositiveCount(leechRaw));
-                const sizeBadgeClass = infoBadgeClass(hasValidSize(torrent.size));
+                const seedBadgeClass = hasPositiveCount(seedRaw) ? 'badge seed' : 'badge seed empty';
+                const leechBadgeClass = hasPositiveCount(leechRaw) ? 'badge leech' : 'badge leech empty';
+                const sizeBadgeClass = hasValidSize(torrent.size) ? 'badge size' : 'badge size empty';
                 const hash = torrent.info_hash || 'N/A';
                 let releaseTitleMagnet = torrent.magnet_original;
                 const looksProcessedMagnet = (name) => /^-S\d{1,2}E\d{1,2}-/.test((name || '').trim()) && (name || '').split('.').length >= 4;
@@ -1007,15 +706,51 @@
             setTimeout(() => errorBox.classList.remove('active'), 5000);
         }
 
+        function siteLabel(site) {
+            const label = document.querySelector(`label[for="site_${site}"]`);
+            return label ? label.textContent : site;
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function fetchSiteResults(site, query, flaresolverrParam) {
+            const url = `/indexers/${site}?q=${encodeURIComponent(query)}${flaresolverrParam}&wait=poll`;
+            const started = Date.now();
+            const maxMs = 10 * 60 * 1000;
+            let failures = 0;
+            while (Date.now() - started < maxMs) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const data = await response.json();
+                    failures = 0;
+                    if (!data.pending) {
+                        return data.results || [];
+                    }
+                } catch (error) {
+                    failures += 1;
+                    if (failures >= 5) {
+                        throw error;
+                    }
+                }
+                await sleep(2000);
+            }
+            throw new Error('tempo esgotado');
+        }
+
         async function searchTorrents(query, selectedScrapers) {
             const loading = document.getElementById('loading');
+            const loadingText = document.getElementById('loadingText');
             const results = document.getElementById('results');
             const searchBtn = document.getElementById('searchBtn');
             loading.classList.add('active');
             results.classList.remove('active');
             searchBtn.disabled = true;
             try {
-                let allResults = [];
                 let scrapersToSearch = [];
                 const allScrapers = Array.from(document.querySelectorAll('input[name="scraper"]')).map(cb => cb.value);
 
@@ -1030,31 +765,54 @@
                     return;
                 }
 
-                const promises = scrapersToSearch.map(async (site) => {
+                const pending = new Set(scrapersToSearch);
+                const failed = [];
+                let allResults = [];
+
+                const refreshStatus = () => {
+                    const names = Array.from(pending).map(siteLabel);
+                    loadingText.textContent = names.length
+                        ? `Buscando em ${names.join(', ')}...`
+                        : 'Buscando torrents...';
+                };
+                refreshStatus();
+
+                await Promise.all(scrapersToSearch.map(async (site) => {
                     try {
                         const checkbox = document.getElementById(`site_${site}`);
                         const useFlareSolverr = checkbox?.dataset.useFlaresolverr === 'true';
                         const flaresolverrParam = useFlareSolverr ? '&use_flaresolverr=true' : '&use_flaresolverr=false';
-                        const url = `/indexers/${site}?q=${encodeURIComponent(query)}${flaresolverrParam}`;
-                        const response = await fetch(url);
-                        const data = await response.json();
-                        return data.results || [];
+                        const rows = await fetchSiteResults(site, query, flaresolverrParam);
+                        allResults = allResults.concat(rows);
+                        if (allResults.length) {
+                            allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                            renderResults(allResults);
+                            results.classList.add('active');
+                        }
                     } catch (error) {
                         console.error(`Erro ao buscar em ${site}:`, error);
-                        return [];
+                        failed.push(siteLabel(site));
+                    } finally {
+                        pending.delete(site);
+                        refreshStatus();
                     }
-                });
+                }));
 
-                const resultsArray = await Promise.all(promises);
-                allResults = resultsArray.flat();
                 allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
                 renderResults(allResults);
+                if (failed.length && allResults.length === 0) {
+                    const resultsList = document.getElementById('resultsList');
+                    resultsList.innerHTML = `<div class="no-results"><h3>Nenhum resultado encontrado</h3><p>Estes sites não responderam: ${failed.join(', ')}.</p></div>`;
+                } else if (failed.length) {
+                    showError(`Estes sites não responderam: ${failed.join(', ')}.`);
+                }
                 results.classList.add('active');
             } catch (error) {
                 showError('Erro ao buscar torrents. Tente novamente.');
                 console.error('Erro:', error);
             } finally {
                 loading.classList.remove('active');
+                loadingText.textContent = 'Buscando torrents...';
                 searchBtn.disabled = false;
             }
         }

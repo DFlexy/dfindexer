@@ -160,7 +160,7 @@ class BaseScraper(ABC):
                 self._open_first_connection()
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
                 self._site_offline = True
-                logger.info(f"[{self._site_label()}] está fora")
+                logger.info(f"[{self._site_label()}] <<<<< Está fora >>>>>")
                 return False
         return True
 

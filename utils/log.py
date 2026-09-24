@@ -30,19 +30,15 @@ def print_support_banner(log_format: str = 'console') -> None:
         return
     _ensure_utf8_output()
     lines = [
-        '',
-        '======================================================================',
+        '===================================================',
         '                 💖 Apoie este projeto',
-        '======================================================================',
-        '',
-        '  Este projeto e 100% independente e open-source.',
-        '  💜 Seu apoio mantem o desenvolvimento ativo.',
-        '',
-        '  >> APOIAR ESTE PROJETO:',
-        '  https://donate.stripe.com/3cI3cvehCfd18bxbPoco000',
-        '',
-        '======================================================================',
-        '',
+        '===================================================',
+        ' Este projeto e 100% independente e open-source.',
+        ' 💜 Seu apoio mantem o desenvolvimento ativo.',
+        ' 💰 NÃO PRECISA SER MUITO! QUALQUER VALOR AJUDA.',
+        ' >> APOIAR ESTE PROJETO:',
+        ' https://donate.stripe.com/3cI3cvehCfd18bxbPoco000',
+        '===================================================',
     ]
     for line in lines:
         print(line, file=sys.stdout)
