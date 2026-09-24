@@ -1,0 +1,111 @@
+name: Build and Publish Multi-Arch Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*", "*.*.*" ]
+  workflow_dispatch:
+
+concurrency:
+  group: versao-dfindexer
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Tirar fluxo-atual.html do repositorio
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if git ls-files --error-unmatch -- fluxo-atual.html >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git rm -f -- fluxo-atual.html
+            git commit -m "Remove fluxo-atual.html do repositorio"
+            git push origin HEAD:main
+          fi
+
+      - name: Gerar versao
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="${VERSION#v}"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch origin --tags --force
+          existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          if [[ -n "$existing" ]]; then
+            echo "version=${existing#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [[ -z "$latest" ]]; then
+            next="1.0.0"
+          else
+            ver="${latest#v}"
+            major="${ver%%.*}"
+            rest="${ver#*.}"
+            minor="${rest%%.*}"
+            patch="${rest#*.}"
+            patch="$((patch + 1))"
+            next="${major}.${minor}.${patch}"
+          fi
+
+          git tag "v${next}"
+          git push origin "v${next}"
+          gh release create "v${next}" --title "${next}" --generate-notes
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+          echo "Versao ${next} criada."
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: image
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LC}/dfindexer"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Versao invalida: ${VERSION}"
+            exit 1
+          fi
+
+          TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Publicando: ${TAGS}"
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.tags }}

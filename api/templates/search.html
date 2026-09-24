@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DF Indexer - Busca de Torrents</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 12px;
+            color: #2d2d3a;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .header {
+            text-align: left;
+            padding: 4px 0;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .stat-pill {
+            background: #f0effa;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            color: #6b6f85;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .stat-pill strong {
+            color: #0c066f;
+            font-weight: 700;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+            color: #0c066f;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            color: #6b6f85;
+        }
+
+        .support-banner {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            background: #f0effa;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-left: 4px solid #0c066f;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(12, 6, 111, 0.08);
+        }
+
+        .support-banner-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .support-banner-title {
+            font-size: 1.05em;
+            font-weight: 700;
+            color: #0c066f;
+            margin-bottom: 4px;
+        }
+
+        .support-banner-desc {
+            font-size: 0.82em;
+            line-height: 1.45;
+            color: #6b6f85;
+            white-space: nowrap;
+        }
+
+        .btn-support {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 7px 14px;
+            background: #16a34a;
+            color: #fff;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+            white-space: nowrap;
+        }
+
+        .btn-support:hover {
+            background: #15803d;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(22, 163, 74, 0.4);
+        }
+
+        .btn-support:active {
+            transform: translateY(0);
+        }
+
+        .search-box {
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-top: 3px solid #0c066f;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
+        }
+
+        .search-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            color: #0c066f;
+            font-weight: 600;
+            font-size: 0.85em;
+            letter-spacing: 0.3px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 9px 38px 9px 12px;
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.15);
+            border-radius: 8px;
+            font-size: 0.95em;
+            color: #0c066f;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #0c066f;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(12, 6, 111, 0.12);
+        }
+
+        .form-group input::placeholder {
+            color: #9ca3b8;
+        }
+
+        .clear-button {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1.3em;
+            width: 24px;
+            height: 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            border-radius: 50%;
+        }
+
+        .clear-button:hover {
+            color: #0c066f;
+            background: rgba(12, 6, 111, 0.08);
+        }
+
+        .btn-search {
+            padding: 9px 20px;
+            background: #0c066f;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 3px 12px rgba(12, 6, 111, 0.35);
+            white-space: nowrap;
+        }
+
+        .btn-search:hover {
+            background: #1e14b8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(12, 6, 111, 0.45);
+        }
+
+        .btn-search:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .sites-section label {
+            color: #0c066f;
+            font-weight: 600;
+            font-size: 0.85em;
+            letter-spacing: 0.3px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .scrapers-container {
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .scrapers-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .select-all-wrapper {
+            width: 100%;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(12, 6, 111, 0.1);
+        }
+
+        .checkbox-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 12px;
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.15);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .checkbox-wrapper:hover {
+            background: #f0effa;
+            border-color: #0c066f;
+            transform: translateY(-1px);
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            cursor: pointer;
+            accent-color: #0c066f;
+            margin: 0;
+        }
+
+        .checkbox-wrapper label {
+            cursor: pointer;
+            color: #0c066f;
+            font-size: 0.88em;
+            font-weight: 500;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 36px 16px;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid rgba(12, 6, 111, 0.1);
+            border-top: 4px solid #0c066f;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            color: #6b6f85;
+            font-size: 1em;
+        }
+
+        .results {
+            background: #ffffff;
+            border: 1px solid rgba(12, 6, 111, 0.12);
+            border-radius: 12px;
+            padding: 16px;
+            display: none;
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.08);
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(12, 6, 111, 0.15);
+        }
+
+        .results-header h2 {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #0c066f;
+        }
+
+        .results-count {
+            color: #6b6f85;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .result-item {
+            background: #f6f7fc;
+            border: 1px solid rgba(12, 6, 111, 0.1);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 0 auto 10px;
+            width: 100%;
+            border-left: 3px solid #0c066f;
+            transition: all 0.3s ease;
+        }
+
+        .result-item:hover {
+            background: #f0effa;
+            border-left-color: #1e14b8;
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(12, 6, 111, 0.12);
+        }
+
+        .result-content {
+            display: grid;
+            grid-template-columns: 70% 30%;
+            gap: 8px 16px;
+            width: 100%;
+        }
+
+        .result-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .result-line .result-value {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .result-value:has(.badge) {
+            justify-content: center;
+        }
+
+        @supports not selector(:has(*)) {
+            .result-value {
+                text-align: center;
+            }
+        }
+
+        .result-label {
+            color: #6b6f85;
+            font-size: 0.78em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .result-value {
+            color: #2d2d3a;
+            font-size: 0.88em;
+            word-break: break-word;
+        }
+
+        .result-value .badge {
+            margin: 0 2px;
+        }
+
+        .result-title {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #0c066f;
+            line-height: 1.3;
+        }
+
+        .result-link {
+            color: #1e14b8;
+            text-decoration: none;
+            font-size: 0.85em;
+            transition: color 0.2s;
+        }
+
+        .result-link:hover {
+            color: #0c066f;
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin: 0;
+            white-space: nowrap;
+            line-height: 1.3;
+        }
+
+        .badge.audio {
+            background: rgba(12, 6, 111, 0.08);
+            color: #0c066f;
+            border: 1px solid rgba(12, 6, 111, 0.2);
+        }
+
+        .badge.info {
+            background: rgba(30, 20, 184, 0.08);
+            color: #1e14b8;
+            border: 1px solid rgba(30, 20, 184, 0.2);
+        }
+
+        .badge.info.ok {
+            background: rgba(22, 163, 74, 0.1);
+            color: #15803d;
+            border: 1px solid rgba(22, 163, 74, 0.35);
+        }
+
+        .badge.info.empty {
+            background: rgba(220, 38, 38, 0.08);
+            color: #b91c1c;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .result-value.info-badges {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .hash-value {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            color: #6b6f85;
+            word-break: break-all;
+        }
+
+        .magnet-name {
+            font-size: 0.65em;
+            color: #2d2d3a;
+            word-break: break-word;
+        }
+
+        .magnet-button {
+            display: inline-block;
+            padding: 4px 14px;
+            background: #0c066f;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.75em;
+            font-weight: 600;
+            line-height: 1;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 10px rgba(12, 6, 111, 0.25);
+            white-space: nowrap;
+        }
+
+        .magnet-button:hover {
+            background: #1e14b8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(12, 6, 111, 0.35);
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 36px 16px;
+        }
+
+        .no-results h3 {
+            font-size: 1.4em;
+            margin-bottom: 12px;
+            color: #0c066f;
+        }
+
+        .no-results p {
+            color: #6b6f85;
+            font-size: 0.95em;
+        }
+
+        .error {
+            background: #fff5f5;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            color: #b91c1c;
+            display: none;
+            font-weight: 500;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 28px;
+            padding: 14px;
+            color: #6b6f85;
+            font-size: 0.85em;
+            border-top: 1px solid rgba(12, 6, 111, 0.1);
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 1024px) {
+            .header h1 {
+                font-size: 1.6em;
+            }
+            .result-label {
+                min-width: 100px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header {
+                margin-bottom: 0;
+            }
+
+            .stat-pill {
+                width: 100%;
+                text-align: center;
+            }
+            .header h1 {
+                font-size: 1.5em;
+            }
+            .header p {
+                font-size: 0.85em;
+            }
+            .search-box {
+                padding: 12px;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .btn-search {
+                width: 100%;
+                padding: 10px;
+            }
+            .form-group input {
+                font-size: 16px;
+                padding: 10px 38px 10px 12px;
+            }
+            .result-content {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .result-line {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            .result-label {
+                font-size: 0.75em;
+            }
+            .result-value {
+                font-size: 0.85em;
+                width: 100%;
+            }
+            .result-title {
+                font-size: 0.92em;
+            }
+            .badge {
+                font-size: 0.72em;
+                padding: 2px 6px;
+                margin: 2px;
+            }
+            .hash-value {
+                font-size: 0.7em;
+            }
+            .magnet-name {
+                font-size: 0.8em;
+            }
+            .magnet-button {
+                width: 100%;
+                text-align: center;
+                padding: 10px;
+                font-size: 0.85em;
+            }
+            .results-header {
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            .results-header h2 {
+                font-size: 1.2em;
+            }
+            .support-banner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .support-banner-desc {
+                white-space: normal;
+            }
+            .btn-support {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 6px;
+            }
+            .header h1 {
+                font-size: 1.3em;
+            }
+            .search-box {
+                padding: 10px;
+            }
+            .results {
+                padding: 12px;
+            }
+            .result-item {
+                padding: 10px;
+            }
+            .checkbox-wrapper {
+                padding: 6px 10px;
+            }
+            .support-banner {
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-bar">
+            <div class="header">
+                <h1>🔍 DF Indexer</h1>
+                <p>Busca Inteligente de Torrents Brasileiros</p>
+            </div>
+            <div class="stat-pill">
+                Indexados: <strong id="indexedCountTop">Carregando...</strong>
+            </div>
+        </div>
+
+        <aside class="support-banner" aria-label="Apoie o projeto">
+            <div class="support-banner-text">
+                <div class="support-banner-title">💖 Apoie este projeto</div>
+                <p class="support-banner-desc">Projeto 100% independente e open-source. Seu apoio mantém o desenvolvimento ativo.</p>
+            </div>
+            <a
+                class="btn-support"
+                href="https://donate.stripe.com/3cI3cvehCfd18bxbPoco000"
+                target="_blank"
+                rel="noopener noreferrer"
+            >Apoiar projeto</a>
+        </aside>
+
+        <div class="search-box">
+            <form id="searchForm" class="search-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="query">O que você procura?</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="query" name="query" placeholder="Digite o nome do filme ou série..." required>
+                            <button type="button" class="clear-button" id="clearButton" title="Limpar">×</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-search" id="searchBtn">Buscar</button>
+                </div>
+
+                <div class="sites-section">
+                    <label>Selecione os sites de busca:</label>
+                    <div class="scrapers-container">
+                        <div class="scrapers-grid">
+                            <div class="checkbox-wrapper select-all-wrapper">
+                                <input type="checkbox" id="selectAll">
+                                <label for="selectAll">Selecionar Todos</label>
+                            </div>
+                            <div id="scrapersList" style="display: contents;"></div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="error" id="errorBox"></div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Buscando torrents...</p>
+        </div>
+
+        <div class="results" id="results">
+            <div class="results-header">
+                <h2>Resultados</h2>
+                <div class="results-count" id="resultsCount"></div>
+            </div>
+            <div id="resultsList"></div>
+        </div>
+
+        <div class="footer">
+            <div class="footer-content">
+                <span>DF Indexer © 2025</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSites() {
+            try {
+                const response = await fetch('/');
+                const data = await response.json();
+                const scrapersList = document.getElementById('scrapersList');
+                const selectAllCheckbox = document.getElementById('selectAll');
+                const typesInfo = data.types_info || {};
+
+                if (data.available_types && Array.isArray(data.available_types)) {
+                    scrapersList.innerHTML = '';
+                    const defaultScraper = data.available_types.includes('starck') ? 'starck' : data.available_types[0];
+                    data.available_types.forEach((site) => {
+                        const meta = typesInfo[site] || {};
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'checkbox-wrapper';
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.id = `site_${site}`;
+                        checkbox.value = site;
+                        checkbox.name = 'scraper';
+                        checkbox.dataset.useFlaresolverr = meta.use_flaresolverr_default ? 'true' : 'false';
+                        if (site === defaultScraper) checkbox.checked = true;
+                        const label = document.createElement('label');
+                        label.htmlFor = `site_${site}`;
+                        label.textContent = meta.display_name || (site.charAt(0).toUpperCase() + site.slice(1));
+                        wrapper.appendChild(checkbox);
+                        wrapper.appendChild(label);
+                        scrapersList.appendChild(wrapper);
+                    });
+                    updateSelectAllState();
+                    selectAllCheckbox.addEventListener('change', (e) => {
+                        document.querySelectorAll('input[name="scraper"]').forEach(cb => cb.checked = e.target.checked);
+                    });
+                    scrapersList.addEventListener('change', (e) => {
+                        if (e.target.name === 'scraper') updateSelectAllState();
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar sites:', error);
+            }
+        }
+
+        function updateSelectAllState() {
+            const checkboxes = document.querySelectorAll('input[name="scraper"]');
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            if (checkedCount === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCount === checkboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+
+        function getSelectedScrapers() {
+            const selected = Array.from(document.querySelectorAll('input[name="scraper"]:checked')).map(cb => cb.value);
+            return selected;
+        }
+
+        function extractAudioTags(title) {
+            const finalTitle = title.trim();
+            const idiomas = [];
+            if (title.includes('[Brazilian]')) idiomas.push('Português');
+            if (title.includes('[Eng]')) idiomas.push('Inglês');
+            if (title.includes('[Jap]')) idiomas.push('Japonês');
+            return {
+                finalTitle: finalTitle,
+                idiomas: idiomas.slice(0, 3),
+                legendas: []
+            };
+        }
+
+        function determineLegenda(torrent) {
+            if (torrent.legend != null && torrent.legend !== undefined && torrent.legend !== 'N/A' && String(torrent.legend).trim()) {
+                return String(torrent.legend).trim();
+            }
+            if (torrent.has_legenda === true) {
+                return 'Português';
+            }
+            const title = (torrent.title_processed || '').toLowerCase();
+            if (title.includes('legendado') || title.includes('legenda') || /\bleg\b/.test(title)) {
+                return 'Português';
+            }
+            const magnetOriginal = (torrent.magnet_original || '').toLowerCase();
+            if (magnetOriginal.includes('legendado') || magnetOriginal.includes('legenda') || /\bleg\b/.test(magnetOriginal)) {
+                return 'Português';
+            }
+            const magnetLink = (torrent.magnet || torrent.magnet_link || '').toLowerCase();
+            if (magnetLink.includes('magnet:')) {
+                try {
+                    const dnMatch = magnetLink.match(/[&?]dn=([^&]+)/i);
+                    if (dnMatch) {
+                        const magnetName = decodeURIComponent(dnMatch[1]).toLowerCase();
+                        if (magnetName.includes('legendado') || magnetName.includes('legenda') || /\bleg\b/.test(magnetName)) {
+                            return 'Português';
+                        }
+                    }
+                } catch (e) {
+                    // Ignora erros de decodificação
+                }
+            }
+            return null;
+        }
+
+        function formatSize(size) {
+            return size && size !== 'N/A' ? size : 'N/A';
+        }
+
+        function formatNumber(num) {
+            return (num === null || num === undefined || num === 'N/A') ? 'N/A' : num.toString();
+        }
+
+        function hasPositiveCount(value) {
+            if (value === null || value === undefined || value === '' || value === 'N/A') {
+                return false;
+            }
+            const num = Number(value);
+            return !Number.isNaN(num) && num > 0;
+        }
+
+        function hasValidSize(size) {
+            if (!size || size === 'N/A') {
+                return false;
+            }
+            const normalized = String(size).trim().toLowerCase();
+            return normalized !== '0' && normalized !== '0 b' && normalized !== '0b';
+        }
+
+        function infoBadgeClass(hasValue) {
+            return hasValue ? 'badge info ok' : 'badge info empty';
+        }
+
+        function formatUrl(url) {
+            if (!url || url === '#') return 'N/A';
+            try {
+                return `${new URL(url).origin}/...`;
+            } catch (e) {
+                const match = url.match(/^https?:\/\/([^\/]+)/);
+                return match ? `${match[0]}/...` : (url.length > 50 ? url.substring(0, 50) + '...' : url);
+            }
+        }
+
+        function renderResults(torrents) {
+            const resultsList = document.getElementById('resultsList');
+            const resultsCount = document.getElementById('resultsCount');
+            resultsCount.textContent = `${torrents.length} resultado(s) encontrado(s)`;
+            if (torrents.length === 0) {
+                resultsList.innerHTML = '<div class="no-results"><h3>Nenhum resultado encontrado</h3><p>Tente buscar com outros termos ou verifique a ortografia.</p></div>';
+                return;
+            }
+            resultsList.innerHTML = torrents.map(torrent => {
+                const { finalTitle, idiomas } = extractAudioTags(torrent.title_processed || '');
+                const idiomasStr = idiomas.length > 0 ? idiomas.join(', ') : 'N/A';
+                const legendaDetectada = determineLegenda(torrent);
+                const legendaStr = legendaDetectada || 'N/A';
+                const detailsUrl = torrent.details || '#';
+                const magnetLink = torrent.magnet || torrent.magnet_link || '#';
+                const formattedUrl = formatUrl(detailsUrl);
+                const seedRaw = torrent.tracker_seed !== undefined ? torrent.tracker_seed : torrent.seed_count;
+                const leechRaw = torrent.tracker_leech !== undefined ? torrent.tracker_leech : torrent.leech_count;
+                const seeds = formatNumber(seedRaw !== undefined ? seedRaw : 'N/A');
+                const leech = formatNumber(leechRaw !== undefined ? leechRaw : 'N/A');
+                const size = formatSize(torrent.size);
+                const seedBadgeClass = infoBadgeClass(hasPositiveCount(seedRaw));
+                const leechBadgeClass = infoBadgeClass(hasPositiveCount(leechRaw));
+                const sizeBadgeClass = infoBadgeClass(hasValidSize(torrent.size));
+                const hash = torrent.info_hash || 'N/A';
+                let releaseTitleMagnet = torrent.magnet_original;
+                const looksProcessedMagnet = (name) => /^-S\d{1,2}E\d{1,2}-/.test((name || '').trim()) && (name || '').split('.').length >= 4;
+                if (looksProcessedMagnet(releaseTitleMagnet)) {
+                    releaseTitleMagnet = null;
+                }
+                if (!releaseTitleMagnet && magnetLink && magnetLink !== '#') {
+                    try {
+                        const dnMatch = magnetLink.match(/[&?]dn=([^&]+)/i);
+                        if (dnMatch) {
+                            const dnValue = decodeURIComponent(dnMatch[1]);
+                            if (!looksProcessedMagnet(dnValue)) {
+                                releaseTitleMagnet = dnValue;
+                            }
+                        }
+                    } catch (e) {
+                        // Ignora erros de decodificação
+                    }
+                }
+                releaseTitleMagnet = releaseTitleMagnet || 'N/A';
+                return `<div class="result-item"><div class="result-content">
+                    <div class="result-line"><span class="result-label">TÍTULO PROCESSADO:</span><span class="result-value result-title">${finalTitle}</span></div>
+                    <div class="result-line"><span class="result-label">LINK:</span><span class="result-value">${detailsUrl !== '#' ? `<a href="${detailsUrl}" target="_blank" class="result-link" title="${detailsUrl}">${formattedUrl}</a>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">ÁUDIO:</span><span class="result-value">${idiomasStr !== 'N/A' ? `<span class="badge audio">${idiomasStr}</span>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">LEGENDA:</span><span class="result-value">${legendaStr !== 'N/A' ? `<span class="badge audio">${legendaStr}</span>` : 'N/A'}</span></div>
+                    <div class="result-line"><span class="result-label">INFO:</span><span class="result-value info-badges"><span class="${seedBadgeClass}">S: ${seeds}</span><span class="${leechBadgeClass}">L: ${leech}</span><span class="${sizeBadgeClass}">${size}</span></span></div>
+                    <div class="result-line"><span class="result-label">HASH:</span><span class="result-value hash-value">${hash}</span></div>
+                    <div class="result-line"><span class="result-label">MAGNET:</span><span class="result-value magnet-name">${releaseTitleMagnet}</span></div>
+                    <div class="result-line"><span class="result-label">DOWNLOAD:</span><span class="result-value">${magnetLink !== '#' ? `<a href="${magnetLink}" class="magnet-button">Magnet</a>` : 'N/A'}</span></div>
+                </div></div>`;
+            }).join('');
+        }
+
+        function showError(message) {
+            const errorBox = document.getElementById('errorBox');
+            errorBox.textContent = message;
+            errorBox.classList.add('active');
+            setTimeout(() => errorBox.classList.remove('active'), 5000);
+        }
+
+        async function searchTorrents(query, selectedScrapers) {
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const searchBtn = document.getElementById('searchBtn');
+            loading.classList.add('active');
+            results.classList.remove('active');
+            searchBtn.disabled = true;
+            try {
+                let allResults = [];
+                let scrapersToSearch = [];
+                const allScrapers = Array.from(document.querySelectorAll('input[name="scraper"]')).map(cb => cb.value);
+
+                if (selectedScrapers.length === 0 || selectedScrapers.length === allScrapers.length) {
+                    scrapersToSearch = allScrapers;
+                } else {
+                    scrapersToSearch = selectedScrapers;
+                }
+
+                if (scrapersToSearch.length === 0) {
+                    showError('Por favor, selecione pelo menos um site de busca.');
+                    return;
+                }
+
+                const promises = scrapersToSearch.map(async (site) => {
+                    try {
+                        const checkbox = document.getElementById(`site_${site}`);
+                        const useFlareSolverr = checkbox?.dataset.useFlaresolverr === 'true';
+                        const flaresolverrParam = useFlareSolverr ? '&use_flaresolverr=true' : '&use_flaresolverr=false';
+                        const url = `/indexers/${site}?q=${encodeURIComponent(query)}${flaresolverrParam}`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        return data.results || [];
+                    } catch (error) {
+                        console.error(`Erro ao buscar em ${site}:`, error);
+                        return [];
+                    }
+                });
+
+                const resultsArray = await Promise.all(promises);
+                allResults = resultsArray.flat();
+                allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                renderResults(allResults);
+                results.classList.add('active');
+            } catch (error) {
+                showError('Erro ao buscar torrents. Tente novamente.');
+                console.error('Erro:', error);
+            } finally {
+                loading.classList.remove('active');
+                searchBtn.disabled = false;
+            }
+        }
+
+        const queryInput = document.getElementById('query');
+        const clearButton = document.getElementById('clearButton');
+
+        function toggleClearButton() {
+            clearButton.style.display = queryInput.value.trim().length > 0 ? 'flex' : 'none';
+        }
+
+        queryInput.addEventListener('input', toggleClearButton);
+        clearButton.addEventListener('click', () => {
+            queryInput.value = '';
+            queryInput.focus();
+            clearButton.style.display = 'none';
+        });
+
+        document.getElementById('searchForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const query = queryInput.value.trim();
+            if (!query) {
+                showError('Por favor, digite um termo de busca.');
+                return;
+            }
+            searchTorrents(query, getSelectedScrapers());
+        });
+
+        function setIndexedCount(value) {
+            document.getElementById('indexedCountTop').textContent = value;
+        }
+
+        async function loadIndexedCount() {
+            try {
+                const response = await fetch('/');
+                const data = await response.json();
+                setIndexedCount((data.indexed_torrents || 0).toLocaleString('pt-BR'));
+            } catch (error) {
+                console.error('Erro ao carregar contagem:', error);
+                setIndexedCount('N/A');
+            }
+        }
+
+        loadSites();
+        loadIndexedCount();
+    </script>
+</body>
+</html>

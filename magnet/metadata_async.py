@@ -1,0 +1,372 @@
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
+
+import logging
+import re
+import time
+import asyncio
+from typing import Dict, Optional, Tuple
+from urllib.parse import unquote
+import aiohttp
+from cache.store import get_redis_client
+from cache.store import metadata_key, metadata_failure_key, metadata_failure503_key, circuit_metadata_key
+from app.config import Config
+
+logger = logging.getLogger(__name__)
+
+_rate_limiter_lock = asyncio.Lock()
+_rate_limiter_last_request = 0.0
+_rate_limiter_min_interval = 0.15
+_rate_limiter_burst_tokens = 10
+_CIRCUIT_BREAKER_KEY = circuit_metadata_key()
+_CIRCUIT_BREAKER_TIMEOUT_THRESHOLD = 3
+_CIRCUIT_BREAKER_503_THRESHOLD = 5
+_CIRCUIT_BREAKER_DISABLE_DURATION = 60
+_CIRCUIT_BREAKER_COUNTER_TTL = 60
+_METADATA_FAILURE_CACHE_TTL = 60
+_METADATA_503_CACHE_TTL = 300
+_METADATA_NOT_FOUND_CACHE_TTL = 120
+_hash_locks = {}
+_hash_locks_lock = asyncio.Lock()
+_MAX_HASH_LOCKS_ASYNC = 500
+
+_circuit_breaker_log_cache = {}
+_circuit_breaker_log_lock = asyncio.Lock()
+_CIRCUIT_BREAKER_LOG_COOLDOWN = 30
+_cache_failure_log_cache = {}
+_cache_failure_log_lock = asyncio.Lock()
+_CACHE_FAILURE_LOG_COOLDOWN = 60
+
+def cleanup_metadata_async_state():
+    global _hash_locks, _circuit_breaker_log_cache, _cache_failure_log_cache
+    _hash_locks.clear()
+    _circuit_breaker_log_cache.clear()
+    _cache_failure_log_cache.clear()
+
+def _is_redis_connection_error(error: Exception) -> bool:
+    error_str = str(error).lower()
+    connection_errors = [
+        "connection refused",
+        "error 111",
+        "error 111 connecting",
+        "cannot connect",
+        "no connection",
+        "connection error",
+        "connection timeout",
+        "name or service not known",
+    ]
+    return any(err in error_str for err in connection_errors)
+
+async def _rate_limit():
+    global _rate_limiter_last_request, _rate_limiter_burst_tokens
+    
+    async with _rate_limiter_lock:
+        now = time.time()
+        elapsed = now - _rate_limiter_last_request
+        
+        if elapsed >= _rate_limiter_min_interval:
+            tokens_to_add = int(elapsed / _rate_limiter_min_interval)
+            _rate_limiter_burst_tokens = min(10, _rate_limiter_burst_tokens + tokens_to_add)
+        
+        if _rate_limiter_burst_tokens <= 0:
+            wait_time = _rate_limiter_min_interval - elapsed
+            if wait_time > 0:
+                await asyncio.sleep(wait_time)
+                now = time.time()
+                elapsed = now - _rate_limiter_last_request
+                if elapsed >= _rate_limiter_min_interval:
+                    tokens_to_add = int(elapsed / _rate_limiter_min_interval)
+                    _rate_limiter_burst_tokens = min(10, tokens_to_add)
+        
+        _rate_limiter_burst_tokens -= 1
+        _rate_limiter_last_request = now
+
+async def _is_circuit_breaker_open() -> bool:
+    redis = get_redis_client()
+    
+    if redis:
+        try:
+            disabled_until_str = redis.hget(_CIRCUIT_BREAKER_KEY, 'disabled')
+            if disabled_until_str:
+                disabled_until_float = float(disabled_until_str)
+                now = time.time()
+                if now < disabled_until_float:
+                    return True
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
+        except Exception:
+            pass
+    
+    return False
+
+async def _record_timeout():
+    redis = get_redis_client()
+    
+    if redis:
+        try:
+            timeout_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, 'timeouts', 1)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
+            
+            if timeout_count >= _CIRCUIT_BREAKER_TIMEOUT_THRESHOLD:
+                disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
+                redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
+                logger.debug(
+                    f"Circuit breaker aberto: {timeout_count} timeouts consecutivos. "
+                    f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
+                )
+                redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts')
+        except Exception:
+            pass
+
+async def _record_503():
+    redis = get_redis_client()
+    
+    if redis:
+        try:
+            error_503_count = redis.hincrby(_CIRCUIT_BREAKER_KEY, '503s', 1)
+            redis.expire(_CIRCUIT_BREAKER_KEY, max(_CIRCUIT_BREAKER_COUNTER_TTL, _CIRCUIT_BREAKER_DISABLE_DURATION))
+            
+            if error_503_count >= _CIRCUIT_BREAKER_503_THRESHOLD:
+                disabled_until = time.time() + _CIRCUIT_BREAKER_DISABLE_DURATION
+                redis.hset(_CIRCUIT_BREAKER_KEY, 'disabled', str(disabled_until))
+                redis.expire(_CIRCUIT_BREAKER_KEY, _CIRCUIT_BREAKER_DISABLE_DURATION)
+                logger.debug(
+                    f"Circuit breaker aberto: {error_503_count} erros 503 consecutivos. "
+                    f"Metadata desabilitado por {_CIRCUIT_BREAKER_DISABLE_DURATION}s"
+                )
+                redis.hdel(_CIRCUIT_BREAKER_KEY, '503s')
+        except Exception:
+            pass
+
+async def _record_success():
+    redis = get_redis_client()
+    
+    if redis:
+        try:
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'timeouts', '503s')
+            redis.hdel(_CIRCUIT_BREAKER_KEY, 'disabled')
+        except Exception:
+            pass
+
+async def _is_failure_cached(info_hash: str) -> bool:
+    info_hash_lower = info_hash.lower()
+    
+    try:
+        from cache.store import MetadataCache
+        metadata_cache = MetadataCache()
+        return metadata_cache.is_failure_cached(info_hash_lower)
+    except Exception:
+        return False
+
+async def _cache_failure(info_hash: str, is_503: bool = False, ttl: Optional[int] = None):
+    info_hash_lower = info_hash.lower()
+    
+    try:
+        from cache.store import MetadataCache
+        metadata_cache = MetadataCache()
+        if ttl is not None:
+
+            metadata_cache.set_failure(info_hash_lower, ttl)
+        elif is_503:
+            metadata_cache.set_failure(info_hash_lower, _METADATA_503_CACHE_TTL)
+        else:
+            metadata_cache.set_failure(info_hash_lower, _METADATA_FAILURE_CACHE_TTL)
+    except Exception:
+        pass
+
+async def _get_hash_lock(info_hash: str):
+    info_hash_lower = info_hash.lower()
+    async with _hash_locks_lock:
+        if len(_hash_locks) > _MAX_HASH_LOCKS_ASYNC:
+            keys_to_remove = list(_hash_locks.keys())[:len(_hash_locks) // 2]
+            for key in keys_to_remove:
+                del _hash_locks[key]
+        if info_hash_lower not in _hash_locks:
+            _hash_locks[info_hash_lower] = asyncio.Lock()
+        return _hash_locks[info_hash_lower]
+
+from magnet.parser import parse_bencode_size as _parse_bencode_size
+
+async def _fetch_torrent_header_async(
+    session: aiohttp.ClientSession,
+    info_hash: str,
+    use_lowercase: bool = False
+) -> Tuple[Optional[bytes], bool, bool]:
+    info_hash_hex = info_hash.lower() if use_lowercase else info_hash.upper()
+    url = f"https://itorrents.org/torrent/{info_hash_hex}.torrent"
+    
+    timeout = aiohttp.ClientTimeout(total=3.5, connect=2, sock_read=1.5)
+    max_size = 512 * 1024
+    
+    await _rate_limit()
+    
+    try:
+        headers = {'Range': f'bytes=0-{max_size - 1}'}
+        async with session.get(url, headers=headers, timeout=timeout) as response:
+            if response.status not in (200, 206):
+                if response.status == 404:
+                    await _cache_failure(info_hash, is_503=False)
+                    return None, False, False
+                if response.status == 503:
+                    await _record_503()
+                    await _cache_failure(info_hash, is_503=True)
+                    return None, False, True
+                return None, False, False
+
+            all_data = await response.read()
+            if not all_data:
+                return None, False, False
+
+            if b'<!DOCTYPE html' in all_data or b'<html' in all_data.lower():
+                return None, False, False
+
+            if b'pieces' in all_data:
+                pieces_index = all_data.index(b'pieces')
+                await _record_success()
+                return all_data[:pieces_index + 20], False, False
+
+            await _record_success()
+            return all_data, False, False
+    
+    except asyncio.TimeoutError:
+        await _record_timeout()
+        return None, True, False
+    except aiohttp.ClientResponseError as e:
+        if e.status == 503:
+            await _record_503()
+            await _cache_failure(info_hash, is_503=True)
+            return None, False, True
+        elif e.status == 404:
+            await _cache_failure(info_hash, is_503=False)
+            return None, False, False
+        else:
+            await _cache_failure(info_hash, is_503=False)
+            return None, False, False
+    except Exception:
+        return None, False, False
+
+async def fetch_metadata_from_itorrents_async(
+    session: aiohttp.ClientSession,
+    info_hash: str,
+    scraper_name: Optional[str] = None,
+    title: Optional[str] = None
+) -> Optional[Dict[str, any]]:
+    info_hash_lower = info_hash.lower()
+    
+    try:
+        from cache.store import MetadataCache
+        metadata_cache = MetadataCache()
+        data = metadata_cache.get(info_hash_lower)
+        if data:
+            return data
+    except Exception:
+        pass
+    
+    if await _is_circuit_breaker_open():
+        return None
+    
+    if await _is_failure_cached(info_hash):
+        return None
+    
+    hash_lock = await _get_hash_lock(info_hash)
+    async with hash_lock:
+        try:
+            from cache.store import MetadataCache
+            metadata_cache = MetadataCache()
+            data = metadata_cache.get(info_hash_lower)
+            if data:
+                return data
+        except Exception:
+            pass
+        
+        log_parts = []
+        if scraper_name:
+            log_parts.append(f"[{scraper_name}]")
+        if title:
+            title_preview = title[:120] if len(title) > 120 else title
+            log_parts.append(title_preview)
+        if not log_parts:
+            log_parts.append(info_hash_lower[:16])
+        log_id = " ".join(log_parts) if log_parts else info_hash_lower[:16]
+        logger.debug(f"[Metadata Async] Buscando metadata: {log_id}...")
+        torrent_data, was_timeout, was_503 = await _fetch_torrent_header_async(
+            session, info_hash, use_lowercase=True
+        )
+        
+        if not torrent_data and not was_timeout and not was_503:
+            torrent_data, was_timeout, was_503 = await _fetch_torrent_header_async(
+                session, info_hash, use_lowercase=False
+            )
+        
+        if not torrent_data:
+            await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
+            return None
+        
+        size = _parse_bencode_size(torrent_data)
+        
+        if not size:
+            await _cache_failure(info_hash_lower, is_503=False, ttl=_METADATA_NOT_FOUND_CACHE_TTL)
+            return None
+        
+        name = None
+        try:
+            name_pattern = rb'4:name(\d+):'
+            name_match = re.search(name_pattern, torrent_data)
+            if name_match:
+                name_len = int(name_match.group(1))
+                start_pos = name_match.end()
+                if start_pos + name_len <= len(torrent_data):
+                    name_bytes = torrent_data[start_pos:start_pos + name_len]
+                    name = name_bytes.decode('utf-8', errors='ignore')
+                    if name:
+                        logger.debug(f"[Metadata Async] Buscando metadata: {name[:60]}...")
+        except Exception:
+            pass
+        
+        result = {'size': size}
+        if name:
+            result['name'] = name
+        
+        try:
+            creation_date_pattern = rb'13:creation datei(\d+)e'
+            creation_match = re.search(creation_date_pattern, torrent_data)
+            if creation_match:
+                timestamp = int(creation_match.group(1))
+                if 946684800 <= timestamp <= 4102444800:
+                    result['creation_date'] = timestamp
+        except Exception:
+            pass
+        
+        try:
+            imdb_patterns = [
+                rb'4:imdb(\d+):',
+                rb'7:imdb_id(\d+):',
+                rb'8:imdb-id(\d+):',
+                rb'9:imdb\.com(\d+):',
+            ]
+            
+            for pattern in imdb_patterns:
+                imdb_match = re.search(pattern, torrent_data)
+                if imdb_match:
+                    imdb_len = int(imdb_match.group(1))
+                    start_pos = imdb_match.end()
+                    if start_pos + imdb_len <= len(torrent_data):
+                        imdb_bytes = torrent_data[start_pos:start_pos + imdb_len]
+                        imdb_value = imdb_bytes.decode('utf-8', errors='ignore').strip()
+                        if re.match(r'^tt\d+$', imdb_value):
+                            result['imdb'] = imdb_value
+                            break
+                        url_match = re.search(r'imdb\.com/title/(tt\d+)', imdb_value)
+                        if url_match:
+                            result['imdb'] = url_match.group(1)
+                            break
+        except Exception:
+            pass
+        
+        try:
+            from cache.store import MetadataCache
+            metadata_cache = MetadataCache()
+            metadata_cache.set(info_hash_lower, result)
+        except Exception:
+            pass
+        
+        return result

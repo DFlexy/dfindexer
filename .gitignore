@@ -1,0 +1,14 @@
+﻿__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.xlsx
+*.xls
+*.xlsm
+*.ods
+~$*.xlsx
+~$*.xls
+redis_data/
+prowlarr/
+docker/redis_data/
+docker/prowlarr/

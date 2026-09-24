@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# Copyright (c) 2025 DFlexy · https://github.com/DFlexy
+
+import sys
+
+sys.dont_write_bytecode = True
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from api.indexer_service import get_prowlarr_default_scraper, get_prowlarr_scraper_options
+
+
+def main() -> None:
+    options = get_prowlarr_scraper_options()
+    default = get_prowlarr_default_scraper()
+    if not options:
+        print("# Nenhum scraper encontrado em scraper/", file=sys.stderr)
+        sys.exit(1)
+
+    print("  - name: scraper_type")
+    print("    type: select")
+    print("    label: Scraper")
+    print(f"    default: {default}")
+    print("    options:")
+    for slug, label in options.items():
+        print(f"      {slug}: {label}")
+
+
+if __name__ == "__main__":
+    main()
