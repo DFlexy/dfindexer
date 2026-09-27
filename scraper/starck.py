@@ -27,7 +27,7 @@ _log_ctx = ScraperLogContext("Starck", logger)
 
 SITE = SiteConfig(
     # Endereço do site: ajuste aqui se o domínio mudar.
-    url="https://www.starck-oficial.com/",
+    url="https://www.starckfilmes-v24.com/",
     caminho_busca="?s=",
     paginacao="page/{}/",
     seletores={
