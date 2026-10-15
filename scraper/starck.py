@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from utils.parsing import parse_date_from_string
 from typing import List, Dict, Optional, Callable, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 from app.config import Config
@@ -16,7 +16,7 @@ from scraper.base import BaseScraper
 from scraper.base import SiteConfig
 from utils.http import get_proxy_dict, get_proxy_url, is_proxy_local
 from magnet.parser import MagnetParser
-from utils.text import find_year_from_text, find_sizes_from_text
+from utils.text import find_year_from_text, find_sizes_from_text, remove_accents
 from utils.parsing import detect_audio_from_html
 from utils.log import format_error, format_link_preview, ScraperLogContext
 from utils.parsing import decode_data_u
@@ -27,7 +27,7 @@ _log_ctx = ScraperLogContext("Starck", logger)
 
 SITE = SiteConfig(
     # Endereço do site: ajuste aqui se o domínio mudar.
-    url="https://www.starckfilmes-v24.com/",
+    url="https://www.starckfilmes-v26.com/",
     caminho_busca="?s=",
     paginacao="page/{}/",
     seletores={
@@ -386,6 +386,53 @@ def _apply_resolved_base_url(scraper: 'StarckScraper', resolved_url: str) -> Non
     scraper.base_url = new_base
 
 
+def _starck_season_from_title(page_title: str) -> str:
+    text = remove_accents(page_title or '').lower().replace('ª', 'a').replace('º', 'o')
+    match = re.search(r'(\d{1,2})\s*a?\s*temporada', text)
+    if not match:
+        match = re.search(r'temporada\s*(\d{1,2})', text)
+    if not match:
+        return ''
+    number = int(match.group(1))
+    if number <= 0 or number > 99:
+        return ''
+    return str(number).zfill(2)
+
+
+def _starck_episode_code(label: str, season: str) -> str:
+    if not season:
+        return ''
+    text = re.sub(r'\s+', ' ', remove_accents(label or '').lower())
+    match = re.search(
+        r'episodio?s?\s*(\d{1,2})\s*(?:ao|ate|a|e)\s*(\d{1,2})',
+        text,
+    )
+    if match:
+        start = int(match.group(1))
+        end = int(match.group(2))
+        if 0 < start < end <= 99:
+            return f"S{season}E{start:02d}-{end:02d}"
+    match = re.search(r'episodio\s*(\d{1,2})', text)
+    if match:
+        episode = int(match.group(1))
+        if 0 < episode <= 99:
+            return f"S{season}E{episode:02d}"
+    return ''
+
+
+def _starck_quality_token(text: str) -> str:
+    match = re.search(r'(?i)\b(2160p|1080p|720p|480p|4k)\b', text or '')
+    return match.group(1).lower() if match else ''
+
+
+def _starck_magnet_with_display_name(magnet: str, display_name: str) -> str:
+    if not magnet or not display_name:
+        return magnet
+    if re.search(r'(?:^|[?&])dn=', magnet, re.I):
+        return magnet
+    return magnet + '&dn=' + quote(display_name)
+
+
 def _starck_raw_data_u_values(page_html: str) -> List[str]:
     if not page_html:
         return []
@@ -643,18 +690,46 @@ class StarckScraper(BaseScraper):
                 if decoded_magnet:
                     _add_magnet(decoded_magnet)
 
-        page_html = self._get_fetched_html()
-        _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(page_html))
-
         buttons_root = post.select_one(SITE.seletores["botoes_download"]) or post
-        for elem in buttons_root.select('[data-u]'):
-            data_u_value = (elem.get('data-u') or '').strip()
+        season_code = _starck_season_from_title(page_title)
+        dual_section = False
+        for block in buttons_root.find_all(['h3', 'p']):
+            if block.name == 'h3':
+                heading = remove_accents(block.get_text(' ', strip=True)).lower()
+                dual_section = 'dual' in heading
+                continue
+            data_elem = block.select_one('[data-u]')
+            if not data_elem:
+                continue
+            data_u_value = html.unescape((data_elem.get('data-u') or '').strip())
             if not data_u_value or data_u_value in seen_data_u:
                 continue
-            seen_data_u.add(data_u_value)
             decoded_magnet = decode_data_u(data_u_value)
-            if decoded_magnet:
-                _add_magnet(decoded_magnet)
+            if not decoded_magnet or not decoded_magnet.startswith('magnet:'):
+                continue
+            seen_data_u.add(data_u_value)
+            try:
+                display_name = MagnetParser.parse(decoded_magnet).get('display_name') or ''
+            except Exception:
+                display_name = ''
+            if not display_name.strip():
+                label = block.get_text(' ', strip=True)
+                episode_code = _starck_episode_code(label, season_code)
+                quality = _starck_quality_token(data_elem.get_text(' ', strip=True) or label)
+                name_parts = [episode_code]
+                if year:
+                    name_parts.append(str(year))
+                name_parts.append('WEB-DL')
+                if quality:
+                    name_parts.append(quality)
+                if dual_section:
+                    name_parts.append('DUAL')
+                synthetic = '.'.join(part for part in name_parts if part)
+                decoded_magnet = _starck_magnet_with_display_name(decoded_magnet, synthetic)
+            _add_magnet(decoded_magnet)
+
+        page_html = self._get_fetched_html()
+        _append_decoded_magnets_from_data_u_values(_starck_raw_data_u_values(page_html))
 
         for link in all_links:
             if link.get('data-u'):

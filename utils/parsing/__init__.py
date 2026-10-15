@@ -427,7 +427,10 @@ def add_audio_tag_if_needed(title: str, magnet_processed: str, info_hash: Option
 
     if audio_info_from_html:
         audio_info_str = str(audio_info_from_html).lower()
-        if 'português' in audio_info_str or 'portugues' in audio_info_str:
+        if re.search(r'\bdual\b', audio_info_str):
+            has_brazilian_audio = True
+            has_eng_audio = True
+        elif 'português' in audio_info_str or 'portugues' in audio_info_str:
             has_brazilian_audio = True
 
     if magnet_processed and not has_brazilian_audio:
