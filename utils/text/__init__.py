@@ -830,6 +830,17 @@ def _query_word_spans_title_words(title_normalized: str, query_word: str) -> boo
                 break
     return False
 
+def query_for_catalog_page(query: str) -> str:
+    """Season catalog pages name the season, not SxxExx. Keep the season for the page check."""
+    if not query:
+        return ''
+
+    def repl(match):
+        return f"temporada {int(match.group(1))}"
+
+    replaced = re.sub(r'(?i)\bs(\d{1,2})e\d{1,2}\b', repl, str(query))
+    return re.sub(r'\s+', ' ', replaced).strip()
+
 def check_query_match(query: str, title: str, title_original_html: str = '', title_translated_html: str = '') -> bool:
     query = str(query) if query is not None else ''
     title = str(title) if title is not None else ''

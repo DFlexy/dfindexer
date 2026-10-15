@@ -785,10 +785,10 @@ class BaseScraper(ABC):
         if not query.strip():
             return False
 
-        from utils.text import check_query_match
+        from utils.text import check_query_match, query_for_catalog_page
 
         if check_query_match(
-            query,
+            query_for_catalog_page(query),
             page_title or '',
             original_title or '',
             title_translated or '',
